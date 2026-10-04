@@ -184,13 +184,18 @@ struct Index {
       }
       .width('100%')
       .height('100%')
-      .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: this.bottomInset + NAV_MARGIN })
+      // 底部再让出手势条：实测根节点下沿离屏幕底还有约 63px，
+      // 不留这一截，导航栏的圆角指示器会贴到屏幕边缘被视觉裁切
+      .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: this.bottomInset + NAV_MARGIN + 18 })
       .justifyContent(FlexAlign.End)
       // 整层只是定位容器：自己不响应点击，也不拦截，事件留给下面的导航栏与内容
       .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')
     .height('100%')
+    // 让背景铺到状态栏和手势区下面。不加这句，根节点会被安全区限制在
+    // [0,137] 起，顶部柔光就永远铺不到屏幕顶端（实测确认过）。
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .backgroundColor(COLOR_BG)
   }
 
@@ -441,7 +446,8 @@ struct Index {
       })
     }
     .width('100%')
-    // 不在这里为导航栏留白：内容要能滚到悬浮栏下面，才有「悬浮」的层次感
-    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 10 })
+    // 这是固定底栏，必须整体抬到悬浮导航栏之上，否则会被导航栏压住。
+    // 让出的高度 = 导航栏高度 + 两个间距 + 一点额外余量。
+    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: NAV_RESERVE + 12 })
   }
 }

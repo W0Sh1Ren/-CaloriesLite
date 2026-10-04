@@ -22,10 +22,29 @@ export class Store {
     try {
       const options: preferences.Options = { name: STORE_NAME };
       Store.prefs = preferences.getPreferencesSync(context, options);
+      hilog.info(DOMAIN, 'CalorieLite', 'Store ready: %{public}s', STORE_NAME);
     } catch (err) {
       hilog.error(DOMAIN, 'CalorieLite', 'Store init failed: %{public}s', JSON.stringify(err));
       Store.prefs = null;
     }
+  }
+
+  /**
+   * 存储是否可用。
+   *
+   * 曾经踩过的坑：EntryAbility 漏调 init()，prefs 一直是 null，
+   * 所有写入被静默丢弃——界面照常显示，只是重启后数据全没了，极难排查。
+   * 所以保留这个检查，未就绪时统一告警而不是无声失败。
+   */
+  static isReady(): boolean {
+    return Store.prefs !== null;
+  }
+
+  /** 未就绪时统一在这里告警，避免每个调用点各写一遍 */
+  private static warnNotReady(op: string, key: string): void {
+    hilog.warn(DOMAIN, 'CalorieLite',
+      'Store not ready (%{public}s %{public}s) — data will NOT persist. Did EntryAbility call Store.init()?',
+      op, key);
   }
 
   /** 未初始化时回退到调用方给的默认值，避免崩溃 */
@@ -82,7 +101,7 @@ export class Store {
   /** 写入内存后异步落盘；落盘失败只记日志，不打断交互 */
   static put(key: string, value: string | number | boolean): void {
     if (Store.prefs === null) {
-      hilog.warn(DOMAIN, 'CalorieLite', 'Store not initialized, drop key %{public}s', key);
+      Store.warnNotReady('put', key);
       return;
     }
     try {
@@ -97,6 +116,7 @@ export class Store {
 
   static remove(key: string): void {
     if (Store.prefs === null) {
+      Store.warnNotReady('remove', key);
       return;
     }
     try {

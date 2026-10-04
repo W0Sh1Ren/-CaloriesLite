@@ -54,8 +54,13 @@ export const KCAL_PER_KG_FAT: number = 7700;
 export const NAV_HEIGHT: number = 62;
 /** 悬浮导航栏离屏幕左右与底部的距离 */
 export const NAV_MARGIN: number = 18;
-/** 内容区底部要为悬浮导航栏留出的空间 */
-export const NAV_RESERVE: number = NAV_HEIGHT + NAV_MARGIN * 2;
+/**
+ * 内容区底部要为悬浮导航栏留出的空间。
+ *
+ * 组成：导航栏自身高度 + 上下两个外边距 + 让开底部手势条的一点余量。
+ * 首页的固定底栏（拍照按钮）与滚动区末尾都用这个值，避免被导航栏压住。
+ */
+export const NAV_RESERVE: number = NAV_HEIGHT + NAV_MARGIN * 2 + 6;
 
 /** 动效时长（毫秒） */
 export const DUR_FAST: number = 180;
