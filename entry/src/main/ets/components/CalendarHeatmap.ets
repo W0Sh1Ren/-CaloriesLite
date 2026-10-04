@@ -55,8 +55,46 @@ export struct CalendarHeatmap {
   /** 42 个格子，由父组件算好 */
   @Prop cells: DayCell[] = [];
   @Prop selectedDay: string = '';
+  /**
+   * 换月动画的重放键：父组件每次换月自增。
+   *
+   * 用 @Watch 而不是比较月份：组件不需要知道月份怎么算，
+   * 收到新键就播一次滑入动画。
+   */
+  @Prop @Watch('onMonthChange') animKey: number = 0;
+  /** 换月方向：1 向后、-1 向前，决定从哪一侧滑入 */
+  @Prop shiftDir: number = 1;
   onSelectDay: (dayKey: string) => void = () => {
   };
+
+  /**
+   * 换月动画的两个可插值量。
+   *
+   * 名字刻意避开 offset / opacity / scale / translate 这类词：
+   * ArkUI 的 CustomComponent 基类已占用了同名属性（`offset()` / `opacity()`），
+   * 用 gridOffset 会报「not assignable to the same property in base type」
+   *（之前 scale / tabIndex 也踩过同一个坑）。
+   */
+  @State cellShift: number = 0;
+  @State cellAlpha: number = 1;
+
+  /**
+   * 换月时播一次滑入。
+   *
+   * 先把位移摆到起点、透明度归零（**无动画**），下一帧再 animateTo 归位。
+   * 同一帧里既摆起点又开动画，起点会来不及上屏就被覆盖，
+   * 观感是「从中间冒出来」而不是「滑进来」。
+   */
+  onMonthChange(): void {
+    this.cellShift = this.shiftDir >= 0 ? 40 : -40;
+    this.cellAlpha = 0;
+    setTimeout(() => {
+      this.getUIContext().animateTo({ duration: 260, curve: Curve.FastOutSlowIn }, () => {
+        this.cellShift = 0;
+        this.cellAlpha = 1;
+      });
+    }, 16);
+  }
 
   /** 状态点的颜色：按缺口正负分级 */
   private dotColor(data: DayCell): string {
@@ -105,20 +143,37 @@ export struct CalendarHeatmap {
     return data.isToday ? COLOR_PRIMARY : COLOR_TEXT;
   }
 
+  /** 该格是否用中等字重（选中的今天） */
+  private isEmphasized(index: number): boolean {
+    const data: DayCell = this.cellAt(index);
+    return this.selectedDay === data.dayKey || data.isToday;
+  }
+
+  /** 状态点底色：选中格不画点（与选中圆底撞色） */
+  private dotBg(index: number): string {
+    const data: DayCell = this.cellAt(index);
+    return this.selectedDay === data.dayKey ? TRANSPARENT : this.dotColor(data);
+  }
+
   build() {
     Column({ space: 2 }) {
-      // 星期表头：与下面的单元格共用同一套等宽栅格，保证对齐
-      Row() {
-        ForEach(WEEK_HEADER, (w: string) => {
-          Text(w)
-            .fontSize(11)
-            .fontColor(COLOR_TEXT_SUB)
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .height(28)
-        }, (w: string) => w)
-      }
-      .width('100%')
+      /*
+       * 只有「格子区」参与换月动画，月份标题在父组件那边、不动。
+       * 整块日历滑走会让上面的月份标题和下面的图例跟着跳，很乱。
+       */
+      Column({ space: 2 }) {
+        // 星期表头：与下面的单元格共用同一套等宽栅格，保证对齐
+        Row() {
+          ForEach(WEEK_HEADER, (w: string) => {
+            Text(w)
+              .fontSize(11)
+              .fontColor(COLOR_TEXT_SUB)
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .height(28)
+          }, (w: string) => w)
+        }
+        .width('100%')
 
       // 6 行 × 7 列。
       // 行高必须显式指定：只给格子设高度、行用默认约束时，
@@ -126,12 +181,62 @@ export struct CalendarHeatmap {
       ForEach(ROW_INDEXES, (rowIndex: number) => {
         Row() {
           ForEach(COL_INDEXES, (colIndex: number) => {
-            this.dayCell(this.cellAt(rowIndex * 7 + colIndex))
+            /*
+             * 格子**必须内联**，不能抽成 this.dayCell(data) 这种 @Builder。
+             *
+             * @Builder 的入参只在容器构建时求值一次，之后数据变了不会重新求值，
+             * 表现就是「切换月份后日历的日期与星期不跟着变」（实测反馈的 bug）。
+             * 同一个坑在顶栏标题、热量环数字、首页标签上都踩过，
+             * 解法统一是「内联，或改传 getter 函数」。
+             */
+            Column() {
+              if (this.cellAt(rowIndex * 7 + colIndex).inMonth) {
+                Stack() {
+                  // 选中/今天底色：圆形而非方块，更接近 Apple 的日历
+                  Row()
+                    .width(32)
+                    .height(32)
+                    .backgroundColor(this.cellBg(this.cellAt(rowIndex * 7 + colIndex)))
+                    .borderRadius(16)
+
+                  Text(`${this.cellAt(rowIndex * 7 + colIndex).day}`)
+                    .fontSize(15)
+                    .fontWeight(this.isEmphasized(rowIndex * 7 + colIndex)
+                      ? FontWeight.Medium : FontWeight.Normal)
+                    .fontColor(this.cellTextColor(this.cellAt(rowIndex * 7 + colIndex)))
+                }
+                .width(32)
+                .height(32)
+
+                // 状态点：有记录才画，没记录留空占位保持行高一致
+                Row()
+                  .width(5)
+                  .height(5)
+                  .backgroundColor(this.dotBg(rowIndex * 7 + colIndex))
+                  .borderRadius(3)
+                  .margin({ top: 2 })
+              }
+            }
+            .layoutWeight(1)
+            .height(CELL_HEIGHT)
+            .justifyContent(FlexAlign.Center)
+            // 点击热区覆盖整格，而不是只有日号那么大
+            .onClick(() => {
+              const data: DayCell = this.cellAt(rowIndex * 7 + colIndex);
+              if (data.inMonth && !data.isFuture) {
+                this.onSelectDay(data.dayKey);
+              }
+            })
           }, (colIndex: number) => `c${rowIndex}-${colIndex}`)
         }
         .width('100%')
         .height(CELL_HEIGHT)
-      }, (rowIndex: number) => `r${rowIndex}`)
+        }, (rowIndex: number) => `r${rowIndex}`)
+      }
+      .width('100%')
+      // 换月动画：位移 + 淡入。两者都是可插值属性，animateTo 每帧重绘
+      .translate({ x: `${this.cellShift}%` })
+      .opacity(this.cellAlpha)
 
       // 图例
       Row({ space: 14 }) {
@@ -151,47 +256,6 @@ export struct CalendarHeatmap {
     .shadow(CARD_SHADOW)
   }
 
-  @Builder
-  dayCell(data: DayCell) {
-    // 宽高都显式给：只靠 layoutWeight + 父容器约束时，
-    // ArkUI 会把格子沿主轴方向拉伸，日历就会出现大片空白。
-    Column() {
-      if (data.inMonth) {
-        Stack() {
-          // 选中/今天底色：圆形而非方块，更接近 Apple 的日历
-          Row()
-            .width(32)
-            .height(32)
-            .backgroundColor(this.cellBg(data))
-            .borderRadius(16)
-
-          Text(`${data.day}`)
-            .fontSize(15)
-            .fontWeight(this.selectedDay === data.dayKey || data.isToday ? FontWeight.Medium : FontWeight.Normal)
-            .fontColor(this.cellTextColor(data))
-        }
-        .width(32)
-        .height(32)
-
-        // 状态点：有记录才画，没记录留空占位保持行高一致
-        Row()
-          .width(5)
-          .height(5)
-          .backgroundColor(this.selectedDay === data.dayKey ? TRANSPARENT : this.dotColor(data))
-          .borderRadius(3)
-          .margin({ top: 2 })
-      }
-    }
-    .layoutWeight(1)
-    .height(CELL_HEIGHT)
-    .justifyContent(FlexAlign.Center)
-    // 点击热区覆盖整格，而不是只有日号那么大
-    .onClick(() => {
-      if (data.inMonth && !data.isFuture) {
-        this.onSelectDay(data.dayKey);
-      }
-    })
-  }
   @Builder
   legend(color: string, label: string) {
     Row({ space: 5 }) {

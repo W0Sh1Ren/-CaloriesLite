@@ -19,6 +19,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MealType, FoodRecord, DailySummary } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel, macroTargetFor } from '../model/Enums';
 import { friendlyDate, todayKey, timeLabel } from '../common/DateUtil';
+import { AppState } from '../common/AppState';
 import { DailyService } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
 import { ImageService } from '../service/ImageService';
@@ -180,6 +181,14 @@ struct DayDetail {
   build() {
     Column() {
       // ------------------------------------------------ 顶栏
+      /*
+       * 顶部安全距离从一开始就补上。
+       *
+       * 这一页是普通页（没有调 setWindowLayoutFullScreen），
+       * 但窗口仍会延伸到状态栏区域，原先只留了 8vp，
+       * 结果顶栏压在系统时间上。口径与主界面一致：
+       * 用 AppState.topInset（EntryAbility 实测的 avoid area 高度）。
+       */
       Row() {
         Button({ type: ButtonType.Circle }) {
           Text('‹').fontSize(22).fontColor(COLOR_TEXT)
@@ -201,7 +210,7 @@ struct DayDetail {
         Row().width(36).height(36)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
 
       Scroll() {
         Column({ space: GAP }) {

@@ -37,6 +37,15 @@ export struct HistoryTab {
   @State viewMonth0: number = 0;
   @State selectedDay: string = '';
   @State cells: DayCell[] = [];
+  /**
+   * 换月动画：每次换月自增，日历据此重放滑入动画。
+   *
+   * 用「键 + 方向」而不是让日历自己比较月份：
+   * 组件不必知道月份是怎么算的，只管播动画。
+   */
+  @State monthAnimKey: number = 0;
+  /** 换月方向：1 向后（›）、-1 向前（‹） */
+  @State monthShiftDir: number = 1;
   @State detail: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
   @State detailRecords: FoodRecord[] = [];
   @State weights: WeightRecord[] = [];
@@ -106,6 +115,9 @@ export struct HistoryTab {
     this.viewYear = y;
     this.viewMonth0 = m;
     this.cells = this.buildCells();
+    // 通知日历播放换月动画：新月份从切换方向那一侧滑入
+    this.monthShiftDir = delta >= 0 ? 1 : -1;
+    this.monthAnimKey++;
   }
 
   /** 保存体重：同一天覆盖 */
@@ -206,6 +218,8 @@ export struct HistoryTab {
         CalendarHeatmap({
           cells: this.cells,
           selectedDay: this.selectedDay,
+          animKey: this.monthAnimKey,
+          shiftDir: this.monthShiftDir,
           onSelectDay: (day: string) => {
             this.selectedDay = day;
             this.rebuild();

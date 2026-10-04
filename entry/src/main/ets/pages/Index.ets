@@ -9,7 +9,7 @@
  * 没有用 Tabs 组件：Tabs 的 tabBar 贴底且做不出毛玻璃悬浮效果，
  * 自己搭反而更好控制动画与层次。
  */
-import { router } from '@kit.ArkUI';
+import { router, curves } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -24,7 +24,7 @@ import { ImageService } from '../service/ImageService';
 import { AppState } from '../common/AppState';
 import {
   COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB,
-  CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_MARGIN,
+  CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_HEIGHT, NAV_MARGIN,
   NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
 import { CalorieRing } from '../components/CalorieRing';
@@ -37,6 +37,25 @@ import { HistoryTab } from './HistoryTab';
 import { ProfileTab } from './ProfileTab';
 
 const DOMAIN = 0x0000;
+
+/**
+ * 首页悬浮「拍照识别」按钮的高度。
+ *
+ * 提成常量是因为滚动区的底部留白与按钮自身高度都要用它：
+ * 分散写死会出现「按钮长高了但留白没跟着变」，
+ * 最后一节内容被压住点不到。
+ */
+const CAMERA_BAR_HEIGHT: number = 50;
+
+/**
+ * 悬浮按钮底边距屏幕底的高度。
+ *
+ * 组成：底部安全区 + 导航栏外边距(30) + 导航栏高度 + 两条之间的呼吸(NAV_MARGIN)。
+ * 这样按钮正好落在导航栏**正上方**，两者不重叠、也不贴在一起。
+ */
+function cameraFloatBottom(bottomInset: number): number {
+  return bottomInset + 30 + NAV_HEIGHT + NAV_MARGIN;
+}
 
 /** 三个导航项 */
 const NAV_ITEMS: NavItem[] = [
@@ -83,12 +102,24 @@ struct Index {
   @State bottomInset: number = 0;
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
-  /** 本次切换的方向：1 向右切、-1 向左切，决定入场从哪一侧滑入 */
-  @State navDir: number = 1;
-  /** 视图入场动画的重放键：每次切换自增，迫使动画重新播放 */
-  @State viewAnimKey: number = 0;
   /**
-   * 是否正有模态面板打开（由「我的」页通过 AppState 通知）。
+   * 页面切换动画的两个可插值量。
+   *
+   * viewOffset：内容横向偏移（百分比，相对自身宽度），
+   *   ±100 表示「整屏在屏幕外」，0 表示归位。
+   * viewOpacity：内容透明度，切页时从 0 淡入。
+   *
+   * 为什么用状态 + animateTo 而不是 TransitionEffect：
+   * transition 只在节点增删时触发，而承载内容的 Column 是稳定的
+   *（只换了内部条件渲染的分支），挂在它上面永远不触发——之前那版
+   * 写了 transition 却完全没动画，就是这个原因。
+   */
+  @State viewOffset: number = 0;
+  @State viewOpacity: number = 1;
+  /** 页面切换用的 spring 参数，与底部导航选中缩放同一套手感 */
+  private static readonly VIEW_SPRING: ICurve = curves.springMotion(0.72, 0.86);
+  /**
+   * 模态面板是否正打开。
    *
    * 必须是 @State：.visibility() 的参数要能在 build 里读到，
    * 而 AppState 的静态字段变化不会触发重建。
@@ -173,19 +204,36 @@ struct Index {
     Stack({ alignContent: Alignment.Top }) {
       // 底层：当前页内容。各页自己用 topReserve() 留出顶栏高度，
       // 这样内容向上滚动时会从顶栏下面穿过去，被顶栏的模糊吃掉。
+      //
+      // 外层 Column 只承担页面切换动画（位移 + 淡入）：三个视图共用同一层，
+      // 所以切换时是「整页滑入」而不是各页各滑一次。
       Column() {
-        if (this.activeTab === 0) {
-          this.todayView()
-        } else if (this.activeTab === 1) {
-          HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
-        } else {
-          ProfileTab({ refreshTick: this.refreshTick })
+        Column() {
+          if (this.activeTab === 0) {
+            this.todayView()
+          } else if (this.activeTab === 1) {
+            HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
+          } else {
+            ProfileTab({ refreshTick: this.refreshTick })
+          }
         }
+        .width('100%')
+        .height('100%')
       }
       .width('100%')
       .height('100%')
+      /*
+       * 页面切换动画。
+       *
+       * 这里**不能**用 TransitionEffect：它只在节点增删时触发，
+       * 而这个 Column 是稳定的（只是内部条件渲染换了分支），
+       * 所以挂在它上面的 transition 永远不触发——之前写了但没有任何效果。
+       * 改用「改 @State + animateTo」：位移与透明度都是可插值属性，
+       * 每帧重绘，一定能看到动画。
+       */
+      .translate({ x: `${this.viewOffset}%` })
+      .opacity(this.viewOpacity)
 
-      // 顶层：毛玻璃顶栏。zIndex(1) 保证盖在内容之上。
       // 顶层：毛玻璃顶栏。zIndex(1) 保证盖在内容之上。
       // 首页的右上角放一对步进按钮用于切换日期——之前把内嵌日期栏删掉时
       // 忘了把入口搬过来，导致首页没法切日期了。
@@ -205,15 +253,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    // 新视图从切换方向那一侧滑入并淡入；旧视图立即移除，所以不存在
-    // 「透明层挡住点击」的问题
-    .transition(TransitionEffect.asymmetric(
-      TransitionEffect.OPACITY
-        .combine(TransitionEffect.translate({ x: this.navDir >= 0 ? 56 : -56 }))
-        .animation({ duration: DUR_VIEW_SWITCH, curve: Curve.FastOutSlowIn }),
-      TransitionEffect.OPACITY
-        .animation({ duration: 120, curve: Curve.EaseIn })
-    ))
   }
 
   /** 顶栏主标题 */
@@ -360,10 +399,23 @@ struct Index {
     if (AppState.profileDirty) {
       AppState.profileDirty = false;
     }
-    this.navDir = index > this.activeTab ? 1 : -1;
+    /*
+     * 页面切换动画：新页从切换方向那一侧整屏滑入 + 淡入。
+     *
+     * 必须先让「起点」真正渲染一帧，再开动画：同一帧里既摆起点又
+     * animateTo 的话，起点来不及上屏就被动画覆盖，看着像从中间冒出来。
+     * 这里用一个 16ms 的定时器隔开（≈ 一帧）。
+     */
+    const dir: number = index > this.activeTab ? 1 : -1;
+    this.viewOffset = dir * 100;
+    this.viewOpacity = 0;
     this.activeTab = index;
-    // 重放入场动画
-    this.viewAnimKey++;
+    setTimeout(() => {
+      this.getUIContext().animateTo({ curve: Index.VIEW_SPRING, duration: DUR_VIEW_SWITCH }, () => {
+        this.viewOffset = 0;
+        this.viewOpacity = 1;
+      });
+    }, 16);
     // 回到首页时按当天重读，保证刚记录的餐次立刻出现
     if (index === 0) {
       this.dayKey = todayKey();
@@ -486,69 +538,90 @@ struct Index {
   // ================================================== 首页
   @Builder
   todayView() {
-    Column() {
-      Scroll() {
-        // 顶部留出毛玻璃顶栏的高度，否则第一张卡片会被顶栏压住
-        Column({ space: GAP }) {
-          CalorieRing({
-            intake: this.data.summary.intake,
-            budget: this.data.summary.budget,
-            exerciseKcal: this.data.summary.exerciseKcal,
-            deficit: this.data.summary.deficit,
-            refreshKey: this.dataVersion
-          })
+    /*
+     * 用 Stack 而不是 Column：拍照按钮要**悬浮**在内容之上，
+     * 而不是作为固定底栏把内容挤上去、自己占掉一条横带。
+     *
+     * 悬浮 vs 固定底栏的差别不只是位置：
+     *   固定底栏会形成一条「分界线」，内容到此为止
+     *   悬浮时内容从按钮下面穿过去，按钮像一颗浮起来的气泡
+     * 与底部导航栏是同一套语言。
+     */
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
+        Scroll() {
+          // 顶部留出毛玻璃顶栏的高度，否则第一张卡片会被顶栏压住
+          Column({ space: GAP }) {
+            CalorieRing({
+              intake: this.data.summary.intake,
+              budget: this.data.summary.budget,
+              exerciseKcal: this.data.summary.exerciseKcal,
+              deficit: this.data.summary.deficit,
+              refreshKey: this.dataVersion
+            })
 
-          // 结算评语
-          Row() {
-            Text(DailyService.verdict(this.data.summary))
-              .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
-              .layoutWeight(1)
+            // 结算评语
+            Row() {
+              Text(DailyService.verdict(this.data.summary))
+                .fontSize(13)
+                .fontColor(COLOR_TEXT_SUB)
+                .layoutWeight(1)
+            }
+            .width('100%')
+            .padding({ left: 4, right: 4 })
+
+            Row({ space: 14 }) {
+              if (this.data.streak > 0) {
+                this.chip('连续达标', () => this.data.streak, '天')
+              }
+              if (this.data.summary.exerciseKcal > 0) {
+                this.chip('运动 +', () => this.data.summary.exerciseKcal, '')
+              }
+            }
+            .width('100%')
+            .padding({ left: 4, right: 4 })
+
+            // 营养素卡片常显：没有记录时也要能看到推荐量，
+            // 否则用户不知道今天该吃多少
+            MacroBar({
+              protein: this.data.summary.protein,
+              fat: this.data.summary.fat,
+              carb: this.data.summary.carb,
+              // 推荐克数按当日实际预算推算，不写死数字：
+              // 写死会在换人/换目标后与顶部预算自相矛盾
+              carbTarget: macroTargetFor(this.data.summary.budget).carb,
+              proteinTarget: macroTargetFor(this.data.summary.budget).protein,
+              fatTarget: macroTargetFor(this.data.summary.budget).fat
+            })
+
+            ForEach(MEAL_ORDER, (meal: MealType) => {
+              this.mealSection(meal)
+            }, (meal: MealType) => `${meal}-${this.data.summary.recordCount}`)
+
+            this.exerciseSection()
+
+            /*
+             * 底部留白 = 悬浮按钮 + 悬浮导航栏两层占位 + 一段净空。
+             *
+             * 顺序（从屏幕底往上）：导航栏 → 呼吸 → 按钮 → 净空。
+             *
+             * 净空不能省：导航栏只有 92% 宽，两侧各留 8% 的缝，
+             * 那条缝里透出的内容**不在模糊范围内**，会原样显示出来，
+             * 看上去像导航栏破了个洞。留够净空，滚动到底时那一带也是空的。
+             */
+            Row().height(cameraFloatBottom(this.bottomInset) + CAMERA_BAR_HEIGHT + 120)
           }
           .width('100%')
-          .padding({ left: 4, right: 4 })
-
-          Row({ space: 14 }) {
-            if (this.data.streak > 0) {
-              this.chip('连续达标', () => this.data.streak, '天')
-            }
-            if (this.data.summary.exerciseKcal > 0) {
-              this.chip('运动 +', () => this.data.summary.exerciseKcal, '')
-            }
-          }
-          .width('100%')
-          .padding({ left: 4, right: 4 })
-
-          // 营养素卡片常显：没有记录时也要能看到推荐量，
-          // 否则用户不知道今天该吃多少
-          MacroBar({
-            protein: this.data.summary.protein,
-            fat: this.data.summary.fat,
-            carb: this.data.summary.carb,
-            // 推荐克数按当日实际预算推算，不写死数字：
-            // 写死会在换人/换目标后与顶部预算自相矛盾
-            carbTarget: macroTargetFor(this.data.summary.budget).carb,
-            proteinTarget: macroTargetFor(this.data.summary.budget).protein,
-            fatTarget: macroTargetFor(this.data.summary.budget).fat
-          })
-
-          ForEach(MEAL_ORDER, (meal: MealType) => {
-            this.mealSection(meal)
-          }, (meal: MealType) => `${meal}-${this.data.summary.recordCount}`)
-
-          this.exerciseSection()
-
-          // 给悬浮导航栏留出空间
-          Row().height(NAV_RESERVE)
+          .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
         }
-        .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
+        .layoutWeight(1)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
       }
-      .layoutWeight(1)
-      .scrollBar(BarState.Off)
-      .align(Alignment.Top)
+      .width('100%')
+      .height('100%')
 
-      // 底部主操作只剩拍照识别
+      // 悬浮主操作：拍照识别
       this.cameraBar()
     }
     .width('100%')
@@ -810,7 +883,7 @@ struct Index {
     .width('100%')
   }
 
-  /** 底部唯一的操作入口：拍照识别 */
+  /** 悬浮主操作：拍照识别。浮在底部导航栏正上方 */
   @Builder
   cameraBar() {
     Row() {
@@ -821,9 +894,10 @@ struct Index {
           .fontColor(Color.White)
       }
       .width('100%')
-      .height(50)
+      .height(CAMERA_BAR_HEIGHT)
       .backgroundColor(COLOR_PRIMARY)
-      .shadow(CARD_SHADOW)
+      // 与导航栏同一套「浮起」语言：深色投影拉开层次
+      .shadow({ radius: 20, color: 'rgba(16, 24, 36, 0.18)', offsetX: 0, offsetY: 8 })
       .onClick(() => {
         try {
           router.pushUrl({ url: 'pages/Camera' });
@@ -834,8 +908,13 @@ struct Index {
       })
     }
     .width('100%')
-    // 这是固定底栏，必须整体抬到悬浮导航栏之上，否则会被导航栏压住。
-    // 让出的高度 = 导航栏高度 + 两个间距 + 一点额外余量。
-    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: NAV_RESERVE + 12 })
+    /*
+     * 定位：底边刚好落在悬浮导航栏之上。
+     *
+     * 导航栏的占位 = bottomInset + 30(外边距) + NAV_HEIGHT，
+     * 再留 NAV_MARGIN 作为两条之间的呼吸。
+     * 这样按钮不压导航栏、导航栏也不压按钮，两者像一叠气泡。
+     */
+    .padding({ left: PAGE_PAD, right: PAGE_PAD, bottom: cameraFloatBottom(this.bottomInset) })
   }
 }
