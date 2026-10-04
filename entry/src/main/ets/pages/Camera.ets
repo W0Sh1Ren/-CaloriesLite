@@ -264,7 +264,7 @@ struct CameraPage {
                 .fontSize(12)
                 .fontColor(COLOR_TEXT_SUB)
                 .width('100%')
-              Text('照片只会在本机压缩后发送到智谱开放平台')
+              Text('照片只会在本机压缩后发送到 DeepSeek')
                 .fontSize(12)
                 .fontColor(COLOR_TEXT_SUB)
                 .width('100%')

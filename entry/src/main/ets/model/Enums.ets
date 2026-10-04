@@ -194,22 +194,27 @@ export class ProviderPreset {
 }
 
 /**
- * 智谱开放平台的接口地址。
+ * DeepSeek 开放平台的接口地址。
  *
- * 注意结尾是 /api/paas/v4 而不是 /v1，代码里再拼 /chat/completions。
+ * 注意这是**根路径**，代码里再拼 /chat/completions 得到
+ * https://api.deepseek.com/chat/completions，与官方文档一致。
+ * 不要填成 /v1——虽然 /v1/chat/completions 也能通，但官方写法是根路径。
  */
-export const GLM_BASE_URL: string = 'https://open.bigmodel.cn/api/paas/v4';
+export const AI_BASE_URL: string = 'https://api.deepseek.com';
 
 /**
  * 默认识图模型。
  *
- * glm-4.6v-flash 是 GLM-4.6V 的免费版本，支持图像/视频/文件理解，
- * 128K 上下文，且完全免费。见 https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash
+ * deepseek-flash（底层 DeepSeek-V4.1-Flash）支持图像理解，1M 上下文，
+ * OpenAI 兼容格式，单图最多计 1024 token。
+ * 注意别写成 deepseek-v4-flash 或 deepseek-v4-flash-vision-exp：
+ * 那两个名字对应的模型已下线，请求会由当前 Flash 模型承接。
+ * 见 https://api-docs.deepseek.com/zh-cn/guides/vision
  */
-export const GLM_MODEL: string = 'glm-4.6v-flash';
+export const AI_MODEL: string = 'deepseek-flash';
 
-/** 仅保留智谱 GLM 一家，其余服务商预设已移除 */
+/** 当前只保留一家服务商，其余预设已移除 */
 export const PRESETS: ProviderPreset[] = [
-  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, '智谱 GLM', GLM_BASE_URL,
-    GLM_MODEL, '国内直连，glm-4.6v-flash 完全免费且支持识图')
+  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, 'DeepSeek', AI_BASE_URL,
+    AI_MODEL, '国内直连，识别一张照片约 0.4 分钱（空闲时段减半）')
 ];

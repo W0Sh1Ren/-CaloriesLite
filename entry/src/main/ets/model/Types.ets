@@ -48,7 +48,7 @@ export enum FoodSource {
 
 /** 识别服务商 */
 export enum AiProvider {
-  /** OpenAI 兼容的 /v1/chat/completions 接口（智谱、通义、Kimi、DeepSeek、硅基流动、中转站等） */
+  /** OpenAI 兼容的 /chat/completions 接口（DeepSeek 及各类兼容服务） */
   OPENAI_COMPATIBLE = 'openai_compatible',
   /** Google Gemini */
   GEMINI = 'gemini'
@@ -83,10 +83,10 @@ export class UserProfile {
 /** AI 识别配置 —— 用户自备 API */
 export class AiConfig {
   provider: AiProvider = AiProvider.OPENAI_COMPATIBLE;
-  /** 形如 https://open.bigmodel.cn/api/paas/v4 ，不带结尾斜杠 */
+  /** 形如 https://api.deepseek.com ，不带结尾斜杠 */
   baseUrl: string = '';
   apiKey: string = '';
-  /** 模型名，默认 glm-4.6v-flash */
+  /** 模型名，默认 deepseek-flash */
   model: string = '';
 
   /**

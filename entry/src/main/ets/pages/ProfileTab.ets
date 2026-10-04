@@ -385,8 +385,8 @@ export struct ProfileTab {
       .width('100%')
 
       Text(this.aiReady
-        ? '使用你自己的智谱 API Key，识别结果只发往智谱开放平台'
-        : '填上你的智谱 API Key 就能拍照识别食物，glm-4.6v-flash 免费；本应用不提供也不代管任何额度')
+        ? '使用你自己的 DeepSeek API Key，识别结果只发往 DeepSeek'
+        : '填上你的 DeepSeek API Key 就能拍照识别食物，一张照片约 0.4 分钱；本应用不提供也不代管任何额度')
         .fontSize(12)
         .fontColor(COLOR_TEXT_SUB)
         .width('100%')

@@ -3,7 +3,7 @@
  */
 import { Store } from '../common/Store';
 import { getBool, getNum, getStr, JsonMap, parseObject, toEnum } from '../common/JsonUtil';
-import { ACTIVITY_ORDER, GLM_BASE_URL, GLM_MODEL, GOAL_ORDER } from '../model/Enums';
+import { ACTIVITY_ORDER, AI_BASE_URL, AI_MODEL, GOAL_ORDER } from '../model/Enums';
 import { ActivityLevel, AiConfig, AiProvider, Gender, Goal, UserProfile } from '../model/Types';
 
 const KEY_PROFILE = 'user_profile';
@@ -19,14 +19,31 @@ function defaultProfile(): UserProfile {
 }
 
 function defaultAiConfig(): AiConfig {
-  // 默认就填好智谱的地址和免费识图模型，用户只需再粘一个 API Key
-  return new AiConfig(AiProvider.OPENAI_COMPATIBLE, GLM_BASE_URL, '', GLM_MODEL);
+  // 默认填好地址与模型，用户只需再粘一个 API Key
+  return new AiConfig(AiProvider.OPENAI_COMPATIBLE, AI_BASE_URL, '', AI_MODEL);
 }
 
-/** 已下线的旧模型名 → 现用模型名，避免老用户配置失效 */
-const MODEL_MIGRATIONS: Map<string, string> = (() => {
-  const m: Map<string, string> = new Map<string, string>();
-  m.set('glm-4v-flash', GLM_MODEL);
+/**
+ * 模型名/地址迁移表。
+ *
+ * 服务商换过一轮（智谱 → DeepSeek），老用户存的是智谱的地址与模型名，
+ * 直接沿用会 404。这里按旧模型名把地址和模型名一起换成新服务商的。
+ */
+class AiMigration {
+  model: string;
+  baseUrl: string;
+
+  constructor(model: string, baseUrl: string) {
+    this.model = model;
+    this.baseUrl = baseUrl;
+  }
+}
+
+const AI_MIGRATIONS: Map<string, AiMigration> = (() => {
+  const m: Map<string, AiMigration> = new Map<string, AiMigration>();
+  // 智谱的两个模型名，都迁到当前的 DeepSeek 配置
+  m.set('glm-4v-flash', new AiMigration(AI_MODEL, AI_BASE_URL));
+  m.set('glm-4.6v-flash', new AiMigration(AI_MODEL, AI_BASE_URL));
   return m;
 })();
 
@@ -84,17 +101,25 @@ export class SettingsRepo {
     }
     const def: AiConfig = defaultAiConfig();
 
-    // 旧版本存的是 glm-4v-flash，这个模型已下线，自动换成当前的免费识图模型
+    // 老配置存的是智谱的模型名与地址，这里整组迁到当前服务商，
+    // 否则沿用旧地址会直接 404。
     let model: string = getStr(map, 'model', def.model);
-    const migrated: string | undefined = MODEL_MIGRATIONS.get(model);
+    let baseUrl: string = getStr(map, 'baseUrl', def.baseUrl);
+    let apiKey: string = getStr(map, 'apiKey', '');
+    const migrated: AiMigration | undefined = AI_MIGRATIONS.get(model);
     if (migrated !== undefined) {
-      model = migrated;
+      model = migrated.model;
+      baseUrl = migrated.baseUrl;
+      // Key 是跟着服务商走的，换了服务商旧 Key 必然无效（会直接 401）。
+      // 与其让用户对着一个「已配置」却报错的界面，不如清掉，
+      // 让「未配置」的状态如实反映需要重新填 Key。
+      apiKey = '';
     }
 
     return new AiConfig(
       toEnum<AiProvider>(getStr(map, 'provider', def.provider), ALL_PROVIDERS, def.provider),
-      getStr(map, 'baseUrl', def.baseUrl),
-      getStr(map, 'apiKey', ''),
+      baseUrl,
+      apiKey,
       model,
       getBool(map, 'thinking', def.thinking)
     );

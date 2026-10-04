@@ -1,14 +1,14 @@
 /**
  * AI 识别配置页。
  *
- * 用智谱开放平台的 OpenAI 兼容接口做识图：填 API Key 和模型名，点「测试」当场验证。
+ * 用 DeepSeek 的 OpenAI 兼容接口做识图：填 API Key 和模型名，点「测试」当场验证。
  * Key 只存在本机应用沙箱里，不经任何中转。
  */
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { AiConfig, AiProvider } from '../model/Types';
-import { GLM_BASE_URL, GLM_MODEL, PRESETS, ProviderPreset } from '../model/Enums';
+import { AI_BASE_URL, AI_MODEL, PRESETS, ProviderPreset } from '../model/Enums';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { VisionService, VisionError } from '../service/VisionService';
 import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
@@ -18,10 +18,10 @@ const DOMAIN = 0x0000;
 @Entry
 @Component
 struct AiSettings {
-  /** 固定走 OpenAI 兼容协议（智谱），不需要用户选 */
-  @State baseUrl: string = GLM_BASE_URL;
+  /** 固定走 OpenAI 兼容协议，不需要用户选 */
+  @State baseUrl: string = AI_BASE_URL;
   @State apiKey: string = '';
-  @State model: string = GLM_MODEL;
+  @State model: string = AI_MODEL;
   /** 思考模式，默认关；开了更准但更贵更慢 */
   @State thinking: boolean = false;
   @State showKey: boolean = false;
@@ -31,9 +31,9 @@ struct AiSettings {
 
   aboutToAppear(): void {
     const c: AiConfig = SettingsRepo.loadAiConfig();
-    this.baseUrl = c.baseUrl.length > 0 ? c.baseUrl : GLM_BASE_URL;
+    this.baseUrl = c.baseUrl.length > 0 ? c.baseUrl : AI_BASE_URL;
     this.apiKey = c.apiKey;
-    this.model = c.model.length > 0 ? c.model : GLM_MODEL;
+    this.model = c.model.length > 0 ? c.model : AI_MODEL;
     this.thinking = c.thinking;
   }
 
@@ -114,7 +114,7 @@ struct AiSettings {
               .fontWeight(FontWeight.Medium)
               .fontColor(COLOR_TEXT)
               .width('100%')
-            Text('拍照识别用的是你自己的智谱 API Key。下面填的信息只保存本机，识别时由手机直连智谱开放平台，不经过任何中间服务器。')
+            Text('拍照识别用的是你自己的 DeepSeek API Key。下面填的信息只保存本机，识别时由手机直连 DeepSeek，不经过任何中间服务器。')
               .fontSize(12)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
@@ -130,11 +130,11 @@ struct AiSettings {
               .fontSize(13)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
-            Text('OpenAI 兼容（智谱开放平台）')
+            Text('OpenAI 兼容（DeepSeek）')
               .fontSize(14)
               .fontColor(COLOR_TEXT)
               .width('100%')
-            Text('请求发往智谱的 /chat/completions 接口，API Key 只保存在本机。')
+            Text('请求发往 DeepSeek 的 /chat/completions 接口，API Key 只保存在本机。')
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
@@ -144,7 +144,7 @@ struct AiSettings {
           .backgroundColor(COLOR_CARD)
           .borderRadius(RADIUS)
 
-          // 服务商信息（当前只支持智谱 GLM）
+          // 服务商信息（当前只支持 DeepSeek）
           Column({ space: 10 }) {
             Text('服务商')
               .fontSize(13)
@@ -186,7 +186,7 @@ struct AiSettings {
               })
             }, (p: ProviderPreset) => p.title)
 
-            Text('换模型不必改代码：把下面的「模型名」改成智谱平台上其它支持识图的模型即可。')
+            Text('换模型不必改代码：把下面的「模型名」改成 DeepSeek 平台上其它支持识图的模型即可。')
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
@@ -198,7 +198,7 @@ struct AiSettings {
 
           // 填写区
           Column({ space: 14 }) {
-            this.field('接口地址', this.baseUrl, GLM_BASE_URL, false, (v: string) => {
+            this.field('接口地址', this.baseUrl, AI_BASE_URL, false, (v: string) => {
               this.baseUrl = v;
             })
 
@@ -229,22 +229,26 @@ struct AiSettings {
                   this.apiKey = v;
                 })
 
-              Text('在 bigmodel.cn 控制台「API Keys」里创建，形如 xxxxxxxx.yyyyyyyy')
+              Text('在 platform.deepseek.com 的「API keys」里创建，形如 sk-xxxxxxxx')
                 .fontSize(11)
                 .fontColor(COLOR_TEXT_SUB)
                 .width('100%')
             }
             .width('100%')
 
-            this.field('模型名', this.model, GLM_MODEL, false, (v: string) => {
+            this.field('模型名', this.model, AI_MODEL, false, (v: string) => {
               this.model = v;
             })
 
-            Text(`默认 ${GLM_MODEL}，是 GLM-4.6V 的免费版本，支持识图且不收费。`)
+            Text(`默认 ${AI_MODEL}，支持图像理解，1M 上下文。`)
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
-            Text('模型必须支持图片输入，纯文本模型无法识别照片。')
+            Text('别填 deepseek-v4-flash 或 deepseek-v4-flash-vision-exp——那两个名字对应的模型已下线。')
+              .fontSize(11)
+              .fontColor(COLOR_TEXT_SUB)
+              .width('100%')
+            Text('模型必须支持图片输入，DeepSeek 的 deepseek-v4-pro 不支持识图。')
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
