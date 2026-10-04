@@ -130,6 +130,16 @@ export class AppState {
    */
   static profileDirty: boolean = false;
 
+  /**
+   * 桌面卡片带来的目标页。
+   *
+   * 卡片的「拍照记录」区带 wantParams.cardRoute='camera' 拉起应用，
+   * EntryAbility 把它写进这里，首页在刷新时读走并跳转，读完清空。
+   * 用共享状态而不是路由参数：路由参数是无类型 Object，
+   * 而且应用未启动时还没建立路由栈，只能等首页加载完再跳。
+   */
+  static cardRoute: string = '';
+
   static clearPending(): void {
     AppState.pending = null;
   }

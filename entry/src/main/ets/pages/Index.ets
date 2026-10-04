@@ -24,7 +24,7 @@ import { ImageService } from '../service/ImageService';
 import { AppState } from '../common/AppState';
 import {
   COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB,
-  CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_HEIGHT, NAV_MARGIN,
+  CARD_SHADOW, CURVE_BOUNCE, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_HEIGHT, NAV_MARGIN,
   NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
 import { CalorieRing } from '../components/CalorieRing';
@@ -37,6 +37,15 @@ import { HistoryTab } from './HistoryTab';
 import { ProfileTab } from './ProfileTab';
 
 const DOMAIN = 0x0000;
+
+/**
+ * 餐次明细区高度的占位初值（vp），用于「展开动画 1.0」。
+ *
+ * 不能给 0：高度 0 时内层不被布局，onAreaChange 量不到真实高度，
+ * 高度会永远是 0、展开后一片空白（循环依赖）。
+ * 给一个足够容纳多条记录的值，量到真实高度后即被替换。
+ */
+const MEAL_BODY_PLACEHOLDER_H: number = 400;
 
 /**
  * 首页悬浮「拍照识别」按钮的高度。
@@ -133,6 +142,16 @@ struct Index {
   @State modalOpen: boolean = false;
 
   /**
+   * 餐次明细的展开动画状态（展开动画 1.0，见 docs/展开动画1.0.md）。
+   *
+   * mealBodyH：明细区自然高度，初值是足够大的占位值而不是 0 ——
+   *   高度 0 时内层不被布局、onAreaChange 不触发，会陷入循环依赖。
+   * mealAlpha：透明度，**动效就来自它**（高度是即时变化的）。
+   */
+  @State mealBodyH: number = MEAL_BODY_PLACEHOLDER_H;
+  @State mealAlpha: number = 0;
+
+  /**
    * 数据版本号：每次重读当日数据就自增，传给环等自绘组件做强制重绘。
    *
    * 为什么不只依赖子组件的 onDidUpdate / @Watch：
@@ -154,6 +173,7 @@ struct Index {
       this.modalOpen = AppState.modalOpen;
       this.dayKey = todayKey();
       this.reload();
+      this.consumeCardRoute();
     });
     this.modalOpen = AppState.modalOpen;
     this.reload();
@@ -790,7 +810,15 @@ struct Index {
     .borderRadius(12)
   }
 
-  /** 展开/收起某一餐 */
+  /**
+   * 展开/收起某一餐。
+   *
+   * 套用「展开动画 1.0」（见 docs/展开动画1.0.md，在「我的 → 个人情况」
+   * 上定型、用户确认「非常好」）：
+   *   高度即时变化 + 透明度用 animateTo 插值 —— 动效来自透明度。
+   * 高度动画在这套结构下始终没有中间帧（.height() 从占位值跳到实测值
+   * 那一帧不可插值），所以不要改回靠高度做动效。
+   */
   private toggleMeal(meal: MealType): void {
     const next: MealType[] = [];
     let removed: boolean = false;
@@ -803,8 +831,54 @@ struct Index {
     }
     if (!removed) {
       next.push(meal);
+      // 展开前恢复占位高度，逼它重新量一次（明细条数可能已变）
+      this.mealBodyH = MEAL_BODY_PLACEHOLDER_H;
+      this.getUIContext().animateTo({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut }, () => {
+        this.expandedMeals = next;
+        this.mealAlpha = 1;
+      });
+      return;
     }
-    this.expandedMeals = next;
+    this.getUIContext().animateTo({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut }, () => {
+      this.expandedMeals = next;
+      this.mealAlpha = 0;
+    });
+  }
+
+  /** 量餐次明细的自然高度（套用展开动画 1.0 的测量环节） */
+  private onMealBodyArea(area: Area): void {
+    const h: number = Number.parseFloat(`${area.height}`);
+    if (Number.isNaN(h) || h <= 0.5) {
+      return;
+    }
+    if (Math.abs(h - this.mealBodyH) < 0.5) {
+      return;
+    }
+    this.mealBodyH = h;
+  }
+
+  /**
+   * 处理桌面卡片带来的跳转意图。
+   *
+   * 卡片的「拍照记录」区带 cardRoute='camera' 拉起应用，
+   * EntryAbility 写进 AppState，这里读走并跳到拍照页，读完清空
+   *（否则每次刷新都会重新跳一次）。
+   * 卡片其它区域不带参数，落到首页即可，无需处理。
+   */
+  private consumeCardRoute(): void {
+    const route: string = AppState.cardRoute;
+    if (route.length === 0) {
+      return;
+    }
+    AppState.cardRoute = '';
+    if (route === 'camera') {
+      try {
+        router.pushUrl({ url: 'pages/Camera' });
+      } catch (err) {
+        const e: BusinessError = err as BusinessError;
+        hilog.error(DOMAIN, 'CalorieLite', 'card route to camera failed: %{public}s', e.message);
+      }
+    }
   }
 
   private isExpanded(meal: MealType): boolean {
@@ -844,7 +918,8 @@ struct Index {
           .fontSize(14)
           .fontColor(COLOR_TEXT_SUB)
           .rotate({ angle: this.isExpanded(meal) ? 180 : 0 })
-          .animation({ duration: DUR_NORMAL, curve: Curve.EaseInOut })
+          // 与明细区同时长，箭头与容器动作才是一体的
+          .animation({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut })
       }
       .width('100%')
       .padding({ left: 14, right: 14, top: 12, bottom: 12 })
@@ -860,46 +935,65 @@ struct Index {
         Divider().color(COLOR_DIVIDER)
       }
 
-      if (this.isExpanded(meal)) {
-        Column({ space: 8 }) {
-          if (DailyService.recordsOf(this.data.records, meal).length === 0) {
-            Row() {
-              Text('还没有记录')
-                .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
-            }
-            .width('100%')
-            .padding(14)
-          } else {
-            ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
-              RecordRow({
-                record: record,
-                onDelete: (id: string) => {
-                  const target: FoodRecord | undefined =
-                    this.data.records.find((r: FoodRecord) => r.id === id);
-                  if (target !== undefined) {
-                    this.confirmDelete(target);
+      /*
+       * 明细区：套一层「按高度收缩 + 裁切 + 透明度」的容器，
+       * 套用展开动画 1.0（见 docs/展开动画1.0.md）。
+       */
+      Column() {
+        if (this.isExpanded(meal)) {
+          Column({ space: 8 }) {
+            if (DailyService.recordsOf(this.data.records, meal).length === 0) {
+              Row() {
+                Text('还没有记录')
+                  .fontSize(13)
+                  .fontColor(COLOR_TEXT_SUB)
+              }
+              .width('100%')
+              .padding(14)
+            } else {
+              ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
+                RecordRow({
+                  record: record,
+                  onDelete: (id: string) => {
+                    const target: FoodRecord | undefined =
+                      this.data.records.find((r: FoodRecord) => r.id === id);
+                    if (target !== undefined) {
+                      this.confirmDelete(target);
+                    }
                   }
-                }
-              })
-            }, (record: FoodRecord) => record.id)
+                })
+              }, (record: FoodRecord) => record.id)
+            }
           }
+          .width('100%')
+          // 浅底块：与白色卡片形成第二层，明细区一眼是「卡片里的内容」
+          .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+          .backgroundColor(COLOR_BG)
+          /*
+           * 底部的圆角要跟着卡片：卡片圆角 18、外层 padding 0，
+           * 明细块在最底下，不补圆角就会溢出卡片边角。
+           */
+          .borderRadius({ bottomLeft: RADIUS, bottomRight: RADIUS })
+          // 展开时量一次自然高度，供收起动画用
+          .onAreaChange((oldValue: Area, newValue: Area) => {
+            this.onMealBodyArea(newValue);
+          })
         }
-        .width('100%')
-        // 浅底块：与白色卡片形成第二层，明细区一眼是「卡片里的内容」
-        .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-        .backgroundColor(COLOR_BG)
-        /*
-         * 底部的圆角要跟着卡片：卡片圆角 18、外层 padding 0，
-         * 明细块在最底下，不补圆角就会溢出卡片边角。
-         */
-        .borderRadius({ bottomLeft: RADIUS, bottomRight: RADIUS })
-        // 展开/收起都走同一个过渡，收起时自动反向播放
-        .transition(TransitionEffect.OPACITY
-          .combine(TransitionEffect.scale({ x: 1, y: 0.94, centerY: '0%' }))
-          .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut }))
-      } else if (DailyService.recordsOf(this.data.records, meal).length > 0) {
-        // 收起态给一行摘要，避免完全看不到吃了什么
+      }
+      .width('100%')
+      /*
+       * 展开动画 1.0：
+       * 高度即时变化（展开 = 实测高度，收起 = 0），动效由透明度承担。
+       * 不要再挂 transition：条件为假时节点立刻从树上移除，
+       * transition 跑在不参与布局的元素上，会与下方控件重叠（踩过）。
+       */
+      .height(this.isExpanded(meal) ? this.mealBodyH : 0)
+      .clip(true)
+      .opacity(this.isExpanded(meal) ? this.mealAlpha : 0)
+
+      // 收起态给一行摘要，避免完全看不到吃了什么
+      // （原来是 else if 链，套上外层动画容器后必须写成独立 if）
+      if (!this.isExpanded(meal) && DailyService.recordsOf(this.data.records, meal).length > 0) {
         Row() {
           Text(this.mealSummary(meal))
             .fontSize(12)

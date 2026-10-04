@@ -93,6 +93,21 @@
             "resource": "$profile:backup_config"
           }
         ]
+      },
+      {
+        // 桌面卡片（2x2）：热量环 + 三大营养素 + 拍照记录入口。
+        // 卡片 UI 在 ets/widget/pages/CalorieCard.ets，
+        // 数据接口在 ets/entryformability/CalorieCardAbility.ets。
+        "name": "CalorieCardAbility",
+        "srcEntry": "./ets/entryformability/CalorieCardAbility.ets",
+        "type": "form",
+        "exported": true,
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:form_config"
+          }
+        ]
       }
     ]
   }

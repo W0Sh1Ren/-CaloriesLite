@@ -19,6 +19,14 @@
     {
       "name": "reason_photo",
       "value": "用于从相册选择食物照片，识别其中包含的食物和热量"
+    },
+    {
+      "name": "card_display_name",
+      "value": "今日热量"
+    },
+    {
+      "name": "card_desc",
+      "value": "一屏看完今天的热量、三大营养素，点底部直接拍照记录"
     }
   ]
 }

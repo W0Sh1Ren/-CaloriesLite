@@ -5,6 +5,7 @@
     "pages/ResultConfirm",
     "pages/ManualAdd",
     "pages/AiSettings",
-    "pages/DayDetail"
+    "pages/DayDetail",
+    "widget/pages/CalorieCard"
   ]
 }
