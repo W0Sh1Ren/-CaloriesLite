@@ -110,7 +110,17 @@ struct Index {
    * 会冲过头把邻页边缘拖进视口再弹回，观感像「没对齐」。
    * 要的是「走完全程、稳稳停住」。
    */
-  private static readonly VIEW_SPRING: ICurve = curves.springMotion(0.86, 1.0);
+  /**
+   * Swiper 控制器：切换必须走 changeIndex() 才有动画。
+   *
+   * 关键区别（查 swiper.d.ts 确认）：
+   *   .index(value)                     → 等同 changeIndex(value, false)，**瞬切无动画**
+   *   .changeIndex(index, useAnimation) → 该方法本身支持动画
+   * 之前只用 .index(activeTab)，所以点导航是硬切、看不到任何过渡。
+   * 另外 .index() 与 changeIndex() 同时存在会打架（前者瞬切顶掉后者），
+   * 所以 Swiper 上刻意不写 .index()。
+   */
+  private swiperController: SwiperController = new SwiperController();
   /**
    * 模态面板是否正打开。
    *
@@ -214,7 +224,7 @@ struct Index {
          * 从第 0 页切到第 2 页会**连续经过**第 1 页，正是要的观感。
          * 关掉手动滑动（disableSwipe）——切换只由底部导航驱动。
          */
-        Swiper() {
+        Swiper(this.swiperController) {
           Column() {
             this.todayView()
           }
@@ -233,12 +243,33 @@ struct Index {
           .width('100%')
           .height('100%')
         }
-        .index(this.activeTab)
         .loop(false)
+        /*
+         * 刻意**不写 .index(this.activeTab)**。
+         *
+         * .index() 是声明式绑定，值一变就瞬切（等同 changeIndex(v, false)），
+         * 会把 changeIndex(index, true) 的动画顶掉 —— 两者同时存在就是打架，
+         * 结果还是硬切。所以页码只由控制器的 changeIndex 驱动，
+         * activeTab 只用于顶栏标题与导航高亮。
+         */
         .disableSwipe(true)
         .indicator(false)
-        .duration(DUR_VIEW_SWITCH)
-        .curve(Index.VIEW_SPRING)
+        /*
+         * 420ms：跨两页平移是一段不短的距离，340ms 收得太快、
+         * 看不出「经过中间页」。420ms 既能看清连续扫过，又不拖沓
+         *（对齐 iOS 整屏翻页的节奏）。
+         */
+        .duration(420)
+        /*
+         * 用时长型曲线，**不要用 springMotion**。
+         *
+         * 踩过的坑：springMotion 自带时间常数，会忽略 .duration()，
+         * 于是动画在极短时间内走完，观感就是「完全没有动画」
+         *（实测：duration 设 1500ms 仍然瞬切）。
+         * FastOutSlowIn 按 duration 走的「快出慢入」，
+         * 跨多页平移时既有速度感又能稳稳收尾。
+         */
+        .curve(Curve.FastOutSlowIn)
         .width('100%')
         .height('100%')
       }
@@ -413,14 +444,13 @@ struct Index {
       AppState.profileDirty = false;
     }
     /*
-     * 只提交下标。
-     *
-     * 平移动画交给 Swiper 自己播（.index(activeTab) + .curve(VIEW_SPRING)）：
-     * 从第 0 页切到第 2 页时它会连续经过第 1 页，正是要的观感。
-     * 之前手写 animateTo + translate，因为 Row 内子页间距无法预测
-     *（ArkUI 百分比按父容器解析），始终对不上位移量，已弃用。
+     * 只提交下标（顶栏标题、页码高亮等随之更新），
+     * 视觉上的平移**交给 Swiper 的 changeIndex 播**——
+     * 它会按 .curve() / .duration() 平滑滑过去，
+     * 从第 0 页到第 2 页还会连续经过第 1 页。
      */
     this.activeTab = index;
+    this.swiperController.changeIndex(index, true);
     // 回到首页时按当天重读，保证刚记录的餐次立刻出现
     if (index === 0) {
       this.dayKey = todayKey();

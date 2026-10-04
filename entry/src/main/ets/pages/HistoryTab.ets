@@ -38,14 +38,16 @@ export struct HistoryTab {
   @State selectedDay: string = '';
   @State cells: DayCell[] = [];
   /**
-   * 换月动画：每次换月自增，日历据此重放滑入动画。
+   * 换月动画的触发键，方向编码在键里：`n<序号>` 下个月 / `p<序号>` 上个月。
    *
-   * 用「键 + 方向」而不是让日历自己比较月份：
-   * 组件不必知道月份是怎么算的，只管播动画。
+   * 不用「序号 + 单独的方向字段」：两个 Prop 同帧更新时，
+   * @Watch 回调读另一个 Prop 可能拿到上一帧的值，
+   * 表现就是「连续点下月、再点上月，方向还是下月，要多点一次才对」。
+   * 方向与触发同源才可靠。
    */
-  @State monthAnimKey: number = 0;
-  /** 换月方向：1 向后（›）、-1 向前（‹） */
-  @State monthShiftDir: number = 1;
+  @State monthAnimKey: string = '';
+  /** 触发键里的序号，保证每次换月的键都不同（同方向连点也能重播） */
+  @State monthSeq: number = 0;
   @State detail: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
   @State detailRecords: FoodRecord[] = [];
   @State weights: WeightRecord[] = [];
@@ -115,9 +117,12 @@ export struct HistoryTab {
     this.viewYear = y;
     this.viewMonth0 = m;
     this.cells = this.buildCells();
-    // 通知日历播放换月动画：新月份从切换方向那一侧滑入
-    this.monthShiftDir = delta >= 0 ? 1 : -1;
-    this.monthAnimKey++;
+    /*
+     * 换月动画：方向编码进触发键（n = 下个月 / p = 上个月），
+     * 一个 Prop 同时携带「要播动画」和「往哪边」两条信息。
+     */
+    this.monthSeq++;
+    this.monthAnimKey = `${delta >= 0 ? 'n' : 'p'}${this.monthSeq}`;
   }
 
   /** 保存体重：同一天覆盖 */
@@ -219,7 +224,6 @@ export struct HistoryTab {
           cells: this.cells,
           selectedDay: this.selectedDay,
           animKey: this.monthAnimKey,
-          shiftDir: this.monthShiftDir,
           onSelectDay: (day: string) => {
             this.selectedDay = day;
             this.rebuild();

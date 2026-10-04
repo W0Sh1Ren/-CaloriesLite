@@ -56,14 +56,17 @@ export struct CalendarHeatmap {
   @Prop cells: DayCell[] = [];
   @Prop selectedDay: string = '';
   /**
-   * 换月动画的重放键：父组件每次换月自增。
+   * 换月动画的触发键，**方向编码在键里**。
    *
-   * 用 @Watch 而不是比较月份：组件不需要知道月份怎么算，
-   * 收到新键就播一次滑入动画。
+   * 格式：`n<序号>` 切到下个月、`p<序号>` 切到上个月。
+   *
+   * 为什么不单独用一个 shiftDir 数字：两个 Prop 在同一帧一起更新时，
+   * @Watch 回调里读另一个 Prop 可能是**上一帧的值**，
+   * 表现就是「连续点下月、再点上月，动画方向还是下月，要多点一次才对」
+   *（用户实测反馈）。把方向编进触发键，方向与触发同源，
+   * 不存在读到旧值的可能——靠两个赋值语句的执行顺序是不可靠的。
    */
-  @Prop @Watch('onMonthChange') animKey: number = 0;
-  /** 换月方向：1 向后、-1 向前，决定从哪一侧滑入 */
-  @Prop shiftDir: number = 1;
+  @Prop @Watch('onMonthChange') animKey: string = '';
   onSelectDay: (dayKey: string) => void = () => {
   };
 
@@ -71,9 +74,7 @@ export struct CalendarHeatmap {
    * 换月动画的两个可插值量。
    *
    * 名字刻意避开 offset / opacity / scale / translate 这类词：
-   * ArkUI 的 CustomComponent 基类已占用了同名属性（`offset()` / `opacity()`），
-   * 用 gridOffset 会报「not assignable to the same property in base type」
-   *（之前 scale / tabIndex 也踩过同一个坑）。
+   * ArkUI 的 CustomComponent 基类已占用了同名属性（`offset()` / `opacity()`）。
    */
   @State cellShift: number = 0;
   @State cellAlpha: number = 1;
@@ -81,12 +82,16 @@ export struct CalendarHeatmap {
   /**
    * 换月时播一次滑入。
    *
-   * 先把位移摆到起点、透明度归零（**无动画**），下一帧再 animateTo 归位。
+   * 方向直接从 animKey 的首字符取（n = 下个月 / p = 上个月），
+   * 不依赖任何其它 Prop。
+   *
+   * 先把位移摆到起点、透明度归零（**无动画**），下一帧再 animateTo 归位：
    * 同一帧里既摆起点又开动画，起点会来不及上屏就被覆盖，
    * 观感是「从中间冒出来」而不是「滑进来」。
    */
   onMonthChange(): void {
-    this.cellShift = this.shiftDir >= 0 ? 40 : -40;
+    const dir: number = this.animKey.startsWith('p') ? -1 : 1;
+    this.cellShift = dir > 0 ? 40 : -40;
     this.cellAlpha = 0;
     setTimeout(() => {
       this.getUIContext().animateTo({ duration: 260, curve: Curve.FastOutSlowIn }, () => {
