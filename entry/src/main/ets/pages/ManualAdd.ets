@@ -102,7 +102,8 @@ struct ManualAdd {
         Row().width(36).height(36)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
+      // 顶部安全距离，口径与其它页面一致（见 ResultConfirm 的说明）
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
 
       // 搜索
       Row({ space: 10 }) {

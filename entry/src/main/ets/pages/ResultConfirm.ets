@@ -210,7 +210,9 @@ struct ResultConfirm {
         Row().width(36).height(36)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
+      // 顶部安全距离，口径与其它页面一致：普通页的窗口仍延伸到状态栏区域，
+      // 只留 8vp 会让顶栏压在系统时间上（见 AppState.topInset）
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
 
       Scroll() {
         Column({ space: GAP }) {

@@ -349,9 +349,15 @@ struct Index {
    */
   private persistImages(): void {
     // 先做一次全量收敛：合并内容相同的重复文件并删掉孤立的
-    ImageService.dedupeImages(this.data.records, this.uiContext(), (r: FoodRecord) => {
-      FoodRepo.update(r);
-    });
+    // 只跑一次：dedupeImages 要读每张照片的全部字节做两两比对，
+    // 而 persistImages 会随 reload 反复触发（三页常驻后更频繁），
+    // 每次都全量重跑会明显拖慢翻日期/切页。
+    if (!this.imagesPersisted) {
+      this.imagesPersisted = true;
+      ImageService.dedupeImages(this.data.records, this.uiContext(), (r: FoodRecord) => {
+        FoodRepo.update(r);
+      });
+    }
 
     for (const r of this.data.records) {
       const list: string[] = r.gallery();
@@ -383,6 +389,14 @@ struct Index {
 
   /** 图片维护是否已跑过，避免重复转存 */
   private imageTaskDone: boolean = false;
+  /**
+   * 图片去重是否已跑过。
+   *
+   * 与 imageTaskDone 分开：那个管的是「要不要安排这次维护」，
+   * 这个管的是「去重这个重活有没有跑过」。dedupeImages 要读全部字节
+   * 做两两比对，重复跑代价很高，而 persistImages 会随 reload 反复进入。
+   */
+  private imagesPersisted: boolean = false;
 
   /**
    * 重读当日数据。

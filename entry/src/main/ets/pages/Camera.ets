@@ -195,7 +195,13 @@ struct CameraPage {
         Row().width(36).height(36)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
+      /*
+       * 顶部安全距离，口径与其它页面一致（DayDetail / 主界面）：
+       * 用 AppState.topInset（EntryAbility 实测的 avoid area 高度）。
+       * 这一页是普通页，窗口仍会延伸到状态栏区域，
+       * 只留 8vp 的话顶栏会压在系统时间上（实测反馈）。
+       */
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
 
       Scroll() {
         Column({ space: GAP }) {

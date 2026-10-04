@@ -10,6 +10,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AiConfig, AiProvider } from '../model/Types';
 import { AI_BASE_URL, AI_MODEL, PRESETS, ProviderPreset } from '../model/Enums';
 import { SettingsRepo } from '../service/SettingsRepo';
+import { AppState } from '../common/AppState';
 import { VisionService, VisionError } from '../service/VisionService';
 import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
@@ -103,7 +104,8 @@ struct AiSettings {
         Row().width(36).height(36)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
+      // 顶部安全距离，口径与其它页面一致（见 ResultConfirm 的说明）
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
 
       Scroll() {
         Column({ space: GAP }) {
