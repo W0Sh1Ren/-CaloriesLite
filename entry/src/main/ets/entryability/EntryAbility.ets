@@ -4,6 +4,7 @@ import { window } from '@kit.ArkUI';
 
 import { SafeArea } from '../common/SafeArea';
 import { Store } from '../common/Store';
+import { ImageService } from '../service/ImageService';
 
 const DOMAIN = 0x0000;
 
@@ -22,6 +23,10 @@ export default class EntryAbility extends UIAbility {
     // 漏掉这一步时 Store.prefs 一直是 null，所有写入都会被静默丢弃：
     // API Key、个人情况、饮食记录全都存不住，界面还照常显示，极难排查。
     Store.init(this.context);
+
+    // 清掉缓存里过期的临时识别图。用户取消识别时那份压缩副本
+    // 不会有人接手，长期会堆积占空间。
+    ImageService.cleanOldShots(this.context);
 
     hilog.info(DOMAIN, 'CalorieLite', '%{public}s', 'Ability onCreate');
   }

@@ -148,13 +148,30 @@ struct Index {
    * 注意必须用 update 而不是 addMany：addMany 是纯追加、不按 id 去重，
    * 用它会把当天每条记录都复制一遍。
    */
+  /**
+   * 图片转存与去重（每次加载只跑一次）。
+   *
+   * 相机与相册给的 uri 都在临时目录，缓存也可能被系统回收，
+   * 直接落库的话过几天图片就丢了，所以要转存到 filesDir。
+   *
+   * 两个关键点：
+   *   1. 整批共用一个 memo（persistAll）。同一餐的多道菜共享同一组照片，
+   *      逐条转存会把一张图复制 N 份——实测 2 张照片被复制成 20 个文件，
+   *      详情页里图片就会一直重复滚动。
+   *   2. 落盘必须用 update 而不是 addMany：后者纯追加、不按 id 去重，
+   *      会把当天记录整体复制一遍。
+   */
   private persistImages(): void {
+    // 先做一次全量收敛：合并内容相同的重复文件并删掉孤立的
+    ImageService.dedupeImages(this.data.records, this.uiContext(), (r: FoodRecord) => {
+      FoodRepo.update(r);
+    });
+
     for (const r of this.data.records) {
       const list: string[] = r.gallery();
       if (list.length === 0) {
         continue;
       }
-      // 整组一起判断：只要有一张还在缓存里就整组转存一遍
       let needs: boolean = false;
       for (const u of list) {
         if (!u.includes('/food_images/')) {
@@ -165,11 +182,7 @@ struct Index {
       if (!needs) {
         continue;
       }
-      const saved: string[] = [];
-      for (const u of list) {
-        const one: string = ImageService.persist(u, this.uiContext());
-        saved.push(one.length > 0 ? one : u);
-      }
+      const saved: string[] = ImageService.persistAll(list, this.uiContext());
       r.imageUris = saved;
       r.imageUri = saved[0];
       FoodRepo.update(r);

@@ -13,6 +13,8 @@ import { util } from '@kit.ArkTS';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
+import { FoodRecord } from '../model/Types';
+
 const DOMAIN = 0x0000;
 
 /** 压缩后长边像素上限 */
@@ -249,10 +251,25 @@ export class ImageService {
    *
    * 只做拷贝不做重新压缩——传进来的已经是压缩过的那份，
    * 再压一次纯属掉画质。
+   *
+   * @param memo 来源 uri → 已转存 uri 的映射。
+   *   同一个来源在一次批量处理里必须复用同一份文件：一次识别出的 N 道菜
+   *   共享同一组照片，逐条调用会把这组照片复制 N 份
+   *   （实测踩过：2 张照片被复制成 20 个文件，详情页里图片一直重复滚动）。
    */
-  static persist(uri: string, context: common.Context): string {
+  static persist(uri: string, context: common.Context, memo?: Map<string, string>): string {
     if (uri.length === 0) {
       return '';
+    }
+    // 已经是持久路径就直接返回，不重复拷贝
+    if (uri.includes('/food_images/')) {
+      return uri;
+    }
+    if (memo !== undefined) {
+      const hit: string | undefined = memo.get(uri);
+      if (hit !== undefined) {
+        return hit;
+      }
     }
     const src: string = uri.startsWith('file://') ? uri.substring(7) : uri;
     try {
@@ -266,7 +283,7 @@ export class ImageService {
         const stat: fs.Stat = fs.statSync(from.fd);
         const buf: ArrayBuffer = new ArrayBuffer(stat.size);
         fs.readSync(from.fd, buf);
-        const to: fs.File = fs.openSync(target, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+        const to: fs.File = fs.openSync(target, fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE);
         try {
           fs.writeSync(to.fd, buf);
         } finally {
@@ -275,12 +292,31 @@ export class ImageService {
       } finally {
         fs.closeSync(from);
       }
-      return `file://${target}`;
+      const saved: string = `file://${target}`;
+      if (memo !== undefined) {
+        memo.set(uri, saved);
+      }
+      return saved;
     } catch (err) {
       // 转存失败就退回原 uri：图片可能仍可用，总比完全没有强
       hilog.warn(DOMAIN, 'CalorieLite', 'persist image failed, keep original uri');
       return uri;
     }
+  }
+
+  /**
+   * 转存一组图片，同一批内复用转存结果。
+   *
+   * 这是给「按天/按餐批量处理」用的入口，内部共用一个 memo，
+   * 保证同一张原图不会在这一次批量里被复制多份。
+   */
+  static persistAll(uris: string[], context: common.Context): string[] {
+    const memo: Map<string, string> = new Map<string, string>();
+    const out: string[] = [];
+    for (const u of uris) {
+      out.push(ImageService.persist(u, context, memo));
+    }
+    return out;
   }
 
   /**
@@ -315,6 +351,186 @@ export class ImageService {
     } catch (err) {
       hilog.warn(DOMAIN, 'CalorieLite', 'cleanOldShots failed');
     }
+  }
+
+  /** 读文件全部字节，失败返回 null */
+  private static readBytes(path: string): Uint8Array | null {
+    try {
+      const f: fs.File = fs.openSync(path, fs.OpenMode.READ_ONLY);
+      try {
+        const st: fs.Stat = fs.statSync(f.fd);
+        const buf: ArrayBuffer = new ArrayBuffer(st.size);
+        fs.readSync(f.fd, buf);
+        return new Uint8Array(buf);
+      } finally {
+        fs.closeSync(f);
+      }
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /** 两份字节是否完全相同 */
+  private static sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 合并内容完全相同的图片文件，并删除不再被引用的文件。
+   *
+   * 背景：早期版本在补偿转存历史图片时按记录逐条调用 persist，
+   * 一次识别出的 N 道菜共享的同一组照片被复制了 N 份
+   * （实测 2 张照片变成 20 个文件，详情页里图片一直重复滚动）。
+   *
+   * 这里做一次性收敛：先按文件大小分组（便宜），只对同尺寸的候选
+   * 做逐字节比对（贵但准确），把重复项全部指向保留的那一份。
+   *
+   * 被改写的记录通过 onRecordChanged 逐条回传，由调用方决定怎么落盘——
+   * 不在这里直接写库，避免与本文件的职责耦合，也避免整表覆写
+   * 把调用方在同一轮里做的其它改动冲掉。
+   *
+   * @returns 被删除的重复文件数
+   */
+  static dedupeImages(records: FoodRecord[], context: common.Context,
+    onRecordChanged: (record: FoodRecord) => void): number {
+    if (records.length === 0) {
+      return 0;
+    }
+
+    // 1) 收集所有被引用的本地文件路径
+    const referenced: string[] = [];
+    for (const r of records) {
+      for (const u of r.gallery()) {
+        if (u.includes('/food_images/')) {
+          const p: string = u.startsWith('file://') ? u.substring(7) : u;
+          if (!referenced.includes(p)) {
+            referenced.push(p);
+          }
+        }
+      }
+    }
+    if (referenced.length === 0) {
+      return 0;
+    }
+
+    // 2) 按大小分组，组内再做内容比对，决定每个路径的「规范路径」
+    const canonical: Map<string, string> = new Map<string, string>();
+    const bySize: Map<number, string[]> = new Map<number, string[]>();
+    for (const p of referenced) {
+      try {
+        const st: fs.Stat = fs.statSync(p);
+        const list: string[] | undefined = bySize.get(st.size);
+        if (list === undefined) {
+          bySize.set(st.size, [p]);
+        } else {
+          list.push(p);
+        }
+      } catch (e) {
+        // 文件不存在：保持原样，不参与合并
+        canonical.set(p, p);
+      }
+    }
+
+    bySize.forEach((group: string[]) => {
+      if (group.length === 1) {
+        canonical.set(group[0], group[0]);
+        return;
+      }
+      const kept: string[] = [];
+      const keptBytes: Uint8Array[] = [];
+      for (const p of group) {
+        const bytes: Uint8Array | null = ImageService.readBytes(p);
+        if (bytes === null) {
+          canonical.set(p, p);
+          continue;
+        }
+        let dupOf: string = '';
+        for (let i = 0; i < kept.length; i++) {
+          if (ImageService.sameBytes(bytes, keptBytes[i])) {
+            dupOf = kept[i];
+            break;
+          }
+        }
+        if (dupOf.length > 0) {
+          canonical.set(p, dupOf);
+        } else {
+          kept.push(p);
+          keptBytes.push(bytes);
+          canonical.set(p, p);
+        }
+      }
+    });
+
+    // 3) 改写记录：把重复引用替换成规范路径，并去掉组内重复项
+    let rewritten: number = 0;
+    for (const r of records) {
+      const list: string[] = r.gallery();
+      if (list.length === 0) {
+        continue;
+      }
+      const next: string[] = [];
+      let changed: boolean = false;
+      for (const u of list) {
+        let mapped: string = u;
+        if (u.includes('/food_images/')) {
+          const p: string = u.startsWith('file://') ? u.substring(7) : u;
+          const c: string | undefined = canonical.get(p);
+          if (c !== undefined && c !== p) {
+            mapped = `file://${c}`;
+            changed = true;
+          }
+        }
+        if (!next.includes(mapped)) {
+          next.push(mapped);
+        } else {
+          changed = true;
+        }
+      }
+      if (changed) {
+        r.imageUris = next;
+        r.imageUri = next.length > 0 ? next[0] : '';
+        rewritten++;
+        onRecordChanged(r);
+      }
+    }
+
+    // 4) 删除不再被任何记录引用的文件
+    const stillUsed: string[] = [];
+    for (const r of records) {
+      for (const u of r.gallery()) {
+        if (u.includes('/food_images/')) {
+          const p: string = u.startsWith('file://') ? u.substring(7) : u;
+          if (!stillUsed.includes(p)) {
+            stillUsed.push(p);
+          }
+        }
+      }
+    }
+    let removed: number = 0;
+    for (const p of referenced) {
+      if (!stillUsed.includes(p)) {
+        try {
+          fs.unlinkSync(p);
+          removed++;
+        } catch (e) {
+          // 删除失败不影响功能，顶多占点空间
+        }
+      }
+    }
+
+    if (removed > 0 || rewritten > 0) {
+      hilog.info(DOMAIN, 'CalorieLite',
+        'dedupe images: removed %{public}d, rewrote %{public}d record(s)', removed, rewritten);
+    }
+    return removed;
   }
 
   /** 读一个本地文件成 base64（调试/复用历史图片时用） */
