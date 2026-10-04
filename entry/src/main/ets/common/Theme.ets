@@ -140,6 +140,20 @@ export const TOP_BAR_SHADOW: ShadowOptions = {
   offsetY: 4
 };
 
+/**
+ * 输入框文字对比度（务必在每个 TextInput / TextArea 上显式设置）。
+ *
+ * 问题：不指定时用系统默认色，在本应用的浅色底（COLOR_BG #F5F8F6）上
+ * 对比度很低，正文与占位符都几乎与背景同色，读不出来（实测反馈）。
+ *
+ * 试过用 @Styles 全局收敛，但 @Styles 只能作用于 CommonAttribute，
+ * 而 fontColor / placeholderColor 是 TextInput 的专属属性，
+ * 会报「Property 'fontColor' does not exist on type 'CommonAttribute'」。
+ * 所以只能逐处写，新增输入框时照抄这两行。
+ */
+export const INPUT_TEXT: string = COLOR_TEXT;
+export const INPUT_PLACEHOLDER: string = COLOR_TEXT_SUB;
+
 /** 换算：1 公斤脂肪约等于多少千卡 */
 export const KCAL_PER_KG_FAT: number = 7700;
 

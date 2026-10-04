@@ -20,7 +20,7 @@ import { ExerciseRepo } from '../service/ExerciseRepo';
 import { calcExerciseKcal, MET_TABLE, MetItem } from '../service/CalorieCalc';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 
 const DOMAIN = 0x0000;
@@ -29,8 +29,31 @@ const DOMAIN = 0x0000;
 export struct HistoryTab {
   /** 主页面当前选中的日期 */
   @Prop dayKey: string = todayKey();
-  /** 主页面自增的刷新信号 */
-  @Prop refreshTick: number = 0;
+  /**
+   * 主页面自增的刷新信号。
+   *
+   * **必须挂 @Watch**：三页用 Swiper 常驻之后，切页不再重建组件，
+   * 原先靠「切回来时 aboutToAppear 重读」这条路失效了。
+   * 触发不了重读的表现就是「别处改完体重/档案，回到这页还是旧数据」
+   *（实测反馈「体重记录不能实时显示」）。
+   */
+  @Prop @Watch('onRefreshTick') refreshTick: number = 0;
+
+  /** 父组件要求重读数据（日期变了、或别的页面写了记录） */
+  onRefreshTick(): void {
+    /*
+     * 同步选中日期。主页面翻日期后 refreshTick 与 dayKey 会一起变，
+     * 这里要跟过去，否则日历高亮的还是旧那天。
+     */
+    if (this.dayKey.length > 0) {
+      this.selectedDay = this.dayKey;
+      const d = new Date(fromDayKey(this.dayKey));
+      this.viewYear = d.getFullYear();
+      this.viewMonth0 = d.getMonth();
+    }
+    this.bottomInset = AppState.bottomInset;
+    this.rebuild();
+  }
 
   /** 月历当前显示的月份 */
   @State viewYear: number = 0;
@@ -51,6 +74,8 @@ export struct HistoryTab {
   @State detail: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
   @State detailRecords: FoodRecord[] = [];
   @State weights: WeightRecord[] = [];
+  /** 体重数据的版本号：每次写入自增，驱动折线图重绘（onDidUpdate 不总触发） */
+  @State weightsVersion: number = 0;
   @State exercises: ExerciseRecord[] = [];
   @State weightInput: string = '';
   /** 底部安全区高度，由 EntryAbility 实测后写入 AppState */
@@ -137,6 +162,8 @@ export struct HistoryTab {
     // 换新数组而不是原地改：@Prop 只比较引用，
     // 引用不变时子组件不会重建，Canvas 也就不会重绘
     this.weights = BodyRepo.recent(60).slice();
+    // 显式自增版本号：Canvas 是自绘的，只换数组引用不保证重绘
+    this.weightsVersion++;
     // 体重会影响预算（TDEE 按体重算），推给全局让首页一起更新
     AppState.mirrorToday(DailyService.summaryOf(this.selectedDay));
     AppState.notifyDataChanged();
@@ -224,6 +251,10 @@ export struct HistoryTab {
           cells: this.cells,
           selectedDay: this.selectedDay,
           animKey: this.monthAnimKey,
+          // 左右滑也能换月，走同一条 shiftMonth 链路（含动画与数据重算）
+          onSwipeMonth: (delta: number) => {
+            this.shiftMonth(delta);
+          },
           onSelectDay: (day: string) => {
             this.selectedDay = day;
             this.rebuild();
@@ -433,13 +464,15 @@ export struct HistoryTab {
   @Builder
   weightCard() {
     Column({ space: 10 }) {
-      WeightChart({ records: this.weights })
+      WeightChart({ records: this.weights, refreshKey: this.weightsVersion })
 
       Row({ space: 10 }) {
         TextInput({ text: this.weightInput, placeholder: '输入体重（公斤）' })
           .type(InputType.NUMBER_DECIMAL)
           .height(42)
           .layoutWeight(1)
+          .fontColor(INPUT_TEXT)
+          .placeholderColor(INPUT_PLACEHOLDER)
           .backgroundColor(COLOR_BG)
           .borderRadius(10)
           .onChange((v: string) => {

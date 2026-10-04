@@ -14,7 +14,7 @@ import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
 import { AppState } from '../common/AppState';
 import { DailyService } from '../service/DailyService';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
 @Entry
 @Component
@@ -110,6 +110,8 @@ struct ManualAdd {
           .fontSize(14)
           .height(42)
           .layoutWeight(1)
+          .fontColor(INPUT_TEXT)
+          .placeholderColor(INPUT_PLACEHOLDER)
           .backgroundColor(COLOR_CARD)
           .borderRadius(10)
           .onChange((v: string) => {
@@ -239,6 +241,8 @@ struct ManualAdd {
               .fontSize(14)
               .height(40)
               .layoutWeight(1)
+              .fontColor(INPUT_TEXT)
+              .placeholderColor(INPUT_PLACEHOLDER)
               .backgroundColor(COLOR_BG)
               .borderRadius(8)
               .onChange((v: string) => {

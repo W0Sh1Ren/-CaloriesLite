@@ -14,7 +14,7 @@ import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
 import { DailyService } from '../service/DailyService';
 import { AppState, PendingResult } from '../common/AppState';
-import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -355,6 +355,8 @@ struct ResultConfirm {
           .fontSize(15)
           .height(40)
           .layoutWeight(1)
+          .fontColor(INPUT_TEXT)
+          .placeholderColor(INPUT_PLACEHOLDER)
           .backgroundColor(COLOR_BG)
           .borderRadius(8)
           .onChange((v: string) => {
@@ -377,6 +379,8 @@ struct ResultConfirm {
           .fontSize(14)
           .height(40)
           .layoutWeight(1)
+          .fontColor(INPUT_TEXT)
+          .placeholderColor(INPUT_PLACEHOLDER)
           .backgroundColor(COLOR_BG)
           .borderRadius(8)
           .onChange((v: string) => {

@@ -14,7 +14,7 @@ import { AppState } from '../common/AppState';
 import { topReserve } from '../components/GlassTopBar';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 import { RollingNumber } from '../components/RollingNumber';
 
@@ -313,6 +313,12 @@ export struct ProfileTab {
           .type(InputType.NUMBER_DECIMAL)
           .fontSize(24)
           .fontWeight(FontWeight.Medium)
+          /*
+           * 显式指定文字与占位符颜色（见 Theme.INPUT_TEXT 的说明）：
+           * 不指定时用系统默认色，在这套浅色底上几乎与背景同色、读不出来。
+           */
+          .fontColor(INPUT_TEXT)
+          .placeholderColor(INPUT_PLACEHOLDER)
           .textAlign(TextAlign.Center)
           .height(64)
           .width('100%')
@@ -326,13 +332,40 @@ export struct ProfileTab {
           .fontSize(11)
           .fontColor(COLOR_TEXT_SUB)
       } else {
+        /*
+         * 滚轮选择。
+         *
+         * 之前只设了 selectedTextStyle，未选中项用的是系统默认——
+         * 结果整个滚轮看起来**只有一个数字**，完全看不出可以上下选
+         *（实测反馈）。要把三档都显式给出来：
+         *   selected  当前项，最大最亮
+         *   textStyle 上下相邻项，明显可见但弱一档
+         *   disappear 再往外淡出
+         * 三档形成层次，一眼就知道是个滚轮。
+         */
         TextPicker({ range: this.pickerOptions, selected: this.pickerIndex })
           .width('100%')
-          .height(180)
-          .selectedTextStyle({ color: COLOR_PRIMARY, font: { size: 20, weight: FontWeight.Medium } })
+          .height(200)
+          .canLoop(false)
+          .selectedTextStyle({
+            color: COLOR_PRIMARY,
+            font: { size: 26, weight: FontWeight.Bold }
+          })
+          .textStyle({
+            color: COLOR_TEXT,
+            font: { size: 19, weight: FontWeight.Normal }
+          })
+          .disappearTextStyle({
+            color: COLOR_TEXT_SUB,
+            font: { size: 16, weight: FontWeight.Normal }
+          })
           .onChange((value: string | string[], index: number | number[]) => {
             this.pickerIndex = typeof index === 'number' ? index : index[0];
           })
+
+        Text('上下滑动选择')
+          .fontSize(11)
+          .fontColor(COLOR_TEXT_SUB)
       }
 
       Row().height(16)

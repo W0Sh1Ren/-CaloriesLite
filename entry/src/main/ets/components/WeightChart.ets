@@ -21,6 +21,15 @@ const PAD_BOTTOM = 32;
 @Component
 export struct WeightChart {
   @Prop records: WeightRecord[] = [];
+  /**
+   * 外部刷新键：父组件每次写入体重就自增。
+   *
+   * 为什么不能只靠 onDidUpdate：本项目已多次踩到
+   *「onDidUpdate 在父组件只换了数据时不触发」（热量环弧线、滚动数字）。
+   * 显式刷新键是最确定的信号，少了它就会出现「记了体重、
+   * 下面提示变了，但折线图还是旧的」。
+   */
+  @Prop @Watch('onRefresh') refreshKey: number = 0;
   @Prop chartHeight: number = 170;
 
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
@@ -36,6 +45,15 @@ export struct WeightChart {
    * 但图里还写着还没有体重记录」（实测踩过）。
    */
   onDidUpdate(): void {
+    this.redraw();
+  }
+
+  /** refreshKey 变化时重绘（比 onDidUpdate 可靠） */
+  onRefresh(): void {
+    this.redraw();
+  }
+
+  private redraw(): void {
     if (this.canvasReady) {
       this.draw(this.ctx.width, this.ctx.height);
     }

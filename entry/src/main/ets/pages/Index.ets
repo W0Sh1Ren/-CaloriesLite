@@ -47,6 +47,9 @@ const DOMAIN = 0x0000;
  */
 const CAMERA_BAR_HEIGHT: number = 50;
 
+/** 判定为「翻日期滑动」的最小水平位移（vp）。理由同 CalendarHeatmap 里的同名常量 */
+const DATE_SWIPE_MIN_VP: number = 40;
+
 /**
  * 悬浮按钮底边距屏幕底的高度。
  *
@@ -487,9 +490,28 @@ struct Index {
     }
   }
 
+  /**
+   * 左右滑切换日期。
+   *
+   * 与顶栏的步进按钮走同一条 shiftDate 链路（含未来日期拦截）。
+   * 阈值 40vp：不设阈值的话，点餐次折叠、点记录行时的轻微横向抖动
+   * 都会被判成翻日期——这些是首页最常用的操作，误触代价很高。
+   */
+  private onDateSwipe(dx: number): void {
+    if (Math.abs(dx) < DATE_SWIPE_MIN_VP) {
+      return;
+    }
+    // 手指向左滑（dx < 0）→ 看后一天
+    this.shiftDate(dx < 0 ? 1 : -1);
+  }
+
   private shiftDate(delta: number): void {
     const next: string = shiftDay(this.dayKey, delta);
     if (next > todayKey()) {
+      // 已经是最新一天：给个反馈，否则滑动像「没反应」
+      if (delta > 0) {
+        promptAction.showToast({ message: '已经是最新一天了' });
+      }
       return;
     }
     this.dayKey = next;
@@ -661,6 +683,19 @@ struct Index {
     }
     .width('100%')
     .height('100%')
+    /*
+     * 左右滑切换日期，与顶栏的步进按钮同一条链路。
+     *
+     * 只认水平方向，纵向留给内容滚动（两者不冲突）。
+     * 阈值在 onDateSwipe 里判：不设阈值的话，点餐次折叠、点记录行时的
+     * 轻微横向抖动都会被判成翻日期。
+     */
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionEnd((event: GestureEvent) => {
+          this.onDateSwipe(event.offsetX);
+        })
+    )
   }
 
   /** 日期切换条 */

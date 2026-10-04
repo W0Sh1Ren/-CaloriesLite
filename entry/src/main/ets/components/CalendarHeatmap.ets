@@ -49,6 +49,13 @@ const COL_INDEXES: number[] = [0, 1, 2, 3, 4, 5, 6];
 const CELL_HEIGHT: number = 40;
 /** 全透明色。写成字符串而不是 Color.Transparent，保证辅助函数返回类型一致 */
 const TRANSPARENT: string = '#00000000';
+/**
+ * 判定为「翻月滑动」的最小水平位移（vp）。
+ *
+ * 不设阈值的话，点选某个日期时手指的轻微抖动也会被判成翻月——
+ * 点日期是这一页最常用的操作，误触代价很高。
+ */
+const SWIPE_MIN_VP: number = 40;
 
 @Component
 export struct CalendarHeatmap {
@@ -67,6 +74,9 @@ export struct CalendarHeatmap {
    * 不存在读到旧值的可能——靠两个赋值语句的执行顺序是不可靠的。
    */
   @Prop @Watch('onMonthChange') animKey: string = '';
+  /** 左右滑切换月份：方向 1 = 下个月、-1 = 上个月，由父组件执行换月 */
+  onSwipeMonth: (delta: number) => void = () => {
+  };
   onSelectDay: (dayKey: string) => void = () => {
   };
 
@@ -163,8 +173,12 @@ export struct CalendarHeatmap {
   build() {
     Column({ space: 2 }) {
       /*
-       * 只有「格子区」参与换月动画，月份标题在父组件那边、不动。
-       * 整块日历滑走会让上面的月份标题和下面的图例跟着跳，很乱。
+       * 裁切容器：换月动画是「下一月从一侧滑入」，滑入过程中格子会
+       * 短暂越出卡片边界，看上去像字从框外面飘进来（实测反馈）。
+       * 用 clip(true) 把这一层裁住，动画就只在卡片内部发生。
+       *
+       * 裁切只包住格子区（不含下面的图例）：图例是静态的，
+       * 没必要参与裁切，也让裁切范围更精确。
        */
       Column({ space: 2 }) {
         // 星期表头：与下面的单元格共用同一套等宽栅格，保证对齐
@@ -180,68 +194,95 @@ export struct CalendarHeatmap {
         }
         .width('100%')
 
-      // 6 行 × 7 列。
-      // 行高必须显式指定：只给格子设高度、行用默认约束时，
-      // 纵向会被拉伸到填满可用空间，导致日历出现大片空白（踩过）。
-      ForEach(ROW_INDEXES, (rowIndex: number) => {
-        Row() {
-          ForEach(COL_INDEXES, (colIndex: number) => {
-            /*
-             * 格子**必须内联**，不能抽成 this.dayCell(data) 这种 @Builder。
-             *
-             * @Builder 的入参只在容器构建时求值一次，之后数据变了不会重新求值，
-             * 表现就是「切换月份后日历的日期与星期不跟着变」（实测反馈的 bug）。
-             * 同一个坑在顶栏标题、热量环数字、首页标签上都踩过，
-             * 解法统一是「内联，或改传 getter 函数」。
-             */
-            Column() {
-              if (this.cellAt(rowIndex * 7 + colIndex).inMonth) {
-                Stack() {
-                  // 选中/今天底色：圆形而非方块，更接近 Apple 的日历
+        // 6 行 × 7 列。
+        // 行高必须显式指定：只给格子设高度、行用默认约束时，
+        // 纵向会被拉伸到填满可用空间，导致日历出现大片空白（踩过）。
+        ForEach(ROW_INDEXES, (rowIndex: number) => {
+          Row() {
+            ForEach(COL_INDEXES, (colIndex: number) => {
+              /*
+               * 格子**必须内联**，不能抽成 this.dayCell(data) 这种 @Builder。
+               *
+               * @Builder 的入参只在容器构建时求值一次，之后数据变了不会重新求值，
+               * 表现就是「切换月份后日历的日期与星期不跟着变」（实测反馈的 bug）。
+               * 同一个坑在顶栏标题、热量环数字、首页标签上都踩过，
+               * 解法统一是「内联，或改传 getter 函数」。
+               */
+              Column() {
+                if (this.cellAt(rowIndex * 7 + colIndex).inMonth) {
+                  Stack() {
+                    // 选中/今天底色：圆形而非方块，更接近 Apple 的日历
+                    Row()
+                      .width(32)
+                      .height(32)
+                      .backgroundColor(this.cellBg(this.cellAt(rowIndex * 7 + colIndex)))
+                      .borderRadius(16)
+
+                    Text(`${this.cellAt(rowIndex * 7 + colIndex).day}`)
+                      .fontSize(15)
+                      .fontWeight(this.isEmphasized(rowIndex * 7 + colIndex)
+                        ? FontWeight.Medium : FontWeight.Normal)
+                      .fontColor(this.cellTextColor(this.cellAt(rowIndex * 7 + colIndex)))
+                  }
+                  .width(32)
+                  .height(32)
+
+                  // 状态点：有记录才画，没记录留空占位保持行高一致
                   Row()
-                    .width(32)
-                    .height(32)
-                    .backgroundColor(this.cellBg(this.cellAt(rowIndex * 7 + colIndex)))
-                    .borderRadius(16)
-
-                  Text(`${this.cellAt(rowIndex * 7 + colIndex).day}`)
-                    .fontSize(15)
-                    .fontWeight(this.isEmphasized(rowIndex * 7 + colIndex)
-                      ? FontWeight.Medium : FontWeight.Normal)
-                    .fontColor(this.cellTextColor(this.cellAt(rowIndex * 7 + colIndex)))
+                    .width(5)
+                    .height(5)
+                    .backgroundColor(this.dotBg(rowIndex * 7 + colIndex))
+                    .borderRadius(3)
+                    .margin({ top: 2 })
                 }
-                .width(32)
-                .height(32)
-
-                // 状态点：有记录才画，没记录留空占位保持行高一致
-                Row()
-                  .width(5)
-                  .height(5)
-                  .backgroundColor(this.dotBg(rowIndex * 7 + colIndex))
-                  .borderRadius(3)
-                  .margin({ top: 2 })
               }
-            }
-            .layoutWeight(1)
-            .height(CELL_HEIGHT)
-            .justifyContent(FlexAlign.Center)
-            // 点击热区覆盖整格，而不是只有日号那么大
-            .onClick(() => {
-              const data: DayCell = this.cellAt(rowIndex * 7 + colIndex);
-              if (data.inMonth && !data.isFuture) {
-                this.onSelectDay(data.dayKey);
-              }
-            })
-          }, (colIndex: number) => `c${rowIndex}-${colIndex}`)
-        }
-        .width('100%')
-        .height(CELL_HEIGHT)
+              .layoutWeight(1)
+              .height(CELL_HEIGHT)
+              .justifyContent(FlexAlign.Center)
+              // 点击热区覆盖整格，而不是只有日号那么大
+              .onClick(() => {
+                const data: DayCell = this.cellAt(rowIndex * 7 + colIndex);
+                if (data.inMonth && !data.isFuture) {
+                  this.onSelectDay(data.dayKey);
+                }
+              })
+            }, (colIndex: number) => `c${rowIndex}-${colIndex}`)
+          }
+          .width('100%')
+          .height(CELL_HEIGHT)
         }, (rowIndex: number) => `r${rowIndex}`)
       }
       .width('100%')
-      // 换月动画：位移 + 淡入。两者都是可插值属性，animateTo 每帧重绘
+      /*
+       * 裁切 + 换月动画都放在这一层。
+       *
+       * 裁切的必要性：换月是「新月份从一侧滑入」，滑动过程中格子会短暂
+       * 越出卡片边界，看上去像字从框外面飘进来（实测反馈）。
+       * clip(true) 把动画裁在卡片内部，视觉上就是「卡片里的内容在换」。
+       */
+      .clip(true)
       .translate({ x: `${this.cellShift}%` })
       .opacity(this.cellAlpha)
+      /*
+       * 左右滑切换月份。
+       *
+       * PanGesture 只认水平方向，纵向留给页面滚动（两者不冲突）。
+       * 在 onActionEnd 里看总位移决定方向，并设一个 40vp 阈值：
+       * 不设阈值的话，点选某个日期时手指的轻微抖动也会被判成翻月。
+       * 这里是「整块日历」可滑，不只格子区——手感上更好抓。
+       */
+      .gesture(
+        PanGesture({ direction: PanDirection.Horizontal })
+          .onActionEnd((event: GestureEvent) => {
+            const dx: number = event.offsetX;
+            if (Math.abs(dx) < SWIPE_MIN_VP) {
+              return;
+            }
+            // 手指向左滑（dx < 0）→ 看下个月
+            this.onSwipeMonth(dx < 0 ? 1 : -1);
+          })
+      )
+      .width('100%')
 
       // 图例
       Row({ space: 14 }) {

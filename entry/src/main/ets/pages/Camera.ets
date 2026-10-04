@@ -16,7 +16,7 @@ import { ImageService, PreparedImage, ImageError } from '../service/ImageService
 import { VisionService, VisionResult, VisionError } from '../service/VisionService';
 import { PermissionUtil } from '../common/PermissionUtil';
 import { AppState, PendingResult } from '../common/AppState';
-import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -290,6 +290,8 @@ struct CameraPage {
               .fontSize(14)
               .height(80)
               .width('100%')
+              .fontColor(INPUT_TEXT)
+              .placeholderColor(INPUT_PLACEHOLDER)
               .backgroundColor(COLOR_BG)
               .borderRadius(10)
               .maxLength(100)
