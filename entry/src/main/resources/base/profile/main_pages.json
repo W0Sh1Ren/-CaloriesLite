@@ -4,6 +4,7 @@
     "pages/Camera",
     "pages/ResultConfirm",
     "pages/ManualAdd",
-    "pages/AiSettings"
+    "pages/AiSettings",
+    "pages/DayDetail"
   ]
 }

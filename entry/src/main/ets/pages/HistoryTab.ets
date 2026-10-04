@@ -10,6 +10,7 @@ import { MealType, FoodRecord, WeightRecord, ExerciseRecord, DailySummary } from
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { buildMonthGrid, friendlyDate, fromDayKey, todayKey, timeLabel } from '../common/DateUtil';
 import { makeId } from '../common/JsonUtil';
+import { AppState } from '../common/AppState';
 import { DailyService } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
 import { BodyRepo } from '../service/BodyRepo';
@@ -17,7 +18,7 @@ import { ExerciseRepo } from '../service/ExerciseRepo';
 import { calcExerciseKcal, MET_TABLE, MetItem } from '../service/CalorieCalc';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 
 const DOMAIN = 0x0000;
@@ -39,17 +40,21 @@ export struct HistoryTab {
   @State weights: WeightRecord[] = [];
   @State exercises: ExerciseRecord[] = [];
   @State weightInput: string = '';
+  /** 底部安全区高度，由 EntryAbility 实测后写入 AppState */
+  @State bottomInset: number = 0;
 
   aboutToAppear(): void {
     const now = new Date();
     this.viewYear = now.getFullYear();
     this.viewMonth0 = now.getMonth();
     this.selectedDay = this.dayKey;
+    this.bottomInset = AppState.bottomInset;
     this.rebuild();
   }
 
   /** 主页面翻日期或恢复前台时同步过来 */
   onDidUpdate(): void {
+    this.bottomInset = AppState.bottomInset;
     if (this.selectedDay !== this.dayKey && this.dayKey.length > 0) {
       this.selectedDay = this.dayKey;
       const d = new Date(fromDayKey(this.dayKey));
@@ -190,25 +195,27 @@ export struct HistoryTab {
         .padding({ left: 4, right: 4, top: 6 })
 
         // ------------------------------------------------ 月历
+        // 点击有记录的日期直接进当日详情页（那里能看照片和完整营养明细）
         CalendarHeatmap({
           cells: this.cells,
           selectedDay: this.selectedDay,
           onSelectDay: (day: string) => {
             this.selectedDay = day;
             this.rebuild();
+            this.openDayDetail(day);
           }
         })
 
         // ------------------------------------------------ 当日结算
         this.dayDetailCard()
 
-        // ------------------------------------------------ 运动
-        this.exerciseCard()
-
         // ------------------------------------------------ 体重
         this.weightCard()
 
-        Row().height(NAV_RESERVE)
+        // 底部占位：悬浮导航栏浮在内容之上，没有这段留白的话
+        // 体重输入框和按钮会被压在导航栏下面点不到。
+        // 用实测的 bottomInset（手势条高度）再加导航栏自身高度和一点余量。
+        Row().height(this.bottomInset + NAV_RESERVE + 12)
       }
       .width('100%')
       .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
@@ -267,7 +274,7 @@ export struct HistoryTab {
             Text('+ 补记一笔').fontSize(12).fontColor(COLOR_PRIMARY)
           }
           .height(30)
-          .backgroundColor('#1AFF7A45')
+          .backgroundColor(COLOR_PRIMARY_SOFT)
           .onClick(() => {
             this.goManualAdd();
           })
@@ -323,7 +330,7 @@ export struct HistoryTab {
             Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
           }
           .height(30)
-          .backgroundColor('#1AFF7A45')
+          .backgroundColor(COLOR_PRIMARY_SOFT)
           .onClick(() => {
             this.goManualAdd();
           })
@@ -348,6 +355,17 @@ export struct HistoryTab {
     }
   }
 
+  /** 进入某一天的饮食详情页 */
+  private openDayDetail(day: string): void {
+    try {
+      router.pushUrl({
+        url: 'pages/DayDetail',
+        params: { dayKey: day }
+      });
+    } catch (err) {
+      hilog.error(DOMAIN, 'CalorieLite', 'openDayDetail failed');
+    }
+  }
   @Builder
   miniStat(label: string, value: () => string) {
     Column({ space: 2 }) {
@@ -362,75 +380,15 @@ export struct HistoryTab {
     .layoutWeight(1)
   }
 
-  @Builder
-  exerciseCard() {
-    Column({ space: 10 }) {
-      Row() {
-        Text('运动')
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
-        Blank()
-        Button({ type: ButtonType.Capsule }) {
-          Text('+ 记录').fontSize(13).fontColor(COLOR_PRIMARY)
-        }
-        .height(30)
-        .backgroundColor('#FFF3EC')
-        .onClick(() => {
-          this.pickExercise();
-        })
-      }
-      .width('100%')
-
-      if (this.exercises.length === 0) {
-        Text('这天没有运动记录')
-          .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
-          .width('100%')
-      } else {
-        ForEach(this.exercises, (e: ExerciseRecord) => {
-          Row() {
-            Column({ space: 3 }) {
-              Text(e.name)
-                .fontSize(14)
-                .fontColor(COLOR_TEXT)
-              Text(`${timeLabel(e.timestamp)} · ${e.minutes > 0 ? `${e.minutes} 分钟` : '未记时长'}`)
-                .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
-            }
-            .alignItems(HorizontalAlign.Start)
-            .layoutWeight(1)
-
-            Text(`${e.kcal} 千卡`)
-              .fontSize(14)
-              .fontColor(COLOR_OK)
-
-            Button({ type: ButtonType.Circle }) {
-              Text('✕').fontSize(12).fontColor(COLOR_TEXT_SUB)
-            }
-            .width(26).height(26).backgroundColor(COLOR_DIVIDER)
-            .margin({ left: 10 })
-            .onClick(() => {
-              ExerciseRepo.remove(e.dayKey, e.id);
-              this.exercises = ExerciseRepo.loadDay(this.selectedDay);
-              this.detail = DailyService.summaryOf(this.selectedDay);
-              this.cells = this.buildCells();
-            })
-          }
-          .width('100%')
-        }, (e: ExerciseRecord) => e.id)
-      }
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor(COLOR_CARD)
-    .borderRadius(RADIUS)
-    .shadow(CARD_SHADOW)
-  }
-
+  /**
+   * 体重趋势 + 输入。
+   *
+   * 间距压到 10：这两块本来就属于同一件事，之前 12 的间距加上卡片外边距
+   * 让页面显得松散。
+   */
   @Builder
   weightCard() {
-    Column({ space: 12 }) {
+    Column({ space: 10 }) {
       WeightChart({ records: this.weights })
 
       Row({ space: 10 }) {
@@ -461,5 +419,9 @@ export struct HistoryTab {
         .width('100%')
     }
     .width('100%')
+    .padding(16)
+    .backgroundColor(COLOR_CARD)
+    .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 }

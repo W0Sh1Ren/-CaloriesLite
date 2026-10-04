@@ -11,6 +11,7 @@
  */
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -19,9 +20,10 @@ import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { friendlyDate, todayKey, shiftDay, hourOf } from '../common/DateUtil';
 import { DailyService, HomeData } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
+import { ImageService } from '../service/ImageService';
 import { AppState } from '../common/AppState';
 import {
-  COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB,
+  COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB,
   CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_MARGIN,
   NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
@@ -136,8 +138,53 @@ struct Index {
     ))
   }
 
+  /**
+   * 把记录里的图片从缓存转存到持久目录。
+   *
+   * 相机与相册给的 uri 都在临时目录，缓存也可能被系统回收，
+   * 直接落库的话过几天图片就丢了。这里在读取记录时顺手转存一份，
+   * 并把记录里的 uri 换成持久路径。
+   *
+   * 注意必须用 update 而不是 addMany：addMany 是纯追加、不按 id 去重，
+   * 用它会把当天每条记录都复制一遍。
+   */
+  private persistImages(): void {
+    for (const r of this.data.records) {
+      const list: string[] = r.gallery();
+      if (list.length === 0) {
+        continue;
+      }
+      // 整组一起判断：只要有一张还在缓存里就整组转存一遍
+      let needs: boolean = false;
+      for (const u of list) {
+        if (!u.includes('/food_images/')) {
+          needs = true;
+          break;
+        }
+      }
+      if (!needs) {
+        continue;
+      }
+      const saved: string[] = [];
+      for (const u of list) {
+        const one: string = ImageService.persist(u, this.uiContext());
+        saved.push(one.length > 0 ? one : u);
+      }
+      r.imageUris = saved;
+      r.imageUri = saved[0];
+      FoodRepo.update(r);
+      hilog.info(DOMAIN, 'CalorieLite', 'persisted %{public}d image(s) for %{public}s',
+        saved.length, r.id);
+    }
+  }
+
+  private uiContext(): common.UIAbilityContext {
+    return this.getUIContext().getHostContext() as common.UIAbilityContext;
+  }
+
   private reload(): void {
     this.data = DailyService.homeData(this.dayKey);
+    this.persistImages();
   }
 
   /** 切换视图：改下标并同时刷新数据 */
@@ -377,7 +424,7 @@ struct Index {
       .fontSize(12)
       .fontColor(COLOR_PRIMARY)
       .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-      .backgroundColor('#1AFF7A45')
+      .backgroundColor(COLOR_PRIMARY_SOFT)
       .borderRadius(12)
   }
 

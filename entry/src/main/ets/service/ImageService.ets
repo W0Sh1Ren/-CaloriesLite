@@ -211,14 +211,20 @@ export class ImageService {
     };
   }
 
-  /** 把压缩后的 JPEG 写进应用缓存目录 */
+  /**
+   * 把压缩后的 JPEG 写到应用缓存目录。
+   *
+   * 这里刻意用 cacheDir 而不是 filesDir：识别可能被用户取消，
+   * 每次尝试都往持久目录写会堆积垃圾文件。缓存副本仅用于「识别前预览」，
+   * 真正落库时再调 persist() 转存到 filesDir。
+   */
   private static async saveToSandbox(buffer: ArrayBuffer, context: common.Context): Promise<string> {
     try {
       const dir: string = `${context.cacheDir}/shots`;
       if (!fs.accessSync(dir)) {
         fs.mkdirSync(dir, true);
       }
-      const name: string = `shot_${Date.now()}.jpg`;
+      const name: string = `shot_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
       const path: string = `${dir}/${name}`;
       const file: fs.File = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
       try {
@@ -231,6 +237,83 @@ export class ImageService {
       // 存本地失败不该阻断识别，返回空 uri 即可
       hilog.warn(DOMAIN, 'CalorieLite', 'saveToSandbox failed, continue without local copy');
       return '';
+    }
+  }
+
+  /**
+   * 把图片转存到应用持久目录，返回可长期使用的 uri。
+   *
+   * 为什么必须转存：相机/相册给的 uri 指向系统临时目录，
+   * 缓存目录也可能被系统随时回收，直接把它写进记录的话
+   * 过一段时间图片就打不开了。
+   *
+   * 只做拷贝不做重新压缩——传进来的已经是压缩过的那份，
+   * 再压一次纯属掉画质。
+   */
+  static persist(uri: string, context: common.Context): string {
+    if (uri.length === 0) {
+      return '';
+    }
+    const src: string = uri.startsWith('file://') ? uri.substring(7) : uri;
+    try {
+      const dir: string = `${context.filesDir}/food_images`;
+      if (!fs.accessSync(dir)) {
+        fs.mkdirSync(dir, true);
+      }
+      const target: string = `${dir}/${Date.now()}_${Math.floor(Math.random() * 10000)}.jpg`;
+      const from: fs.File = fs.openSync(src, fs.OpenMode.READ_ONLY);
+      try {
+        const stat: fs.Stat = fs.statSync(from.fd);
+        const buf: ArrayBuffer = new ArrayBuffer(stat.size);
+        fs.readSync(from.fd, buf);
+        const to: fs.File = fs.openSync(target, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+        try {
+          fs.writeSync(to.fd, buf);
+        } finally {
+          fs.closeSync(to);
+        }
+      } finally {
+        fs.closeSync(from);
+      }
+      return `file://${target}`;
+    } catch (err) {
+      // 转存失败就退回原 uri：图片可能仍可用，总比完全没有强
+      hilog.warn(DOMAIN, 'CalorieLite', 'persist image failed, keep original uri');
+      return uri;
+    }
+  }
+
+  /**
+   * 清理缓存目录里的旧识别图。
+   *
+   * 用户取消识别时那份缓存副本不会有人接手，长期会堆积。
+   * 应用启动时扫一遍，删掉超过 1 天的即可（正在用的都是刚生成的）。
+   */
+  static cleanOldShots(context: common.Context): void {
+    try {
+      const dir: string = `${context.cacheDir}/shots`;
+      if (!fs.accessSync(dir)) {
+        return;
+      }
+      const names: string[] = fs.listFileSync(dir);
+      const cutoff: number = Date.now() - 24 * 60 * 60 * 1000;
+      let removed: number = 0;
+      for (const n of names) {
+        try {
+          const st: fs.Stat = fs.statSync(`${dir}/${n}`);
+          if (st.mtime * 1000 < cutoff) {
+            fs.unlinkSync(`${dir}/${n}`);
+            removed++;
+          }
+        } catch (e) {
+          // 单个文件清理失败不影响其它文件
+        }
+      }
+      if (removed > 0) {
+        hilog.info(DOMAIN, 'CalorieLite', 'cleaned %{public}d old shot(s)', removed);
+      }
+    } catch (err) {
+      hilog.warn(DOMAIN, 'CalorieLite', 'cleanOldShots failed');
     }
   }
 

@@ -5,7 +5,7 @@
  * 另有一个索引键记住哪些天有数据，这样日历视图不必扫描全部键。
  */
 import { Store } from '../common/Store';
-import { getNum, getStr, JsonMap, makeId, parseArray, parseObject, toEnum } from '../common/JsonUtil';
+import { getNum, getStr, getStrArray, JsonMap, makeId, parseArray, parseObject, toEnum } from '../common/JsonUtil';
 import { FoodRecord, FoodSource, MealType } from '../model/Types';
 import { MEAL_ORDER } from '../model/Enums';
 
@@ -129,6 +129,15 @@ export class FoodRepo {
       getStr(map, 'imageUri', ''),
       getStr(map, 'note', '')
     );
+
+    // imageUris 是后加的字段。老记录没有，构造函数已用 imageUri 初始化过
+    // 单元素列表；这里只在确实存了数组时覆盖它。
+    const stored: string[] = getStrArray(map, 'imageUris');
+    if (stored.length > 0) {
+      r.imageUris = stored;
+      // 保持两个字段一致，避免下游读到不一致的值
+      r.imageUri = stored[0];
+    }
     return r;
   }
 

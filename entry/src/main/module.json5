@@ -59,6 +59,16 @@
         "startWindowIcon": "$media:startIcon",
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
+        // 沉浸光感开关同样在 ability 级放一份。
+        // 官方 API 文档说 getMaterialInfo() 取自「应用 module.json5 的 metadata」，
+        // 但只放 module 级时实测 state 仍为 0（未生效），
+        // 因此两级都放以覆盖运行时的实际取值位置。
+        "metadata": [
+          {
+            "name": "ohos.arkui.uiMaterial",
+            "value": "{\"state\": 1, \"type\": 2}"
+          }
+        ],
         "skills": [
           {
             "entities": [

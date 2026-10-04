@@ -109,7 +109,7 @@ export struct FloatingNav {
       .radialGradient({
         center: ['50%', '50%'],
         radius: NAV_HEIGHT * 1.1,
-        colors: [[COLOR_PRESS_GLOW, 0.0], ['#00FF7A45', 1.0]]
+        colors: [[COLOR_PRESS_GLOW, 0.0], ['#0022C55E', 1.0]]
       })
       .position({ x: this.pressX - NAV_HEIGHT * 1.1, y: -(NAV_HEIGHT * 1.1 - NAV_HEIGHT / 2) })
       .hitTestBehavior(HitTestMode.None)
@@ -186,7 +186,7 @@ export struct FloatingNav {
       uiMaterial.ImmersiveStyle.THICK,
       '#2EFFFFFF',
       true,
-      '#66FF7A45'
+      '#6622C55E'
     ))
     .clip(true)
     .borderRadius(NAV_HEIGHT / 2)

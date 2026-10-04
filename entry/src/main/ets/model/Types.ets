@@ -162,8 +162,16 @@ export class FoodRecord {
   fat: number = 0;
   carb: number = 0;
   source: FoodSource = FoodSource.MANUAL;
-  /** 拍照识别的原图 uri，可为空 */
+  /** 拍照识别的原图 uri，可为空。等于 imageUris 的第一张，保留给旧代码读 */
   imageUri: string = '';
+  /**
+   * 这条记录关联的全部图片。
+   *
+   * 一次识别可能拍多张（同一餐的多角度照片），只留一张的话
+   * 详情页就没法滑动切换浏览了。老记录里没有这个字段，
+   * 读取时回退到 imageUri（见 FoodRepo）。
+   */
+  imageUris: string[] = [];
   /** AI 给出的识别说明，便于用户判断是否可信 */
   note: string = '';
 
@@ -182,7 +190,21 @@ export class FoodRecord {
     this.carb = carb;
     this.source = source;
     this.imageUri = imageUri;
+    this.imageUris = imageUri.length > 0 ? [imageUri] : [];
     this.note = note;
+  }
+
+  /**
+   * 取这条记录可用于展示的图片列表。
+   *
+   * 优先用 imageUris；老记录只有 imageUri，就包装成单元素列表，
+   * 这样展示端不用到处判空。
+   */
+  gallery(): string[] {
+    if (this.imageUris.length > 0) {
+      return this.imageUris;
+    }
+    return this.imageUri.length > 0 ? [this.imageUri] : [];
   }
 }
 

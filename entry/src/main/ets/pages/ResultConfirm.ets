@@ -156,8 +156,9 @@ struct ResultConfirm {
     }
     const day: string = todayKey();
     const now: number = Date.now();
-    // 记录只挂第一张图，避免每条记录都带一串图片路径
-    const firstImage: string = this.imageUris.length > 0 ? this.imageUris[0] : '';
+    // 整组图片写进每条记录：详情页要支持一餐多图滑动浏览，
+    // 只留第一张的话其余照片就白拍了。
+    const images: string[] = this.imageUris.slice();
     const records: FoodRecord[] = [];
 
     for (const d of this.drafts) {
@@ -166,10 +167,12 @@ struct ResultConfirm {
         promptAction.showToast({ message: `「${d.name}」缺少克重或热量，请补全后再保存` });
         return;
       }
-      records.push(new FoodRecord(
+      const rec: FoodRecord = new FoodRecord(
         makeId(), day, now, this.meal, d.name, grams, d.kcal,
-        d.protein, d.fat, d.carb, d.source, firstImage, d.note
-      ));
+        d.protein, d.fat, d.carb, d.source, images.length > 0 ? images[0] : '', d.note
+      );
+      rec.imageUris = images;
+      records.push(rec);
     }
 
     FoodRepo.addMany(records);

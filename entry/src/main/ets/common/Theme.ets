@@ -7,9 +7,9 @@
 import { curves } from '@kit.ArkUI';
 
 /** 主色：暖橙，代表热量 */
-export const COLOR_PRIMARY: string = '#FF7A45';
+export const COLOR_PRIMARY: string = '#22C55E';
 /** 主色的浅色版本，用于进度环底色与标签背景 */
-export const COLOR_PRIMARY_SOFT: string = '#FFE7DC';
+export const COLOR_PRIMARY_SOFT: string = '#DCFCE7';
 /** 缺口为负（超标）时的警示色 */
 export const COLOR_WARN: string = '#E5533D';
 /** 达标色 */
@@ -76,7 +76,7 @@ export const CURVE_COUNT: ICurve = curves.responsiveSpringMotion(0.5, 0.86);
 /** 按压反馈：按下时缩到的比例 */
 export const PRESS_SCALE: number = 0.9;
 /** 按压/高亮光效的底色 */
-export const COLOR_PRESS_GLOW: string = '#26FF7A45';
+export const COLOR_PRESS_GLOW: string = '#2622C55E';
 
 /**
  * 页面切换动画参数。
@@ -134,17 +134,17 @@ export class GlowPalette {
 /** 按小时取柔光配色：清晨偏暖橙，白天偏中性，夜晚偏冷蓝 */
 export function glowForHour(hour: number): GlowPalette {
   if (hour >= 5 && hour < 11) {
-    // 清晨到上午：暖橙
-    return new GlowPalette('#FFE3D2', '#F6F7F9');
+    // 清晨到上午：嫩绿
+    return new GlowPalette('#DFF5E3', '#F6F7F9');
   }
   if (hour >= 11 && hour < 17) {
-    // 白天：淡金
-    return new GlowPalette('#FFF0D9', '#F6F7F9');
+    // 白天：极淡薄荷
+    return new GlowPalette('#E8F8EC', '#F6F7F9');
   }
   if (hour >= 17 && hour < 21) {
-    // 傍晚：霞粉
-    return new GlowPalette('#FFE0DC', '#F6F7F9');
+    // 傍晚：淡青
+    return new GlowPalette('#DCF2EA', '#F6F7F9');
   }
-  // 夜间：冷蓝
+  // 夜间：冷蓝（保留一点暖夜对比）
   return new GlowPalette('#DCE6F5', '#F6F7F9');
 }
