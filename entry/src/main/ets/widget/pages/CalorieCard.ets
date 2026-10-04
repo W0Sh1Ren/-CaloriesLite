@@ -33,15 +33,30 @@ const ROUTE_CAMERA = 'camera';
 @Entry
 @Component
 struct CalorieCard {
-  // 键名必须与 CalorieCardAbility.buildData() 里的键一致
+  /*
+   * 键名必须与 CalorieCardAbility.buildData() 里的键一致。
+   *
+   * 默认值刻意与 ability 的兜底值保持一致（预算 2000、营养素目标按
+   * macroTargetFor(2000) 算出来），不要全填 0：
+   * 绑定数据到位前会先渲染一帧，填 0 的话用户看到的是「闪一下 0 / 0」。
+   */
   @LocalStorageProp('intake') intake: number = 0;
-  @LocalStorageProp('budget') budget: number = 0;
+  @LocalStorageProp('budget') budget: number = 2000;
   @LocalStorageProp('protein') protein: number = 0;
   @LocalStorageProp('fat') fat: number = 0;
   @LocalStorageProp('carb') carb: number = 0;
-  @LocalStorageProp('proteinTarget') proteinTarget: number = 0;
-  @LocalStorageProp('fatTarget') fatTarget: number = 0;
-  @LocalStorageProp('carbTarget') carbTarget: number = 0;
+  @LocalStorageProp('proteinTarget') proteinTarget: number = 188;
+  @LocalStorageProp('fatTarget') fatTarget: number = 56;
+  @LocalStorageProp('carbTarget') carbTarget: number = 314;
+
+  /*
+   * 这里**不能**做首帧淡入（本来想用 opacity + animateTo 盖住默认值那一帧）：
+   * 卡片环境不支持 animateTo 与 getUIContext，编译期就报
+   *   'animateTo' can't support form application
+   *   'getUIContext' can't support form application
+   * 所以避免闪烁只能靠「给有意义的默认值」——
+   * 见上面各字段的初值与 CalorieCardAbility 的 DEFAULT_BUDGET。
+   */
 
   /** 完成比例 0~1，用于环形与营养条 */
   private static ratio(now: number, target: number): number {

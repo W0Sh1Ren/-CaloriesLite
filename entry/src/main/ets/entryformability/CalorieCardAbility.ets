@@ -18,6 +18,15 @@ import { macroTargetFor, MacroTarget } from '../model/Enums';
 
 const DOMAIN = 0x0000;
 
+/**
+ * 兜底默认预算（千卡）。
+ *
+ * 只在读不到档案时使用（例如首次安装、还没走设置向导）。
+ * 不能给 0：卡片会先渲染一帧「0 / 0」再跳到真实值，用户看到的是闪一下。
+ * 取 2000 接近普通成年人的维持热量，即使兜底也不会显示得离谱。
+ */
+const DEFAULT_BUDGET: number = 2000;
+
 export default class CalorieCardAbility extends FormExtensionAbility {
 
   /**
@@ -25,30 +34,39 @@ export default class CalorieCardAbility extends FormExtensionAbility {
    *
    * 卡片页面只做展示，不在里面读存储 —— 卡片 UI 里写业务逻辑
    * 会在每次刷新时重复执行，而且读不到就整块空白，不如在这里兜住。
+   *
+   * 所有字段都保证是**有意义的非零默认值**：
+   * 卡片那边 @LocalStorageProp 的默认值是 0，绑定数据到位前会先渲染一帧，
+   * 若这里也给 0，用户看到的就是「先闪一下 0 / 0 再变成真实数字」。
+   * 给默认预算后，那一帧显示的是 0 / 2000，观感是正常的「今天还没吃」。
    */
   private static buildData(): Record<string, Object> {
     const data: Record<string, Object> = {};
-    // 先给全 0，保证任何一步失败时卡片仍能正常渲染出结构
     data['intake'] = 0;
-    data['budget'] = 0;
+    data['budget'] = DEFAULT_BUDGET;
     data['protein'] = 0;
     data['fat'] = 0;
     data['carb'] = 0;
-    data['proteinTarget'] = 0;
-    data['fatTarget'] = 0;
-    data['carbTarget'] = 0;
+    const dt: MacroTarget = macroTargetFor(DEFAULT_BUDGET);
+    data['proteinTarget'] = dt.protein;
+    data['fatTarget'] = dt.fat;
+    data['carbTarget'] = dt.carb;
     try {
       const home: HomeData = DailyService.homeData(todayKey());
-      // 推荐克数按当日预算推算，与首页同源，避免两处数字互相矛盾
-      const t: MacroTarget = macroTargetFor(home.summary.budget);
+      const budget: number = Math.round(home.summary.budget);
+      if (budget > 0) {
+        // 推荐克数按当日预算推算，与首页同源，避免两处数字互相矛盾
+        const t: MacroTarget = macroTargetFor(budget);
+        data['budget'] = budget;
+        data['proteinTarget'] = t.protein;
+        data['fatTarget'] = t.fat;
+        data['carbTarget'] = t.carb;
+      }
+      // 摄入与已吃克数可以真是 0（今天还没记录），照实写
       data['intake'] = Math.round(home.summary.intake);
-      data['budget'] = Math.round(home.summary.budget);
       data['protein'] = Math.round(home.summary.protein);
       data['fat'] = Math.round(home.summary.fat);
       data['carb'] = Math.round(home.summary.carb);
-      data['proteinTarget'] = t.protein;
-      data['fatTarget'] = t.fat;
-      data['carbTarget'] = t.carb;
     } catch (err) {
       hilog.error(DOMAIN, 'CalorieLite', 'card data build failed: %{public}s', JSON.stringify(err));
     }
