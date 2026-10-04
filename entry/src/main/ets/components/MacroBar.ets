@@ -7,10 +7,12 @@
  *
  * 用推荐量做分母而不是「三项里的最大值」：后者只能看出三项的相对高低，
  * 看不出「离推荐量还差多少」，而后者才是用户真正关心的。
+ *
+ * 条形宽度带连续动画：数据变化时不是瞬间跳到新比例，而是从当前位置推过去。
  */
 import {
-  CARD_SHADOW, COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT, COLOR_PROTEIN,
-  COLOR_TEXT, COLOR_TEXT_SUB, RADIUS
+  AnimatedValue, CARD_SHADOW, COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT,
+  COLOR_PROTEIN, COLOR_TEXT, COLOR_TEXT_SUB, DUR_SLOW, RADIUS
 } from '../common/Theme';
 
 /** 单项数据 */
@@ -39,13 +41,52 @@ class MacroItem {
 
 @Component
 export struct MacroBar {
-  @Prop protein: number = 0;
-  @Prop fat: number = 0;
-  @Prop carb: number = 0;
+  // 加 @Watch 是为了在数据变化时推动条形动画。
+  // 注意监测的是「克数」而不是算出来的百分比：两者同步变化，
+  // 但克数是入参本身，@Watch 一定能收到。
+  @Prop @Watch('onDataChange') protein: number = 0;
+  @Prop @Watch('onDataChange') fat: number = 0;
+  @Prop @Watch('onDataChange') carb: number = 0;
   /** 三大营养素的推荐克数，由调用方按当日预算算好后传入 */
   @Prop carbTarget: number = 0;
   @Prop proteinTarget: number = 0;
   @Prop fatTarget: number = 0;
+
+  /**
+   * 三项的显示百分比，由 AnimatedValue 逐帧推向目标值。
+   *
+   * 用数组而不是三个独立字段，是为了能用下标统一处理。
+   */
+  @State animPct: number[] = [0, 0, 0];
+  private values: AnimatedValue[] = [new AnimatedValue(), new AnimatedValue(), new AnimatedValue()];
+
+  aboutToAppear(): void {
+    // 首帧直接落位，避免一进页面三根条从 0 长出来
+    this.snapAll();
+  }
+
+  /** 数据变化：把三根条平滑推到新比例 */
+  onDataChange(): void {
+    const list: MacroItem[] = this.items();
+    for (let i = 0; i < list.length; i++) {
+      const target: number = list[i].percent();
+      this.values[i].animate(this, () => target, (v: number) => {
+        const next: number[] = this.animPct.slice();
+        next[i] = v;
+        this.animPct = next;
+      });
+    }
+  }
+
+  /** 不做动画，直接把显示值设为目标 */
+  private snapAll(): void {
+    const list: MacroItem[] = this.items();
+    const next: number[] = [];
+    for (let i = 0; i < list.length; i++) {
+      next.push(list[i].percent());
+    }
+    this.animPct = next;
+  }
 
   private items(): MacroItem[] {
     return [
@@ -55,9 +96,14 @@ export struct MacroBar {
     ];
   }
 
+  /** 取第 i 项的显示宽度百分比 */
+  private pctAt(i: number): number {
+    return i < this.animPct.length ? this.animPct[i] : 0;
+  }
+
   build() {
     Column({ space: 12 }) {
-      ForEach(this.items(), (item: MacroItem) => {
+      ForEach(this.items(), (item: MacroItem, index: number) => {
         Column({ space: 5 }) {
           Row() {
             Text(item.label)
@@ -89,7 +135,7 @@ export struct MacroBar {
                 .borderRadius(4)
 
               Row()
-                .width(`${item.percent()}%`)
+                .width(`${this.pctAt(index)}%`)
                 .height(8)
                 .backgroundColor(item.color)
                 .borderRadius(4)
@@ -102,7 +148,7 @@ export struct MacroBar {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
-      })
+      }, (item: MacroItem, index: number) => `${index}-${item.label}`)
     }
     .width('100%')
     .padding(16)

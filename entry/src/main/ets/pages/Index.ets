@@ -412,7 +412,10 @@ struct Index {
       Scroll() {
         Column({ space: GAP }) {
           CalorieRing({
-            summary: this.data.summary,
+            intake: this.data.summary.intake,
+            budget: this.data.summary.budget,
+            exerciseKcal: this.data.summary.exerciseKcal,
+            deficit: this.data.summary.deficit,
             refreshKey: this.dataVersion
           })
 

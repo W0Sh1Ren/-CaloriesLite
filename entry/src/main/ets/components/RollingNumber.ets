@@ -29,6 +29,8 @@ export struct RollingNumber {
   @Prop fontWeight: FontWeight = FontWeight.Bold;
   @Prop textColor: string = '#1A1A1A';
   @Prop duration: number = DUR_SLOW;
+  /** 小数位数。整数用 0（默认），像 BMI 这种要 1 */
+  @Prop decimals: number = 0;
 
   /** 动画进度 0→1 */
   @State progress: number = 1;
@@ -67,11 +69,16 @@ export struct RollingNumber {
   /** 当前这一帧应该显示的值 */
   private display(): number {
     const v: number = this.fromValue + (this.settled - this.fromValue) * this.progress;
-    return Math.round(v);
+    if (this.decimals <= 0) {
+      return Math.round(v);
+    }
+    // 保留指定小数位后再取整成定点数，避免 35.499999 这种浮点噪声
+    const f: number = Math.pow(10, this.decimals);
+    return Math.round(v * f) / f;
   }
 
   build() {
-    Text(`${this.display()}`)
+    Text(this.decimals <= 0 ? `${this.display()}` : this.display().toFixed(this.decimals))
       .fontSize(this.fontSize)
       .fontWeight(this.fontWeight)
       .fontColor(this.textColor)

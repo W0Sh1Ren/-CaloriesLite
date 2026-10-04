@@ -6,6 +6,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { DayCell, CalendarHeatmap } from '../components/CalendarHeatmap';
 import { WeightChart } from '../components/WeightChart';
+import { RollingNumber } from '../components/RollingNumber';
 import { MealType, FoodRecord, WeightRecord, ExerciseRecord, DailySummary } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { buildMonthGrid, friendlyDate, fromDayKey, todayKey, timeLabel } from '../common/DateUtil';
@@ -18,7 +19,7 @@ import { ExerciseRepo } from '../service/ExerciseRepo';
 import { calcExerciseKcal, MET_TABLE, MetItem } from '../service/CalorieCalc';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 
 const DOMAIN = 0x0000;
@@ -258,11 +259,11 @@ export struct HistoryTab {
 
       // 三项指标：之间加竖分隔线，比纯留白更容易读
       Row() {
-        this.miniStat('摄入', () => `${this.detail.intake}`)
+        this.miniStat('摄入', () => this.detail.intake)
         Divider().vertical(true).height(26).color(COLOR_DIVIDER)
-        this.miniStat('预算', () => `${this.detail.budget}`)
+        this.miniStat('预算', () => this.detail.budget)
         Divider().vertical(true).height(26).color(COLOR_DIVIDER)
-        this.miniStat('运动', () => `${this.detail.exerciseKcal}`)
+        this.miniStat('运动', () => this.detail.exerciseKcal)
       }
       .width('100%')
       .justifyContent(FlexAlign.SpaceEvenly)
@@ -371,13 +372,22 @@ export struct HistoryTab {
       hilog.error(DOMAIN, 'CalorieLite', 'openDayDetail failed');
     }
   }
+  /**
+   * 一项指标，数字带滚动动效。
+   *
+   * value 用取值函数而不是直接传值：@Builder 的参数在容器构建时求值一次，
+   * 之后状态变化不会重新求值，传值会表现为「切换日期后数字不动」。
+   */
   @Builder
-  miniStat(label: string, value: () => string) {
+  miniStat(label: string, value: () => number) {
     Column({ space: 2 }) {
-      Text(value())
-        .fontSize(18)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
+      RollingNumber({
+        value: value(),
+        fontSize: 18,
+        fontWeight: FontWeight.Medium,
+        textColor: COLOR_TEXT,
+        duration: DUR_SLOW
+      })
       Text(label)
         .fontSize(11)
         .fontColor(COLOR_TEXT_SUB)

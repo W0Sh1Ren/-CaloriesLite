@@ -98,6 +98,52 @@ export const PRESS_SCALE: number = 0.9;
 export const COLOR_PRESS_GLOW: string = '#2622C55E';
 
 /**
+ * 把「当前显示值」平滑推动到「目标值」，用于进度条 / 圆环这类需要连续变化的图形。
+ *
+ * 用法（放在组件的 @Prop 的 @Watch 回调里）：
+ *
+ *   onTargetChange(): void {
+ *     animated.animate(this, () => this.ratio, (v) => { this.animRatio = v; });
+ *   }
+ *
+ * 为什么不直接用 `.animation()` 修饰符：那个只对「属性修饰符」生效，
+ * 而这里的宽度是算出来的百分比字符串、圆环是 Canvas 绘制的，
+ * 都不走属性动画通道，只能自己逐帧插值。
+ */
+export class AnimatedValue {
+  /** 当前显示的值 */
+  current: number = 0;
+  /** 是否已初始化过（首个值不播动画，直接落位） */
+  private started: boolean = false;
+
+  /**
+   * 从当前显示值平滑推到 target。
+   *
+   * @param host    调用它的组件（用来取 UIContext 起 animateTo）
+   * @param ratio   取目标值的函数
+   * @param apply   把插值写回 @State 的回调，写回会触发重建从而重绘
+   */
+  animate(host: CustomComponent, ratio: () => number, apply: (v: number) => void,
+    duration: number = DUR_SLOW, curve: ICurve = CURVE_COUNT): void {
+    const target: number = ratio();
+    if (!this.started) {
+      // 首次进入直接落位，否则页面一打开就会从 0 长出来
+      this.started = true;
+      this.current = target;
+      apply(target);
+      return;
+    }
+    if (Math.abs(target - this.current) < 0.0001) {
+      return;
+    }
+    host.getUIContext().animateTo({ duration: duration, curve: curve }, () => {
+      this.current = target;
+      apply(target);
+    });
+  }
+}
+
+/**
  * 页面切换动画参数。
  *
  * 未选中的视图缩到 VIEW_INACTIVE_SCALE 并整体平移出屏，

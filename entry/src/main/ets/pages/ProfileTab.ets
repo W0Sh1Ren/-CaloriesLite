@@ -13,8 +13,9 @@ import { SettingsRepo } from '../service/SettingsRepo';
 import { AppState } from '../common/AppState';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
+import { RollingNumber } from '../components/RollingNumber';
 
 const DOMAIN = 0x0000;
 
@@ -269,10 +270,13 @@ export struct ProfileTab {
         .width('100%')
 
       Row() {
-        Text(`${this.budget}`)
-          .fontSize(40)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLOR_PRIMARY)
+        RollingNumber({
+          value: this.budget,
+          fontSize: 40,
+          fontWeight: FontWeight.Bold,
+          textColor: COLOR_PRIMARY,
+          duration: DUR_SLOW
+        })
         Text(' 千卡')
           .fontSize(14)
           .fontColor(COLOR_TEXT_SUB)
@@ -284,9 +288,9 @@ export struct ProfileTab {
       Divider().color(COLOR_DIVIDER)
 
       Row() {
-        this.metric('基础代谢', () => `${this.bmr}`)
-        this.metric('总消耗', () => `${this.tdee}`)
-        this.metric('BMI', () => `${this.bmi()}`, () => bmiLabel(this.bmi()))
+        this.metric('基础代谢', () => this.bmr)
+        this.metric('总消耗', () => this.tdee)
+        this.metric('BMI', () => this.bmi(), () => bmiLabel(this.bmi()), 1)
       }
       .width('100%')
       .justifyContent(FlexAlign.SpaceBetween)
@@ -304,16 +308,23 @@ export struct ProfileTab {
   }
 
   /**
-   * 一项指标。value 与 sub 都用取值函数，理由同 numRow：
-   * @Builder 参数求值一次，传值不会随状态更新。
+   * 一项指标，数字带滚动动效。
+   *
+   * value 用取值函数而不是直接传值：@Builder 的参数在容器构建时求值一次，
+   * 之后状态变化不会重新求值，传值会表现为「改了年龄但卡片数字不动」。
+   * 返回 number 而不是 string，才能交给 RollingNumber 逐帧插值。
    */
   @Builder
-  metric(label: string, value: () => string, sub: () => string = () => '') {
+  metric(label: string, value: () => number, sub: () => string = () => '', decimals: number = 0) {
     Column({ space: 2 }) {
-      Text(value())
-        .fontSize(18)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
+      RollingNumber({
+        value: value(),
+        fontSize: 18,
+        fontWeight: FontWeight.Medium,
+        textColor: COLOR_TEXT,
+        duration: DUR_SLOW,
+        decimals: decimals
+      })
       Text(sub().length > 0 ? `${label} · ${sub()}` : label)
         .fontSize(11)
         .fontColor(COLOR_TEXT_SUB)
