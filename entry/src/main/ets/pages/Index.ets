@@ -133,25 +133,6 @@ struct Index {
   @State modalOpen: boolean = false;
 
   /**
-   * 餐次明细的收起/展开动画状态。
-   *
-   * mealBodyH：明细区的自然高度（vp），0 表示还没量到。
-   * mealMeasured：本次展开是否已经量到高度。
-   *
-   * 为什么要分两个阶段：
-   *   测量阶段 —— 外层**不加裁切、不设高度**，让内层按自然尺寸布局，
-   *               onAreaChange 才能量到真实高度；
-   *   动画阶段 —— 拿到高度后才设 .height(...) + .clip(true)，
-   *               于是收起是从自然高度收到 0，占位同步释放。
-   *
-   * 上一版之所以「点展开没东西」，就是把两个阶段混在一起了：
-   * 一开始就 .height(0) + .clip(true)，内层根本不被布局，
-   * onAreaChange 永远不触发、高度永远停在 0 —— 典型的循环依赖。
-   */
-  @State mealBodyH: number = 0;
-  @State mealMeasured: boolean = false;
-
-  /**
    * 数据版本号：每次重读当日数据就自增，传给环等自绘组件做强制重绘。
    *
    * 为什么不只依赖子组件的 onDidUpdate / @Watch：
@@ -822,44 +803,12 @@ struct Index {
     }
     if (!removed) {
       next.push(meal);
-      /*
-       * 每次展开都重新量高度：明细条数可能已经变了（刚记一笔、删了一条），
-       * 沿用上一次的高度会让收起动画停在半路。
-       */
-      this.mealMeasured = false;
-      this.mealBodyH = 0;
     }
     this.expandedMeals = next;
   }
 
   private isExpanded(meal: MealType): boolean {
     return this.expandedMeals.includes(meal);
-  }
-
-  /** 记下明细区自然高度，量到后进入动画阶段（见 mealMeasured 的注释） */
-  private onMealBodyArea(area: Area): void {
-    const h: number = Number.parseFloat(`${area.height}`);
-    if (Number.isNaN(h) || h <= 0.5) {
-      return;
-    }
-    if (this.mealMeasured && Math.abs(h - this.mealBodyH) < 0.5) {
-      return;
-    }
-    this.mealBodyH = h;
-    this.mealMeasured = true;
-  }
-
-  /**
-   * 明细区当前应有的高度。
-   *
-   * 测量阶段返回 -1，调用方据此**不设高度**（走自然尺寸）。
-   * 用 -1 而不是 0，是为了和「收到 0」明确区分开。
-   */
-  private mealBodyTarget(meal: MealType): number {
-    if (!this.mealMeasured) {
-      return -1;
-    }
-    return this.isExpanded(meal) ? this.mealBodyH : 0;
   }
 
   /**
@@ -898,64 +847,40 @@ struct Index {
         this.toggleMeal(meal);
       })
 
-      /*
-       * 明细区：两阶段做「真收缩」动画。
-       *
-       * 阶段一（测量）：外层不设高度、不裁切（mealBodyTarget 返回 -1），
-       *   内层按自然尺寸布局，onAreaChange 量到真实高度后置 mealMeasured。
-       * 阶段二（动画）：外层设 .height(目标值) + .clip(true)，
-       *   收起时从自然高度收到 0，占位同步释放，不会与下方控件重叠。
-       *
-       * 两个阶段必须分开：一上来就 .height(0) + .clip(true) 会让内层
-       * 不被布局，onAreaChange 永不触发 —— 循环依赖，内容被自己裁没
-       *（上一版就是这么坏掉的）。
-       *
-       * 也不再给明细挂 transition：条件为假时节点立刻移除，
-       * transition 跑在不参与布局的元素上，是之前「收起时与其他控件重叠」的根因。
-       */
-      Column() {
-        if (this.isExpanded(meal)) {
-          Column({ space: 8 }) {
-            if (DailyService.recordsOf(this.data.records, meal).length === 0) {
-              Row() {
-                Text('还没有记录')
-                  .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
-              }
-              .width('100%')
-              .padding(14)
-              .backgroundColor(COLOR_CARD)
-              .borderRadius(RADIUS)
-              .shadow(CARD_SHADOW)
-            } else {
-              ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
-                RecordRow({
-                  record: record,
-                  onDelete: (id: string) => {
-                    const target: FoodRecord | undefined =
-                      this.data.records.find((r: FoodRecord) => r.id === id);
-                    if (target !== undefined) {
-                      this.confirmDelete(target);
-                    }
-                  }
-                })
-              }, (record: FoodRecord) => record.id)
+      if (this.isExpanded(meal)) {
+        Column({ space: 8 }) {
+          if (DailyService.recordsOf(this.data.records, meal).length === 0) {
+            Row() {
+              Text('还没有记录')
+                .fontSize(13)
+                .fontColor(COLOR_TEXT_SUB)
             }
+            .width('100%')
+            .padding(14)
+            .backgroundColor(COLOR_CARD)
+            .borderRadius(RADIUS)
+            .shadow(CARD_SHADOW)
+          } else {
+            ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
+              RecordRow({
+                record: record,
+                onDelete: (id: string) => {
+                  const target: FoodRecord | undefined =
+                    this.data.records.find((r: FoodRecord) => r.id === id);
+                  if (target !== undefined) {
+                    this.confirmDelete(target);
+                  }
+                }
+              })
+            }, (record: FoodRecord) => record.id)
           }
-          .width('100%')
-          // 展开时量一次自然高度，供收起动画用
-          .onAreaChange((oldValue: Area, newValue: Area) => {
-            this.onMealBodyArea(newValue);
-          })
         }
-      }
-      .width('100%')
-      // 测量阶段（-1）不设高度，让内层按自然尺寸布局
-      .height(this.mealBodyTarget(meal) >= 0 ? this.mealBodyTarget(meal) : undefined)
-      .clip(this.mealBodyTarget(meal) >= 0)
-      .animation({ duration: DUR_NORMAL, curve: Curve.EaseInOut })
-
-      if (!this.isExpanded(meal) && DailyService.recordsOf(this.data.records, meal).length > 0) {
+        .width('100%')
+        // 展开/收起都走同一个过渡，收起时自动反向播放
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.scale({ x: 1, y: 0.94, centerY: '0%' }))
+          .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut }))
+      } else if (DailyService.recordsOf(this.data.records, meal).length > 0) {
         // 收起态给一行摘要，避免完全看不到吃了什么
         Row() {
           Text(this.mealSummary(meal))
