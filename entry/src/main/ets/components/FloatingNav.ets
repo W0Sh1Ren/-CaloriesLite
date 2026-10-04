@@ -13,7 +13,9 @@
  * 注意：底部安全区（手势条）会吃掉点击，整条栏必须由父组件抬到 bottomInset 之上。
  */
 import {
-  COLOR_NAV_ACTIVE, COLOR_NAV_IDLE, DUR_FAST, NAV_HEIGHT, NAV_RADIUS
+  COLOR_GLASS_BORDER, COLOR_NAV_ACTIVE, COLOR_NAV_IDLE,
+  DUR_FAST, GLASS_GLOW, GLASS_HAIRLINE, GLASS_LIFT_SHADOW,
+  NAV_HEIGHT, NAV_RADIUS
 } from '../common/Theme';
 
 /** 一个导航项 */
@@ -183,17 +185,23 @@ export struct FloatingNav {
     /*
      * 液态玻璃。
      *
-     * 用 backdropBlur 而不是 backgroundBlurStyle：后者会按档位一并调整
-     * 亮度与饱和度，在浅色页面上把整条压成一块灰板（实测就是「灰色实心
-     * 塑料板」的来源）。backdropBlur 只做模糊，亮度交给底色，
-     * 这样 25% 白就是通透的玻璃，而不是发灰的塑料。
+     * 用 backdropBlur 而不是 backgroundBlurStyle：后者会按 BlurStyle 档位
+     * 一并施加亮度/饱和度调整，在浅色页面上会把整条压成灰板
+     *（实测顶栏和底部导航都因此发灰）。backdropBlur 只做背景模糊，
+     * 亮度完全由底色决定。
      */
     .backgroundColor('#40FFFFFF')
-    .backdropBlur(40)
-    // 玻璃高光边缘：这圈白边是「玻璃感」的灵魂，比底色更重要
-    .border({ width: 1.5, color: '#E6FFFFFF' })
-    // 内部白色光晕：让边缘有一层柔和的内发光，模拟光线在玻璃里的折射
-    .shadow({ radius: 6, color: 'rgba(255,255,255,0.65)', offsetX: 0, offsetY: 0 })
+    .backdropBlur(32)
+    /*
+     * 玻璃的「质感三件套」，顺序有讲究：
+     *   1. 0.5vp 中性白描边 —— 勾出玻璃厚度（粗了就变实体边框，通透感下降）
+     *   2. 深色大半径投影   —— 与下方内容拉开层次，这是「浮起来」的来源
+     *   3. 白色内光晕       —— 边缘内发光，模拟光线折射
+     * 只留第 3 条会显得贴在内容上、没有高度；只留第 2 条会像一块塑料板。
+     */
+    .border({ width: GLASS_HAIRLINE, color: COLOR_GLASS_BORDER })
+    .shadow(GLASS_LIFT_SHADOW)
+    .shadow(GLASS_GLOW)
     // 整条栏统一接管手势：按下即反馈，移动即跟随，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {

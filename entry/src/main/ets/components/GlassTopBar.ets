@@ -19,7 +19,7 @@
  * 存进 AppState.topInset（窗口设为全屏布局后必须自行避让）。
  */
 import { AppState } from '../common/AppState';
-import { CARD_SHADOW, COLOR_TEXT, COLOR_TEXT_SUB, DUR_FAST, PAGE_PAD } from '../common/Theme';
+import { COLOR_TEXT, COLOR_TEXT_SUB, PAGE_PAD, TOP_BAR_SHADOW } from '../common/Theme';
 
 /** 顶栏除掉状态栏之后的自身高度，用于给内容留出避让空间 */
 export const TOP_BAR_BODY: number = 62;
@@ -130,8 +130,9 @@ export struct GlassTopBar {
      */
     .backgroundColor('#B3FFFFFF')
     .backdropBlur(24)
-    // 底缘极淡的投影，把顶栏和内容分开但不显生硬
-    .shadow({ radius: 12, color: 'rgba(0,0,0,0.03)', offsetX: 0, offsetY: 4 })
+    // 底缘极淡的投影：顶栏紧贴内容，只求「分开」不求「浮起」，
+    // 所以用比悬浮件更轻的 TOP_BAR_SHADOW
+    .shadow(TOP_BAR_SHADOW)
   }
 
   /** 第 index 个右侧按钮是否可用；没传就默认可用 */

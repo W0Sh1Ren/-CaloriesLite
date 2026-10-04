@@ -66,6 +66,58 @@ export const CARD_SHADOW: ShadowOptions = {
   offsetY: 6
 };
 
+/*
+ * ============================================================
+ * 玻璃（沉浸光感）参数
+ *
+ * 口径参考 WeiboPura《新 API26 沉浸光感经验汇总》的自绘玻璃配方：
+ *   半透明底 + 真模糊(带 scale) + 0.5vp 极细描边 + 深色大半径投影
+ * 该文档全工程的玻璃都收敛到这几个值，此处集中一处便于统一调整。
+ * ============================================================
+ */
+
+/**
+ * 玻璃的极细高光描边。
+ *
+ * 文档里所有自绘玻璃都是 0.5vp（不是 1~1.5）：
+ * 描边只负责勾出「玻璃有厚度」这一条信息，粗了就变成实体边框，
+ * 通透感反而下降。
+ */
+export const GLASS_HAIRLINE: number = 0.5;
+/** 玻璃描边颜色：中性白，不掺任何色调，避免与品牌绿打架 */
+export const COLOR_GLASS_BORDER: string = 'rgba(255, 255, 255, 0.72)';
+
+/**
+ * 玻璃的深色大半径投影 —— 「浮起感」的来源。
+ *
+ * 与白色内光晕（GLASS_GLOW）分工不同：
+ *   这条深色投影负责与下方内容拉开层次（浮在内容之上）
+ *   白色光晕负责边缘的内发光（玻璃厚度）
+ * 只留后者会显得「贴」在内容上、没有高度。
+ */
+export const GLASS_LIFT_SHADOW: ShadowOptions = {
+  radius: 32,
+  color: 'rgba(16, 24, 36, 0.10)',
+  offsetX: 0,
+  offsetY: 8
+};
+
+/** 玻璃边缘的白色内发光，模拟光线在玻璃里的折射 */
+export const GLASS_GLOW: ShadowOptions = {
+  radius: 6,
+  color: 'rgba(255, 255, 255, 0.65)',
+  offsetX: 0,
+  offsetY: 0
+};
+
+/** 顶栏底缘的分隔投影：比悬浮件更轻，只把顶栏和滚动内容分开 */
+export const TOP_BAR_SHADOW: ShadowOptions = {
+  radius: 12,
+  color: 'rgba(0, 0, 0, 0.03)',
+  offsetX: 0,
+  offsetY: 4
+};
+
 /** 换算：1 公斤脂肪约等于多少千卡 */
 export const KCAL_PER_KG_FAT: number = 7700;
 
