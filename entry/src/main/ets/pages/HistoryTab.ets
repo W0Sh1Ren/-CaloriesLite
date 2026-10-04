@@ -155,45 +155,49 @@ export struct HistoryTab {
 
   build() {
     Scroll() {
-      Column({ space: GAP }) {
-        // ------------------------------------------------ 月历
-        Column({ space: 10 }) {
-          Row() {
-            Button({ type: ButtonType.Circle }) {
-              Text('‹').fontSize(20).fontColor(COLOR_TEXT)
-            }
-            .width(32).height(32).backgroundColor(COLOR_BG)
-            .onClick(() => {
-              this.shiftMonth(-1);
-            })
+      Column({ space: 14 }) {
+        // ------------------------------------------------ 月份切换
+        // Apple 风格：大标题 + 右侧一对圆形步进按钮，不再把标题夹在两键之间
+        Row() {
+          Text(`${this.viewYear}年${this.viewMonth0 + 1}月`)
+            .fontSize(26)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(COLOR_TEXT)
+            .layoutWeight(1)
 
-            Text(`${this.viewYear}年${this.viewMonth0 + 1}月`)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(COLOR_TEXT)
-              .layoutWeight(1)
-              .textAlign(TextAlign.Center)
-
-            Button({ type: ButtonType.Circle }) {
-              Text('›').fontSize(20).fontColor(COLOR_TEXT)
-            }
-            .width(32).height(32).backgroundColor(COLOR_BG)
-            .onClick(() => {
-              this.shiftMonth(1);
-            })
+          Button({ type: ButtonType.Circle }) {
+            Text('‹').fontSize(20).fontColor(COLOR_TEXT)
           }
-          .width('100%')
+          .width(36).height(36)
+          .backgroundColor(COLOR_CARD)
+          .shadow(CARD_SHADOW)
+          .onClick(() => {
+            this.shiftMonth(-1);
+          })
 
-          CalendarHeatmap({
-            cells: this.cells,
-            selectedDay: this.selectedDay,
-            onSelectDay: (day: string) => {
-              this.selectedDay = day;
-              this.rebuild();
-            }
+          Button({ type: ButtonType.Circle }) {
+            Text('›').fontSize(20).fontColor(COLOR_TEXT)
+          }
+          .width(36).height(36)
+          .margin({ left: 8 })
+          .backgroundColor(COLOR_CARD)
+          .shadow(CARD_SHADOW)
+          .onClick(() => {
+            this.shiftMonth(1);
           })
         }
         .width('100%')
+        .padding({ left: 4, right: 4, top: 6 })
+
+        // ------------------------------------------------ 月历
+        CalendarHeatmap({
+          cells: this.cells,
+          selectedDay: this.selectedDay,
+          onSelectDay: (day: string) => {
+            this.selectedDay = day;
+            this.rebuild();
+          }
+        })
 
         // ------------------------------------------------ 当日结算
         this.dayDetailCard()
@@ -207,7 +211,7 @@ export struct HistoryTab {
         Row().height(NAV_RESERVE)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
     }
     .width('100%')
     .height('100%')
@@ -224,74 +228,86 @@ export struct HistoryTab {
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
           .fontColor(COLOR_TEXT)
+
         Blank()
+
+        // 缺口做成强调徽标：这是这一天最该一眼看到的信息
         Text(this.detail.deficit < 0
           ? `超出 ${-this.detail.deficit}`
           : `缺口 ${this.detail.deficit}`)
-          .fontSize(15)
+          .fontSize(14)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.detail.deficit < 0 ? COLOR_WARN : COLOR_OK)
-        Text(' 千卡')
-          .fontSize(12)
-          .fontColor(COLOR_TEXT_SUB)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .backgroundColor(this.detail.deficit < 0 ? '#1AE5533D' : '#1A2FA36B')
+          .borderRadius(10)
       }
       .width('100%')
 
+      // 三项指标：之间加竖分隔线，比纯留白更容易读
       Row() {
         this.miniStat('摄入', () => `${this.detail.intake}`)
+        Divider().vertical(true).height(26).color(COLOR_DIVIDER)
         this.miniStat('预算', () => `${this.detail.budget}`)
+        Divider().vertical(true).height(26).color(COLOR_DIVIDER)
         this.miniStat('运动', () => `${this.detail.exerciseKcal}`)
-        // 手动补记入口放在这里：首页只留拍照识别，手动录入属于「修正/补充」场景
-        Button({ type: ButtonType.Capsule }) {
-          Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
-        }
-        .height(32)
-        .backgroundColor('#1AFF7A45')
-        .onClick(() => {
-          try {
-            router.pushUrl({ url: 'pages/ManualAdd' });
-          } catch (err) {
-            hilog.error(DOMAIN, 'CalorieLite', 'goManualAdd failed');
-          }
-        })
       }
       .width('100%')
-      .justifyContent(FlexAlign.SpaceBetween)
+      .justifyContent(FlexAlign.SpaceEvenly)
 
       if (this.detailRecords.length === 0) {
-        Row() {
+        Row({ space: 8 }) {
           Text('这天没有饮食记录')
             .fontSize(13)
             .fontColor(COLOR_TEXT_SUB)
+            .layoutWeight(1)
+
+          // 没有记录时把补记入口放在这里，指向更明确
+          Button({ type: ButtonType.Capsule }) {
+            Text('+ 补记一笔').fontSize(12).fontColor(COLOR_PRIMARY)
+          }
+          .height(30)
+          .backgroundColor('#1AFF7A45')
+          .onClick(() => {
+            this.goManualAdd();
+          })
         }
         .width('100%')
-        .padding({ top: 4 })
+        .padding({ top: 2 })
       } else {
         Divider().color(COLOR_DIVIDER)
 
         ForEach(MEAL_ORDER, (meal: MealType) => {
           if (DailyService.recordsOf(this.detailRecords, meal).length > 0) {
-            Column({ space: 4 }) {
+            Column({ space: 6 }) {
               Text(mealTypeLabel(meal))
                 .fontSize(12)
                 .fontColor(COLOR_TEXT_SUB)
                 .width('100%')
 
               ForEach(DailyService.recordsOf(this.detailRecords, meal), (r: FoodRecord) => {
-                Row() {
+                Row({ space: 8 }) {
                   Text(r.name)
                     .fontSize(14)
                     .fontColor(COLOR_TEXT)
                     .layoutWeight(1)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
+
                   Text(`${r.grams}g`)
                     .fontSize(12)
                     .fontColor(COLOR_TEXT_SUB)
-                    .margin({ right: 8 })
-                  Text(`${r.kcal} 千卡`)
-                    .fontSize(13)
+
+                  Text(`${r.kcal}`)
+                    .fontSize(14)
+                    .fontWeight(FontWeight.Medium)
                     .fontColor(COLOR_TEXT)
+                    .width(42)
+                    .textAlign(TextAlign.End)
+
+                  Text('千卡')
+                    .fontSize(11)
+                    .fontColor(COLOR_TEXT_SUB)
                 }
                 .width('100%')
               }, (r: FoodRecord) => r.id)
@@ -300,6 +316,20 @@ export struct HistoryTab {
             .alignItems(HorizontalAlign.Start)
           }
         }, (meal: MealType) => `m-${meal}`)
+
+        // 有记录时补记入口放到底部，不打断阅读
+        Row() {
+          Button({ type: ButtonType.Capsule }) {
+            Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
+          }
+          .height(30)
+          .backgroundColor('#1AFF7A45')
+          .onClick(() => {
+            this.goManualAdd();
+          })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.End)
       }
     }
     .width('100%')
@@ -309,10 +339,15 @@ export struct HistoryTab {
     .shadow(CARD_SHADOW)
   }
 
-  /**
-   * 一项指标。value 用取值函数：@Builder 参数只求值一次，
-   * 传值会导致切换日期后数字不跟着变。
-   */
+  /** 跳转手动补记页 */
+  private goManualAdd(): void {
+    try {
+      router.pushUrl({ url: 'pages/ManualAdd' });
+    } catch (err) {
+      hilog.error(DOMAIN, 'CalorieLite', 'goManualAdd failed');
+    }
+  }
+
   @Builder
   miniStat(label: string, value: () => string) {
     Column({ space: 2 }) {

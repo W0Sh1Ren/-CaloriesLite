@@ -13,7 +13,7 @@ import { todayKey } from '../common/DateUtil';
 import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
 import { AppState, PendingResult } from '../common/AppState';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -23,21 +23,34 @@ class EditableDraft {
   name: string = '';
   gramsText: string = '';
   kcal: number = 0;
+  protein: number = 0;
+  fat: number = 0;
+  carb: number = 0;
   confidence: string = '';
   source: FoodSource = FoodSource.AI;
   note: string = '';
-  /** 每 100 克热量，用于改克重时重算 */
+  /** 每 100 克的营养密度，用于改克重时按比例重算 */
   kcalPer100g: number = 0;
+  proteinPer100g: number = 0;
+  fatPer100g: number = 0;
+  carbPer100g: number = 0;
 
   constructor(draft: FoodDraft) {
     this.name = draft.name;
     this.gramsText = `${draft.grams}`;
     this.kcal = draft.kcal;
+    this.protein = draft.protein;
+    this.fat = draft.fat;
+    this.carb = draft.carb;
     this.confidence = draft.confidence;
     this.source = draft.source;
     this.note = draft.note;
-    if (draft.grams > 0 && draft.kcal > 0) {
-      this.kcalPer100g = draft.kcal / draft.grams * 100;
+    if (draft.grams > 0) {
+      const ratio: number = 100 / draft.grams;
+      this.kcalPer100g = draft.kcal * ratio;
+      this.proteinPer100g = draft.protein * ratio;
+      this.fatPer100g = draft.fat * ratio;
+      this.carbPer100g = draft.carb * ratio;
     }
   }
 
@@ -46,12 +59,22 @@ class EditableDraft {
     return Number.isNaN(v) || v <= 0 ? 0 : Math.round(v);
   }
 
-  /** 改完克重后重算热量；没有基准值时保持原样 */
+  /** 改完克重后按比例重算全部营养值；没有基准值时保持原样 */
   recompute(): void {
-    if (this.kcalPer100g > 0) {
-      this.kcal = Math.round(this.kcalPer100g * this.grams() / 100);
+    if (this.kcalPer100g <= 0) {
+      return;
     }
+    const ratio: number = this.grams() / 100;
+    this.kcal = Math.round(this.kcalPer100g * ratio);
+    this.protein = round1(this.proteinPer100g * ratio);
+    this.fat = round1(this.fatPer100g * ratio);
+    this.carb = round1(this.carbPer100g * ratio);
   }
+}
+
+/** 保留一位小数 */
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
 }
 
 @Entry
@@ -140,7 +163,7 @@ struct ResultConfirm {
       }
       records.push(new FoodRecord(
         makeId(), day, now, this.meal, d.name, grams, d.kcal,
-        0, 0, 0, d.source, this.imageUri, d.note
+        d.protein, d.fat, d.carb, d.source, this.imageUri, d.note
       ));
     }
 
@@ -334,6 +357,14 @@ struct ResultConfirm {
       }
       .width('100%')
 
+      // 三大营养素：让用户当场看到 AI 估了什么，而不是只看到一个热量
+      Row({ space: 12 }) {
+        this.macroTag('蛋白', item.protein)
+        this.macroTag('脂肪', item.fat)
+        this.macroTag('碳水', item.carb)
+      }
+      .width('100%')
+
       Row({ space: 8 }) {
         Text(this.confidenceLabel(item.confidence))
           .fontSize(11)
@@ -359,5 +390,20 @@ struct ResultConfirm {
     .padding(14)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
+  }
+
+  /** 一个营养素小标签 */
+  @Builder
+  macroTag(label: string, grams: number) {
+    Row({ space: 3 }) {
+      Text(label)
+        .fontSize(11)
+        .fontColor(COLOR_TEXT_SUB)
+      Text(`${grams} g`)
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(COLOR_TEXT)
+    }
   }
 }

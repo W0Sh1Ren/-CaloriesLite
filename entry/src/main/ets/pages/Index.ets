@@ -22,8 +22,8 @@ import { FoodRepo } from '../service/FoodRepo';
 import { AppState } from '../common/AppState';
 import {
   COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB,
-  CARD_SHADOW, DUR_NORMAL, GAP, GlowPalette, NAV_MARGIN, NAV_RESERVE, PAGE_PAD, RADIUS,
-  glowForHour
+  CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_MARGIN,
+  NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
 import { CalorieRing } from '../components/CalorieRing';
 import { MacroBar } from '../components/MacroBar';
@@ -153,23 +153,47 @@ struct Index {
         })
 
       // ---------------------------------------------------- 2. 内容层
-      // 全屏布局后内容会顶到状态栏和手势条下面，这里按安全区让开
-      Column() {
-        if (this.activeTab === 0) {
+      // 三个视图都常驻在 Stack 里，靠属性动画做切换过渡。
+      // 不用 if/else 是因为那会销毁并重建视图，过渡动画会被打断。
+      // 未选中的视图缩到 0.94 并移出屏幕，同时屏蔽命中测试。
+      Stack() {
+        Column() {
           this.todayView()
-        } else if (this.activeTab === 1) {
+        }
+        .width('100%')
+        .height('100%')
+        .opacity(this.activeTab === 0 ? 1 : 0)
+        .translate({ x: this.activeTab === 0 ? 0 : (this.activeTab > 0 ? -VIEW_SLIDE_X : VIEW_SLIDE_X) })
+        .scale({ x: this.activeTab === 0 ? 1 : VIEW_INACTIVE_SCALE, y: this.activeTab === 0 ? 1 : VIEW_INACTIVE_SCALE })
+        .hitTestBehavior(this.activeTab === 0 ? HitTestMode.Default : HitTestMode.None)
+        .animation({ duration: DUR_VIEW_SWITCH, curve: CURVE_BOUNCE })
+
+        Column() {
           HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
-        } else {
+        }
+        .width('100%')
+        .height('100%')
+        .opacity(this.activeTab === 1 ? 1 : 0)
+        .translate({ x: this.activeTab === 1 ? 0 : (this.activeTab > 1 ? -VIEW_SLIDE_X : VIEW_SLIDE_X) })
+        .scale({ x: this.activeTab === 1 ? 1 : VIEW_INACTIVE_SCALE, y: this.activeTab === 1 ? 1 : VIEW_INACTIVE_SCALE })
+        .hitTestBehavior(this.activeTab === 1 ? HitTestMode.Default : HitTestMode.None)
+        .animation({ duration: DUR_VIEW_SWITCH, curve: CURVE_BOUNCE })
+
+        Column() {
           ProfileTab({ refreshTick: this.refreshTick })
         }
+        .width('100%')
+        .height('100%')
+        .opacity(this.activeTab === 2 ? 1 : 0)
+        .translate({ x: this.activeTab === 2 ? 0 : (this.activeTab > 2 ? -VIEW_SLIDE_X : VIEW_SLIDE_X) })
+        .scale({ x: this.activeTab === 2 ? 1 : VIEW_INACTIVE_SCALE, y: this.activeTab === 2 ? 1 : VIEW_INACTIVE_SCALE })
+        .hitTestBehavior(this.activeTab === 2 ? HitTestMode.Default : HitTestMode.None)
+        .animation({ duration: DUR_VIEW_SWITCH, curve: CURVE_BOUNCE })
       }
       .width('100%')
       .height('100%')
       .padding({ top: this.topInset })
-      // 切视图时的淡入 + 轻微上移，注意 key 变化才会重放
-      .transition(TransitionEffect.OPACITY
-        .combine(TransitionEffect.translate({ y: 8 }))
-        .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut }))
+      .clip(true)
 
       // ---------------------------------------------------- 3. 悬浮导航栏
       // 关键：bottom 里必须加上 bottomInset。

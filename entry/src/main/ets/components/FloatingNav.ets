@@ -131,18 +131,23 @@ export struct FloatingNav {
 
         Row() {
           ForEach(this.items, (item: NavItem, index: number) => {
-            Column({ space: 2 }) {
+            Column({ space: 3 }) {
+              // 图标固定行高，避免不同字符的行高差异把这一格顶得不居中
               Text(item.glyph)
-                .fontSize(19)
-                .fontColor(this.activeIndex === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
+                .fontSize(20)
+                .lineHeight(24)
+                .textAlign(TextAlign.Center)
+                .fontColor(this.pillIndex() === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
                 .scale({
-                  x: this.pillIndex() === index ? 1.15 : 1,
-                  y: this.pillIndex() === index ? 1.15 : 1
+                  x: this.pillIndex() === index ? 1.12 : 1,
+                  y: this.pillIndex() === index ? 1.12 : 1
                 })
                 .animation({ duration: DUR_FAST, curve: Curve.EaseOut })
 
               Text(item.label)
                 .fontSize(11)
+                .lineHeight(14)
+                .textAlign(TextAlign.Center)
                 .fontWeight(this.pillIndex() === index ? FontWeight.Medium : FontWeight.Normal)
                 .fontColor(this.pillIndex() === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
                 .animation({ duration: DUR_FAST })
@@ -150,6 +155,7 @@ export struct FloatingNav {
             .width(this.cellWidth())
             .height(NAV_HEIGHT)
             .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
             // 按住时未选中的项轻微压暗，突出当前指向的那一项
             .opacity(this.pressing && this.pillIndex() !== index ? 0.72 : 1)
             .animation({ duration: DUR_FAST })

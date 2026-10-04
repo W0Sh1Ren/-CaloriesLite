@@ -79,6 +79,41 @@ export const PRESS_SCALE: number = 0.9;
 export const COLOR_PRESS_GLOW: string = '#26FF7A45';
 
 /**
+ * 页面切换动画参数。
+ *
+ * 未选中的视图缩到 VIEW_INACTIVE_SCALE 并整体平移出屏，
+ * 切换时用弹性曲线滑入，形成「左右切换」的方向感。
+ */
+export const VIEW_INACTIVE_SCALE: number = 0.94;
+/** 视图平移出屏的距离，要足够大才能完全移出可视区 */
+export const VIEW_SLIDE_X: number = 96;
+/** 切换动画时长，比普通过渡略长，让方向感看得清 */
+export const DUR_VIEW_SWITCH: number = 340;
+
+/** 透明度过渡：淡出快一点，避免两个视图同时可见时发灰 */
+export const VIEW_TRANSITION_OUT: TransitionEffect = TransitionEffect.OPACITY
+  .animation({ duration: DUR_FAST, curve: Curve.EaseIn });
+
+/** 透明度过渡：淡入慢一点，配合位移形成层次 */
+export const VIEW_TRANSITION_IN: TransitionEffect = TransitionEffect.OPACITY
+  .animation({ duration: DUR_VIEW_SWITCH, curve: Curve.EaseOut });
+
+/**
+ * 取相机式的位移过渡。每次调用都新建实例——
+ * TransitionEffect 携带内部状态，复用同一个实例会导致动画不重放。
+ */
+export function cameralSlide(fromX: number, toX: number): TransitionEffect {
+  return TransitionEffect.asymmetric(
+    TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ x: toX }))
+      .animation({ duration: DUR_VIEW_SWITCH, curve: Curve.FastOutSlowIn }),
+    TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ x: fromX }))
+      .animation({ duration: DUR_FAST, curve: Curve.EaseIn })
+  );
+}
+
+/**
  * 顶部柔光渐变的配色。
  *
  * 「沉浸光感」的做法：在页面顶部铺一层很淡的径向暖光，
