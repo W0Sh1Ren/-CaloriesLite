@@ -24,11 +24,12 @@ import { ImageService } from '../service/ImageService';
 import { AppState } from '../common/AppState';
 import {
   COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB,
-  CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_MARGIN,
+  CARD_SHADOW, CURVE_BOUNCE, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_MARGIN,
   NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
 import { CalorieRing } from '../components/CalorieRing';
 import { MacroBar } from '../components/MacroBar';
+import { RollingNumber } from '../components/RollingNumber';
 import { RecordRow } from '../components/RecordRow';
 import { FloatingNav, NavItem } from '../components/FloatingNav';
 import { HistoryTab } from './HistoryTab';
@@ -431,10 +432,10 @@ struct Index {
 
           Row({ space: 14 }) {
             if (this.data.streak > 0) {
-              this.chip(`连续达标 ${this.data.streak} 天`)
+              this.chip('连续达标', () => this.data.streak, '天')
             }
             if (this.data.summary.exerciseKcal > 0) {
-              this.chip(`运动 +${this.data.summary.exerciseKcal}`)
+              this.chip('运动 +', () => this.data.summary.exerciseKcal, '')
             }
           }
           .width('100%')
@@ -523,15 +524,35 @@ struct Index {
     .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 10, bottom: 10 })
   }
 
-  /** 一个小标签 */
+  /**
+   * 一个小标签：前缀文字 + 会滚动的数字 + 单位。
+   *
+   * 数字必须走 RollingNumber 且由这里内联渲染：
+   * 之前整个标签是 this.chip(`连续达标 ${n} 天}`) 这样传字符串，
+   * @Builder 的参数只求值一次，数字变了标签也不会更新；
+   * 而且纯 Text 是瞬间跳变，没有滚动感。
+   */
   @Builder
-  chip(text: string) {
-    Text(text)
-      .fontSize(12)
-      .fontColor(COLOR_PRIMARY)
-      .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-      .backgroundColor(COLOR_PRIMARY_SOFT)
-      .borderRadius(12)
+  chip(label: string, value: () => number, unit: string) {
+    Row({ space: 2 }) {
+      Text(label)
+        .fontSize(12)
+        .fontColor(COLOR_PRIMARY)
+      RollingNumber({
+        value: value(),
+        fontSize: 12,
+        fontWeight: FontWeight.Medium,
+        textColor: COLOR_PRIMARY,
+        duration: DUR_SLOW
+      })
+      Text(unit)
+        .fontSize(12)
+        .fontColor(COLOR_PRIMARY)
+    }
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+    .backgroundColor(COLOR_PRIMARY_SOFT)
+    .borderRadius(12)
   }
 
   /** 展开/收起某一餐 */

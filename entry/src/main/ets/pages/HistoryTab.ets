@@ -244,16 +244,24 @@ export struct HistoryTab {
 
         Blank()
 
-        // 缺口做成强调徽标：这是这一天最该一眼看到的信息
-        Text(this.detail.deficit < 0
-          ? `超出 ${-this.detail.deficit}`
-          : `缺口 ${this.detail.deficit}`)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.detail.deficit < 0 ? COLOR_WARN : COLOR_OK)
-          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-          .backgroundColor(this.detail.deficit < 0 ? '#1AE5533D' : '#1A2FA36B')
-          .borderRadius(10)
+        // 缺口做成强调徽标：这是这一天最该一眼看到的信息。
+        // 数字走滚动动效：图标与文字都在变，数字直接跳会很突兀。
+        Row({ space: 2 }) {
+          Text(this.detail.deficit < 0 ? '超出' : '缺口')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.detail.deficit < 0 ? COLOR_WARN : COLOR_OK)
+          RollingNumber({
+            value: Math.abs(this.detail.deficit),
+            fontSize: 14,
+            fontWeight: FontWeight.Medium,
+            textColor: this.detail.deficit < 0 ? COLOR_WARN : COLOR_OK,
+            duration: DUR_SLOW
+          })
+        }
+        .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+        .backgroundColor(this.detail.deficit < 0 ? '#1AE5533D' : '#1A2FA36B')
+        .borderRadius(10)
       }
       .width('100%')
 

@@ -1,14 +1,17 @@
 /**
- * 三大营养素进度条。
+ * 三大营养素：数字滚动 + 进度条滑动。
  *
  * 显示当日摄入量相对「推荐量」的完成度。推荐量由每日总消耗按
  * 碳水 50% / 蛋白质 30% / 脂肪 20% 的热量占比反推克数得到
  * （见 Enums.macroTargetFor），所以换个人、换个目标都会自动跟着变。
  *
- * 用推荐量做分母而不是「三项里的最大值」：后者只能看出三项的相对高低，
- * 看不出「离推荐量还差多少」，而后者才是用户真正关心的。
+ * ── 为什么数字和条要一起用逐帧动画器 ──
+ * 之前数字是直接 Text(`${item.grams}`)。但 items() 每次 build 现读 props，
+ * 而 ForEach 的键是 `${index}-${label}`、**和数值无关**：
+ * ArkUI 在键不变时会复用子组件并跳过重建，数字就永远停在首帧的值。
+ * 条能动是因为它的宽度来自 @State animPct，是另一条独立的更新路径。
  *
- * 条形宽度带连续动画：数据变化时不是瞬间跳到新比例，而是从当前位置推过去。
+ * 现在两处都读「动画器的当前值」，走同一条逐帧路径，必然同步。
  */
 import {
   CARD_SHADOW, COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT,
@@ -39,9 +42,72 @@ class MacroItem {
   }
 }
 
+/** 每帧同时驱动数字与条形 */
+class MacroTicker {
+  /** 当前显示的克数 */
+  shownGrams: number = 0;
+  /** 当前显示的百分比 */
+  shownPct: number = 0;
+
+  private timer: number = -1;
+  private fromG: number = 0;
+  private toG: number = 0;
+  private fromP: number = 0;
+  private toP: number = 0;
+  private startedAt: number = 0;
+  private duration: number = 420;
+
+  stop(): void {
+    if (this.timer !== -1) {
+      clearInterval(this.timer);
+      this.timer = -1;
+    }
+  }
+
+  /** 停掉动画并立即落到目标值 */
+  snap(grams: number, pct: number): void {
+    this.stop();
+    this.shownGrams = grams;
+    this.shownPct = pct;
+  }
+
+  /**
+   * 平滑推进到目标。
+   *
+   * @param apply 每帧回调，让调用方把值写进 @State 触发重建
+   */
+  to(grams: number, pct: number, apply: () => void, duration: number = 420): void {
+    if (Math.abs(grams - this.shownGrams) < 0.05 && Math.abs(pct - this.shownPct) < 0.05) {
+      this.snap(grams, pct);
+      apply();
+      return;
+    }
+    this.stop();
+    this.fromG = this.shownGrams;
+    this.toG = grams;
+    this.fromP = this.shownPct;
+    this.toP = pct;
+    this.startedAt = Date.now();
+    this.duration = duration;
+
+    this.timer = setInterval(() => {
+      const t: number = this.duration <= 0 ? 1 : Math.min(1, (Date.now() - this.startedAt) / this.duration);
+      // easeOutCubic：起步快、收尾缓，与应用其它动效节奏一致
+      const eased: number = 1 - Math.pow(1 - t, 3);
+      this.shownGrams = this.fromG + (this.toG - this.fromG) * eased;
+      this.shownPct = this.fromP + (this.toP - this.fromP) * eased;
+      apply();
+      if (t >= 1) {
+        this.snap(grams, pct);
+        apply();
+      }
+    }, 16);
+  }
+}
+
 @Component
 export struct MacroBar {
-  // 加 @Watch 是为了在数据变化时推动条形动画。
+  // 加 @Watch 是为了在数据变化时推动动画。
   // 注意监测的是「克数」而不是算出来的百分比：两者同步变化，
   // 但克数是入参本身，@Watch 一定能收到。
   @Prop @Watch('onDataChange') protein: number = 0;
@@ -53,41 +119,44 @@ export struct MacroBar {
   @Prop fatTarget: number = 0;
 
   /**
-   * 三项的显示百分比。
+   * 每帧递增的版本号。
    *
-   * 用 @State 数组 + animateTo：animateTo 每帧重建组件，
-   * 而 width 是属性、可被插值，于是三根条连续滑动。
+   * @State 数组本身在动画期间一直被改，但为了让「数字」也跟着重建，
+   * 这里额外用一个计数器：build 里读它，就能保证整块内容每帧重算一次。
    */
-  @State animPct: number[] = [0, 0, 0];
+  @State frame: number = 0;
+
+  private tickers: MacroTicker[] = [new MacroTicker(), new MacroTicker(), new MacroTicker()];
 
   aboutToAppear(): void {
     // 首帧直接落位，避免一进页面三根条从 0 长出来
     this.snapAll();
   }
 
-  /** 数据变化：把三根条平滑推到新比例 */
-  onDataChange(): void {
-    const list: MacroItem[] = this.items();
-    const from: number[] = this.animPct.slice();
-    const target: number[] = [];
-    for (let i = 0; i < list.length; i++) {
-      target.push(list[i].percent());
+  aboutToDisappear(): void {
+    // 定时器必须在销毁时停掉，否则回调会打到已销毁的实例上
+    for (const t of this.tickers) {
+      t.stop();
     }
-    // 先把起点写回，再从起点推到目标，连续切换时不会跳
-    this.animPct = from;
-    this.getUIContext().animateTo({ duration: DUR_SLOW, curve: Curve.EaseOut }, () => {
-      this.animPct = target;
-    });
   }
 
-  /** 不做动画，直接把显示值设为目标 */
+  /** 数据变化：把数字与条一起平滑推到新值 */
+  onDataChange(): void {
+    const list: MacroItem[] = this.items();
+    for (let i = 0; i < list.length; i++) {
+      const item: MacroItem = list[i];
+      this.tickers[i].to(item.grams, item.percent(), () => {
+        this.frame++;
+      }, DUR_SLOW);
+    }
+  }
+
+  /** 不做动画，直接落位 */
   private snapAll(): void {
     const list: MacroItem[] = this.items();
-    const next: number[] = [];
     for (let i = 0; i < list.length; i++) {
-      next.push(list[i].percent());
+      this.tickers[i].snap(list[i].grams, list[i].percent());
     }
-    this.animPct = next;
   }
 
   private items(): MacroItem[] {
@@ -98,9 +167,15 @@ export struct MacroBar {
     ];
   }
 
-  /** 取第 i 项的显示宽度百分比 */
+  /** 第 i 项当前应显示的克数（保留一位小数） */
+  private gramsAt(i: number): number {
+    const v: number = i < this.tickers.length ? this.tickers[i].shownGrams : 0;
+    return Math.round(v * 10) / 10;
+  }
+
+  /** 第 i 项当前应显示的条形宽度百分比 */
   private pctAt(i: number): number {
-    return i < this.animPct.length ? this.animPct[i] : 0;
+    return i < this.tickers.length ? this.tickers[i].shownPct : 0;
   }
 
   build() {
@@ -112,8 +187,8 @@ export struct MacroBar {
               .fontSize(13)
               .fontColor(COLOR_TEXT_SUB)
             Blank()
-            // 摄入 / 推荐，两个数字都给出，用户才知道自己处在什么位置
-            Text(`${item.grams} / ${item.target} g`)
+            // 摄入 / 推荐。摄入值走动画器，所以会跟着条一起连续变化
+            Text(`${this.gramsAt(index)} / ${item.target} g`)
               .fontSize(12)
               .fontColor(COLOR_TEXT)
           }
@@ -150,7 +225,13 @@ export struct MacroBar {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
-      }, (item: MacroItem, index: number) => `${index}-${item.label}`)
+        /*
+         * 键里带上 frame：ArkUI 的 ForEach 在键不变时会直接复用子组件、
+         * 跳过重建。原来的键是 `${index}-${label}`，和数值无关，
+         * 于是数字永远停在首帧的值（条能动是因为它的宽度来自另一条路径）。
+         * 把每帧递增的 frame 编进键里，就能强制每帧重建。
+         */
+      }, (item: MacroItem, index: number) => `${index}-${this.frame}-${item.label}`)
     }
     .width('100%')
     .padding(16)
