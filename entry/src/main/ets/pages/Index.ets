@@ -103,21 +103,23 @@ struct Index {
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
   /**
-   * 页面切换动画的两个可插值量。
+   * 页面平移的当前位移（百分比，相对单页宽度）。
    *
-   * viewOffset：内容横向偏移（百分比，相对自身宽度），
-   *   ±100 表示「整屏在屏幕外」，0 表示归位。
-   * viewOpacity：内容透明度，切页时从 0 淡入。
-   *
-   * 为什么用状态 + animateTo 而不是 TransitionEffect：
-   * transition 只在节点增删时触发，而承载内容的 Column 是稳定的
-   *（只换了内部条件渲染的分支），挂在它上面永远不触发——之前那版
-   * 写了 transition 却完全没动画，就是这个原因。
+   * 0 = 首页，-100 = 记录页，-200 = 「我的」页。
+   * 三页并排成一条 300% 宽的 Row，平移它即可让视口停在某一页；
+   * 从首页切到「我的」时，视口会**连续经过**记录页，
+   * 这正是「三个页面在平移」的观感。
    */
   @State viewOffset: number = 0;
-  @State viewOpacity: number = 1;
-  /** 页面切换用的 spring 参数，与底部导航选中缩放同一套手感 */
-  private static readonly VIEW_SPRING: ICurve = curves.springMotion(0.72, 0.86);
+  /**
+   * 页面切换用的曲线。
+   *
+   * 选 springMotion(0.86, 1.0)：阻尼比接近临界（1.0）→ 不回弹。
+   * 这一条很重要：三页并排时如果曲线带回弹，平移会冲过头，
+   * 把邻页的边缘拖进视口再弹回去，观感像「没对齐」。
+   * 所以要的是「走完全程、稳稳停住」，而不是活泼的弹簧。
+   */
+  private static readonly VIEW_SPRING: ICurve = curves.springMotion(0.86, 1.0);
   /**
    * 模态面板是否正打开。
    *
@@ -198,41 +200,73 @@ struct Index {
     this.bottomInset = AppState.bottomInset;
   }
 
-  /** 按当前下标渲染视图，并播放从切换方向滑入的入场动画 */
+  /** 三个主页面并排渲染，靠平移切换 */
   @Builder
   contentView() {
     Stack({ alignContent: Alignment.Top }) {
-      // 底层：当前页内容。各页自己用 topReserve() 留出顶栏高度，
-      // 这样内容向上滚动时会从顶栏下面穿过去，被顶栏的模糊吃掉。
-      //
-      // 外层 Column 只承担页面切换动画（位移 + 淡入）：三个视图共用同一层，
-      // 所以切换时是「整页滑入」而不是各页各滑一次。
+      /*
+       * 视口容器：只负责裁切。
+       *
+       * 内部那个 Row 宽 300%（三页 × 100%），必须裁掉溢出部分，
+       * 否则整条 Row 会溢出屏幕、把页面顶歪。
+       */
       Column() {
-        Column() {
-          if (this.activeTab === 0) {
+        /*
+         * 三页并排成一行，整体平移。
+         *
+         * 平移而不是「淡出旧页 + 淡入新页」：从首页切到「我的」时，
+         * 视口会**连续经过**记录页——这正是「三个页面在平移」的观感。
+         * 代价是三页必须常驻（中间页不存在就没法经过）。
+         */
+        Row() {
+          /*
+           * 三页常驻是「连续平移」的前提（中间页不存在就没法经过），
+           * 但常驻带来一个必须处理的副作用：**未激活页仍在树上，
+           * 照样会参与命中测试、偷走点击**。
+           * 之前试过常驻三页用 opacity 切换，透明页把拍照按钮和
+           * 餐次折叠的点击全吃掉了（实测）。
+           *
+           * 所以每一页的容器都挂 hitTestBehavior(None) + enabled(false)：
+           * 前者让它不参与触摸测试，后者连事件派发都关掉，双保险。
+           */
+          Column() {
             this.todayView()
-          } else if (this.activeTab === 1) {
+          }
+          .width('100%')
+          .height('100%')
+          .hitTestBehavior(this.activeTab === 0 ? HitTestMode.Default : HitTestMode.None)
+          .enabled(this.activeTab === 0)
+
+          Column() {
             HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
-          } else {
+          }
+          .width('100%')
+          .height('100%')
+          .hitTestBehavior(this.activeTab === 1 ? HitTestMode.Default : HitTestMode.None)
+          .enabled(this.activeTab === 1)
+
+          Column() {
             ProfileTab({ refreshTick: this.refreshTick })
           }
+          .width('100%')
+          .height('100%')
+          .hitTestBehavior(this.activeTab === 2 ? HitTestMode.Default : HitTestMode.None)
+          .enabled(this.activeTab === 2)
         }
-        .width('100%')
+        .width('300%')
         .height('100%')
+        /*
+         * 平移整条 Row，让视口停在当前页。
+         *
+         * 用「@State viewOffset + animateTo」而不是 .animation()：
+         * animateTo 是显式驱动、一定能触发，不需要赌某个属性是否被
+         * 算作「可动画属性」。
+         */
+        .translate({ x: `${this.viewOffset}%` })
       }
       .width('100%')
       .height('100%')
-      /*
-       * 页面切换动画。
-       *
-       * 这里**不能**用 TransitionEffect：它只在节点增删时触发，
-       * 而这个 Column 是稳定的（只是内部条件渲染换了分支），
-       * 所以挂在它上面的 transition 永远不触发——之前写了但没有任何效果。
-       * 改用「改 @State + animateTo」：位移与透明度都是可插值属性，
-       * 每帧重绘，一定能看到动画。
-       */
-      .translate({ x: `${this.viewOffset}%` })
-      .opacity(this.viewOpacity)
+      .clip(true)
 
       // 顶层：毛玻璃顶栏。zIndex(1) 保证盖在内容之上。
       // 首页的右上角放一对步进按钮用于切换日期——之前把内嵌日期栏删掉时
@@ -400,22 +434,24 @@ struct Index {
       AppState.profileDirty = false;
     }
     /*
-     * 页面切换动画：新页从切换方向那一侧整屏滑入 + 淡入。
-     *
-     * 必须先让「起点」真正渲染一帧，再开动画：同一帧里既摆起点又
-     * animateTo 的话，起点来不及上屏就被动画覆盖，看着像从中间冒出来。
-     * 这里用一个 16ms 的定时器隔开（≈ 一帧）。
+     * 先提交下标（决定哪一页可交互、顶栏显示什么标题），再平移动画。
+     * 顺序不能反：activeTab 一改，命中测试与顶栏立刻切到目标页，
+     * 而视觉上的平移由下面的 animateTo 补上——两者是同一帧发生的，
+     * 看不出时序差。
      */
-    const dir: number = index > this.activeTab ? 1 : -1;
-    this.viewOffset = dir * 100;
-    this.viewOpacity = 0;
     this.activeTab = index;
-    setTimeout(() => {
-      this.getUIContext().animateTo({ curve: Index.VIEW_SPRING, duration: DUR_VIEW_SWITCH }, () => {
-        this.viewOffset = 0;
-        this.viewOpacity = 1;
-      });
-    }, 16);
+    /*
+     * 平移动画：把整条三页 Row 移到目标页。
+     *
+     * 从首页(0)切到「我的」(-200) 时，视口会一路扫过记录页(-100)，
+     * 观感就是「三个页面在平移」而不是「两页互换」。
+     * 位移是百分比、相对 Row 自身宽度（300% 屏宽），
+     * 所以 -100% 恰好等于一屏。
+     */
+    const target: number = -index * 100;
+    this.getUIContext().animateTo({ curve: Index.VIEW_SPRING, duration: DUR_VIEW_SWITCH }, () => {
+      this.viewOffset = target;
+    });
     // 回到首页时按当天重读，保证刚记录的餐次立刻出现
     if (index === 0) {
       this.dayKey = todayKey();
