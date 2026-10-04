@@ -13,8 +13,7 @@
  * 注意：底部安全区（手势条）会吃掉点击，整条栏必须由父组件抬到 bottomInset 之上。
  */
 import {
-  COLOR_PRESS_GLOW, COLOR_PRIMARY, COLOR_PRIMARY_GLASS, COLOR_TEXT_SUB,
-  CURVE_SPRING, DUR_FAST, DUR_NORMAL, NAV_HEIGHT, NAV_RADIUS, PRESS_SCALE
+  COLOR_NAV_IDLE, COLOR_PRIMARY, DUR_FAST, NAV_HEIGHT, NAV_RADIUS
 } from '../common/Theme';
 
 /** 一个导航项 */
@@ -41,7 +40,7 @@ export struct FloatingNav {
 
   /** 是否正被按住 */
   @State pressing: boolean = false;
-  /** 手指按下时相对导航栏左边的 x 坐标 */
+  /** 手指按下时相对导航栏左边的 x 坐标，用于换算下标 */
   @State pressX: number = 0;
   /** 手指当前落在第几项；-1 表示没按 */
   @State hoverIndex: number = -1;
@@ -51,9 +50,14 @@ export struct FloatingNav {
     return this.barWidth > 0 ? this.barWidth / n : 0;
   }
 
-  /** 高亮胶囊显示在哪一项：按住时跟着手指，否则跟着已选中项 */
-  private pillIndex(): number {
-    return this.pressing && this.hoverIndex >= 0 ? this.hoverIndex : this.activeIndex;
+  /**
+   * 一项的颜色：选中是品牌绿，未选中是中性灰。
+   *
+   * 图标与文字共用同一个颜色，所以选中态完全由颜色表达，
+   * 不需要任何背景块。
+   */
+  private itemColor(index: number): string {
+    return index === this.activeIndex ? COLOR_PRIMARY : COLOR_NAV_IDLE;
   }
 
   /** 把 x 坐标换算成项下标 */
@@ -69,17 +73,16 @@ export struct FloatingNav {
   /**
    * 玻璃底色。
    *
-   * 三层要求叠在一起才是「液态玻璃」：
-   *   1. 极低透明度的白底（15%）——让底层内容透上来
+   * 三层叠出「液态玻璃」：
+   *   1. 极低透明度的白底（10%）——让底层内容透上来
    *   2. 拉满的背景模糊——把透上来的内容磨成砂面
-   *   3. 细白色高光边框——玻璃边缘的反光
+   *   3. 细白色高光边框——玻璃边缘的折射感
    *
-   * 关于模糊档位：BlurStyle 枚举里没有 ULTRA_THICK，
-   * 「最厚一档」是 BACKGROUND_ULTRA_THICK（写 ULTRA_THICK 会编译不过）。
-   *
-   * 另外不用背景材质（systemMaterial）而用这里的模糊，是因为
-   * 本机 uiMaterial.getMaterialInfo().state 恒为 0（应用级开关未生效），
-   * 系统材质不渲染；backgroundBlurStyle 则一直可用。
+   * 关于模糊强度：backgroundBlurStyle 只能选 BlurStyle 档位，
+   * 没有 blurRadius 参数（那是前景 blur() 的入参，见 BackgroundBlurStyleOptions
+   * 的字段只有 colorMode / adaptiveColor / scale / blurOptions）。
+   * 「拉满」对应的档位是 BACKGROUND_ULTRA_THICK
+   * （枚举里没有 ULTRA_THICK，写它会编译不过）。
    */
   @Builder
   glassBackdrop() {
@@ -91,123 +94,67 @@ export struct FloatingNav {
         adaptiveColor: AdaptiveColor.DEFAULT,
         scale: 1.0
       })
-      // 15% 白：再高就会在浅色背景上糊成一块实心白，玻璃感全无
-      .backgroundColor('#26FFFFFF')
+      // 10% 白：再高就会在浅色背景上糊成一块实心白，玻璃感全无
+      .backgroundColor('#1AFFFFFF')
       .hitTestBehavior(HitTestMode.None)
-  }
-
-  /** 手指按压处的柔光 */
-  @Builder
-  pressGlow() {
-    Column()
-      .width(NAV_HEIGHT * 2.2)
-      .height(NAV_HEIGHT * 2.2)
-      .radialGradient({
-        center: ['50%', '50%'],
-        radius: NAV_HEIGHT * 1.1,
-        colors: [[COLOR_PRESS_GLOW, 0.0], ['#0022C55E', 1.0]]
-      })
-      .position({ x: this.pressX - NAV_HEIGHT * 1.1, y: -(NAV_HEIGHT * 1.1 - NAV_HEIGHT / 2) })
-      .hitTestBehavior(HitTestMode.None)
-      .visibility(this.pressing ? Visibility.Visible : Visibility.Hidden)
-      .opacity(this.pressing ? 1 : 0)
-      .animation({ duration: DUR_FAST, curve: Curve.EaseOut })
   }
 
   build() {
-    Stack({ alignContent: Alignment.Start }) {
-      // 玻璃底色：15% 白 + 拉满模糊
+    Stack({ alignContent: Alignment.Center }) {
+      // 玻璃底色：10% 白 + 拉满模糊
       this.glassBackdrop()
 
-      Stack({ alignContent: Alignment.Start }) {
-        /*
-         * 选中态小气泡。
-         *
-         * 本身也是毛玻璃：40% 白 + THIN 模糊 + 1.5px 白色高光边框。
-         * 用「占满整宽的容器 + 等宽格子」定位，而不是「固定宽度 + 手算左偏移」，
-         * 后者浮点取整会带来偏心；这里与文字共用同一套等分布局，几何上必然对齐。
-         */
-        Row() {
-          ForEach(this.items, (item: NavItem, index: number) => {
-            Column() {
-              Row()
-                .width('100%')
-                .height(NAV_HEIGHT - 18)
-                .backgroundBlurStyle(BlurStyle.Thin, {
-                  colorMode: ThemeColorMode.LIGHT,
-                  adaptiveColor: AdaptiveColor.DEFAULT,
-                  scale: 1.0
-                })
-                /*
-                 * 绿色胶囊，但保持玻璃质感：用半透明的品牌绿做着色层，
-                 * 底下叠一层 40% 的白当柔光，两层一起压过 Thin 模糊。
-                 * 直接写不透明绿会丢掉玻璃的通透感，写纯白又看不出是选中态。
-                 */
-                .backgroundColor(COLOR_PRIMARY_GLASS)
-                .borderRadius((NAV_HEIGHT - 18) / 2)
-                .border({ width: 1.5, color: '#CCFFFFFF' })
-                .padding({ left: 6, right: 6 })
-            }
-            .layoutWeight(1)
-            .height(NAV_HEIGHT)
-            .justifyContent(FlexAlign.Center)
-            .opacity(this.pillIndex() === index ? 1 : 0)
-            .animation({ curve: CURVE_SPRING, duration: DUR_NORMAL })
-          }, (item: NavItem, index: number) => `pill-${index}`)
-        }
-        .width('100%')
-        .height(NAV_HEIGHT)
-        .hitTestBehavior(HitTestMode.None)
+      /*
+       * 三个入口均匀排布，没有任何选中背景块。
+       *
+       * 选中态完全靠颜色表达（图标与文字一起变绿），
+       * 不再画那个大圆角胶囊——它会占掉大半个格子，
+       * 视觉上像是「一个按钮被按住了」，而不是「当前在这一页」。
+       *
+       * 按下时的反馈也刻意做得很轻（整格轻微缩放 + 压暗），
+       * 不再用跟随手指的径向柔光：那同样会被看成一块背景。
+       */
+      Row() {
+        ForEach(this.items, (item: NavItem, index: number) => {
+          Column({ space: 4 }) {
+            // 图标固定行高，避免不同字符的行高差异把这一格顶得不居中
+            Text(item.glyph)
+              .fontSize(21)
+              .lineHeight(25)
+              .textAlign(TextAlign.Center)
+              .fontColor(this.itemColor(index))
 
-        // 按压柔光垫在胶囊与文字之间
-        this.pressGlow()
-
-        Row() {
-          ForEach(this.items, (item: NavItem, index: number) => {
-            Column({ space: 3 }) {
-              // 图标固定行高，避免不同字符的行高差异把这一格顶得不居中
-              Text(item.glyph)
-                .fontSize(20)
-                .lineHeight(24)
-                .textAlign(TextAlign.Center)
-                .fontColor(this.pillIndex() === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
-                .scale({
-                  x: this.pillIndex() === index ? 1.12 : 1,
-                  y: this.pillIndex() === index ? 1.12 : 1
-                })
-                .animation({ duration: DUR_FAST, curve: Curve.EaseOut })
-
-              Text(item.label)
-                .fontSize(11)
-                .lineHeight(14)
-                .textAlign(TextAlign.Center)
-                .fontWeight(this.pillIndex() === index ? FontWeight.Medium : FontWeight.Normal)
-                .fontColor(this.pillIndex() === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
-                .animation({ duration: DUR_FAST })
-            }
-            .width(this.cellWidth())
-            .height(NAV_HEIGHT)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(HorizontalAlign.Center)
-            // 按住时未选中的项轻微压暗，突出当前指向的那一项
-            .opacity(this.pressing && this.pillIndex() !== index ? 0.72 : 1)
-            .animation({ duration: DUR_FAST })
-          }, (item: NavItem, index: number) => `${index}-${item.label}`)
-        }
-        .width('100%')
-        .height(NAV_HEIGHT)
+            Text(item.label)
+              .fontSize(11)
+              .lineHeight(14)
+              .textAlign(TextAlign.Center)
+              .fontWeight(index === this.activeIndex ? FontWeight.Medium : FontWeight.Normal)
+              .fontColor(this.itemColor(index))
+          }
+          .height(NAV_HEIGHT)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          // 按下时只有当前指到的那一格轻微回弹，其余保持不动
+          .scale({
+            x: this.pressing && this.hoverIndex === index ? 0.92 : 1,
+            y: this.pressing && this.hoverIndex === index ? 0.92 : 1
+          })
+          .animation({ duration: DUR_FAST, curve: Curve.EaseOut })
+        }, (item: NavItem, index: number) => `${index}-${item.label}`)
       }
       .width('100%')
       .height(NAV_HEIGHT)
+      // 三个入口等距分布，不依赖任何格子宽度计算
+      .justifyContent(FlexAlign.SpaceEvenly)
     }
     .width('100%')
     .height(NAV_HEIGHT)
     .clip(true)
     // 大圆角：正好是高度的一半，形成完整胶囊
     .borderRadius(NAV_RADIUS)
-    // 玻璃高光边框：极细的半透明白，模拟玻璃边缘的反光
+    // 玻璃高光边框：极细的半透明白，模拟玻璃边缘的折射
     .border({ width: 1, color: '#99FFFFFF' })
-    // 整条栏统一接管手势：按下即出光效，移动即跟手，抬起即选中。
+    // 整条栏统一接管手势：按下即反馈，移动即跟随，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {
       const touches: TouchObject[] = event.touches;

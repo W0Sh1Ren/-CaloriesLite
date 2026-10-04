@@ -13,12 +13,34 @@ import { RollingNumber } from './RollingNumber';
 
 @Component
 export struct CalorieRing {
-  @Prop summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
+  @Prop @Watch('onDataChange') summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
+  /**
+   * 外部刷新键：父组件每次重读数据都换一个新值，用于强制重绘。
+   *
+   * 不能只靠 onDidUpdate —— 实测它在「父组件只换了数据」时不一定触发，
+   * 结果就是环里的数字变了、弧线还停在旧比例（切换日期后特别明显）。
+   * @Watch 监听 @Prop 更可靠，刷新键再兜一层。
+   */
+  @Prop @Watch('onDataChange') refreshKey: number = 0;
   /** 环外径（vp） */
   @Prop diameter: number = 210;
 
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private ctx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+  /** Canvas 是否已完成布局。未就绪时 ctx.width/height 是 0，画不出东西 */
+  private canvasReady: boolean = false;
+
+  /**
+   * 数据变化后重绘。
+   *
+   * Canvas 的内容不是声明式的：onReady 只在组件首次布局完成时触发一次，
+   * 之后 summary 变了也没人再调 draw()。
+   */
+  onDataChange(): void {
+    if (this.canvasReady) {
+      this.draw();
+    }
+  }
 
   /** 已摄入占「预算 + 运动」的比例（0-1），超出按 1 画满 */
   private ratio(): number {
@@ -81,6 +103,7 @@ export struct CalorieRing {
           .height(this.diameter)
           .onReady(() => {
             // onReady 时才能拿到真实绘制尺寸
+            this.canvasReady = true;
             this.draw();
           })
 

@@ -85,6 +85,14 @@ struct Index {
   @State navDir: number = 1;
   /** 视图入场动画的重放键：每次切换自增，迫使动画重新播放 */
   @State viewAnimKey: number = 0;
+  /**
+   * 数据版本号：每次重读当日数据就自增，传给环等自绘组件做强制重绘。
+   *
+   * 为什么不只依赖子组件的 onDidUpdate / @Watch：
+   * 自绘（Canvas）组件在「父组件只换了数据对象」时收不到重绘通知，
+   * 会出现数字变了、弧线还是旧比例。显式版本号是最确定的信号。
+   */
+  @State dataVersion: number = 0;
 
   aboutToAppear(): void {
     this.syncInsets();
@@ -247,6 +255,8 @@ struct Index {
     try {
       this.data = DailyService.homeData(this.dayKey);
       AppState.mirrorToday(this.data.summary);
+      // 自增版本号，驱动环等自绘组件重绘
+      this.dataVersion++;
       this.scheduleImageMaintenance();
     } catch (err) {
       const e: Error = err as Error;
@@ -401,7 +411,10 @@ struct Index {
 
       Scroll() {
         Column({ space: GAP }) {
-          CalorieRing({ summary: this.data.summary })
+          CalorieRing({
+            summary: this.data.summary,
+            refreshKey: this.dataVersion
+          })
 
           // 结算评语
           Row() {
@@ -480,7 +493,9 @@ struct Index {
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
           .fontColor(COLOR_TEXT)
-        Text(friendlyDate(this.dayKey))
+        // 副标题只在「今天」时补一个日期；看历史日期时标题本身就是日期，
+        // 再重复一次没有信息量
+        Text(this.dayKey === todayKey() ? friendlyDate(this.dayKey) : '查看历史')
           .fontSize(12)
           .fontColor(COLOR_TEXT_SUB)
       }

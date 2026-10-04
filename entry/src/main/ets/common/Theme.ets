@@ -30,6 +30,13 @@ export const COLOR_CARD: string = '#FFFFFF';
 export const COLOR_TEXT: string = '#1A1A1A';
 /** 次要文字 */
 export const COLOR_TEXT_SUB: string = '#8A8F99';
+/**
+ * 底部导航未选中项的颜色。
+ *
+ * 用中性灰而不是次级文字色：导航栏浮在内容之上、背景不可控，
+ * 纯中性灰在任何底色上都能保持「未选中」的语义，不会和品牌绿抢注意力。
+ */
+export const COLOR_NAV_IDLE: string = '#999999';
 /** 分割线 */
 export const COLOR_DIVIDER: string = '#EEF0F3';
 
