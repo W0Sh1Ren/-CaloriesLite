@@ -6,7 +6,7 @@ import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { ActivityLevel, Gender, Goal, UserProfile } from '../model/Types';
-import { ACTIVITY_ORDER, GOAL_ORDER, activityDesc, activityLabel, genderLabel, goalDesc, goalLabel } from '../model/Enums';
+import { ACTIVITY_ORDER, GOAL_ORDER, activityDesc, activityLabel, genderLabel, goalAdjust, goalDesc, goalLabel } from '../model/Enums';
 import { calcBmi, calcBmr, calcDailyBudget, calcTdee, bmiLabel, estimateDaysToGoal } from '../service/CalorieCalc';
 import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
@@ -165,6 +165,21 @@ export struct ProfileTab {
 
   private bmi(): number {
     return Math.round(calcBmi(this.latestWeight, this.profile.heightCm) * 10) / 10;
+  }
+
+  /**
+   * 一句话说明「每日热量目标」是怎么从「总消耗」算出来的。
+   *
+   * 差值直接取 goalAdjust 而不是 budget − tdee：后者会因取整或安全下限
+   * 出现 −501 这种与「每日约 -500 千卡」文案不一致的数字。
+   */
+  private budgetHint(): string {
+    const delta: number = goalAdjust(this.profile.goal);
+    if (delta === 0) {
+      return `饮食目标 = 总消耗（保持体重，收支平衡）`;
+    }
+    const sign: string = delta > 0 ? '+' : '−';
+    return `饮食目标 = 总消耗 ${this.tdee} ${sign} ${Math.abs(delta)}（${goalLabel(this.profile.goal)}）`;
   }
 
   /** 目标达成预估天数，-1 表示当前目标不是减脂 */
@@ -336,7 +351,10 @@ export struct ProfileTab {
   @Builder
   budgetCard() {
     Column({ space: 12 }) {
-      Text('每日基础热量')
+      // 标题用「热量目标」而不是「基础热量」：
+      // 这个值是 TDEE 按减脂/增重目标调整后的**摄入目标**，
+      // 不是基础代谢；叫「基础热量」会和下面的「基础代谢」混起来。
+      Text('每日热量目标')
         .fontSize(13)
         .fontColor(COLOR_TEXT_SUB)
         .width('100%')
@@ -366,6 +384,18 @@ export struct ProfileTab {
       }
       .width('100%')
       .justifyContent(FlexAlign.SpaceBetween)
+
+      /*
+       * 把三者的换算关系写出来。
+       *
+       * 上面三个数字本来就是不同的东西（躺着烧的 / 加上活动烧的 / 该吃的目标），
+       * 但平铺在一起时用户会以为它们互相矛盾——实测就被当成 bug 反馈过。
+       * 这行把一个减法的过程显式摆出来，关系立刻清楚。
+       */
+      Text(this.budgetHint())
+        .fontSize(11)
+        .fontColor(COLOR_PRIMARY)
+        .width('100%')
 
       Text(`按当前体重 ${this.latestWeight} 公斤、${genderLabel(this.profile.gender)}性、${this.profile.age} 岁、${this.profile.heightCm} 厘米计算`)
         .fontSize(11)
