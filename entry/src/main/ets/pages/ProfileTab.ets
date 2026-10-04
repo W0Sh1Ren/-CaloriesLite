@@ -14,7 +14,7 @@ import { AppState } from '../common/AppState';
 import { topReserve } from '../components/GlassTopBar';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_NORMAL, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 import { RollingNumber } from '../components/RollingNumber';
 
@@ -32,6 +32,13 @@ export struct ProfileTab {
    * 表现就是「改了年龄但卡片上的数字不动」。换对象才稳。
    */
   @State profile: UserProfile = SettingsRepo.loadProfile();
+  /**
+   * 「个人情况」卡片是否展开。
+   *
+   * 默认收起：这几项配好之后基本不动，全铺开会把 AI 配置与关于数据
+   * 挤到很下面。收起时给一行摘要，保证信息不丢。
+   */
+  @State profileExpanded: boolean = false;
   @State aiReady: boolean = false;
   @State profileVersion: number = 0;
   @State bmr: number = 0;
@@ -473,126 +480,161 @@ export struct ProfileTab {
   @Builder
   profileCard() {
     Column({ space: 14 }) {
-      Text('个人情况')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
-        .width('100%')
+      /*
+       * 标题行整行可点，右侧箭头随展开状态旋转。
+       *
+       * 折叠的是「不常改的部分」（性别 / 数值 / 活动量 / 目标）。
+       * 这几项配好之后基本不动，全铺开会把 AI 配置与关于数据挤到很下面。
+       */
+      Row({ space: 6 }) {
+        Text('个人情况')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_TEXT)
 
-      // 性别
-      Row({ space: 8 }) {
-        Text('性别')
+        Blank()
+
+        Text('⌄')
           .fontSize(14)
           .fontColor(COLOR_TEXT_SUB)
-          .width(56)
-        ForEach([Gender.MALE, Gender.FEMALE], (g: Gender) => {
-          Text(genderLabel(g))
-            .fontSize(14)
-            .fontColor(this.profile.gender === g ? Color.White : COLOR_TEXT)
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .height(36)
-            .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY : COLOR_BG)
-            .borderRadius(10)
-            .onClick(() => {
-              this.apply((p: UserProfile) => {
-                p.gender = g;
-              });
-            })
-        }, (g: Gender) => g)
+          .rotate({ angle: this.profileExpanded ? 180 : 0 })
+          .animation({ duration: DUR_NORMAL, curve: Curve.EaseInOut })
       }
       .width('100%')
-
-      // 数值项：点击弹出底部选择面板
-      this.numRow('年龄', () => this.profile.age, '岁', () => {
-        this.openPicker('age');
+      .padding({ top: 2, bottom: 2 })
+      .onClick(() => {
+        this.profileExpanded = !this.profileExpanded;
       })
 
-      this.numRow('身高', () => this.profile.heightCm, '厘米', () => {
-        this.openPicker('height');
-      })
+      /*
+       * 收起态摘要：折叠后不会「什么也看不见」。
+       * 只读不改，改还是要点开。
+       */
+      if (!this.profileExpanded) {
+        Text(this.profileSummary())
+          .fontSize(12)
+          .fontColor(COLOR_TEXT_SUB)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+      }
 
-      this.numRow('体重', () => this.profile.weightKg, '公斤', () => {
-        this.openPicker('weight');
-      })
-
-      Divider().color(COLOR_DIVIDER)
-
-      // 活动水平
-      Text('日常活动量')
-        .fontSize(13)
-        .fontColor(COLOR_TEXT_SUB)
-        .width('100%')
-
-      ForEach(ACTIVITY_ORDER, (level: ActivityLevel) => {
-        Row() {
-          Column({ space: 2 }) {
-            Text(activityLabel(level))
+      if (this.profileExpanded) {
+        // 性别
+        Row({ space: 8 }) {
+          Text('性别')
+            .fontSize(14)
+            .fontColor(COLOR_TEXT_SUB)
+            .width(56)
+          ForEach([Gender.MALE, Gender.FEMALE], (g: Gender) => {
+            Text(genderLabel(g))
               .fontSize(14)
-              .fontColor(this.profile.activityLevel === level ? COLOR_PRIMARY : COLOR_TEXT)
-            Text(activityDesc(level))
-              .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-
-          if (this.profile.activityLevel === level) {
-            Text('✓')
-              .fontSize(16)
-              .fontColor(COLOR_PRIMARY)
-          }
+              .fontColor(this.profile.gender === g ? Color.White : COLOR_TEXT)
+              .textAlign(TextAlign.Center)
+              .layoutWeight(1)
+              .height(36)
+              .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY : COLOR_BG)
+              .borderRadius(10)
+              .onClick(() => {
+                this.apply((p: UserProfile) => {
+                  p.gender = g;
+                });
+              })
+          }, (g: Gender) => g)
         }
         .width('100%')
-        .padding({ top: 8, bottom: 8 })
-        .onClick(() => {
-          this.apply((p: UserProfile) => {
-            p.activityLevel = level;
-          });
+
+        // 数值项：点击弹出底部选择面板
+        this.numRow('年龄', () => this.profile.age, '岁', () => {
+          this.openPicker('age');
         })
-      }, (level: ActivityLevel) => level)
 
-      Divider().color(COLOR_DIVIDER)
-
-      // 目标
-      Text('目标')
-        .fontSize(13)
-        .fontColor(COLOR_TEXT_SUB)
-        .width('100%')
-
-      ForEach(GOAL_ORDER, (goal: Goal) => {
-        Row() {
-          Column({ space: 2 }) {
-            Text(goalLabel(goal))
-              .fontSize(14)
-              .fontColor(this.profile.goal === goal ? COLOR_PRIMARY : COLOR_TEXT)
-            Text(goalDesc(goal))
-              .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-
-          if (this.profile.goal === goal) {
-            Text('✓')
-              .fontSize(16)
-              .fontColor(COLOR_PRIMARY)
-          }
-        }
-        .width('100%')
-        .padding({ top: 8, bottom: 8 })
-        .onClick(() => {
-          this.apply((p: UserProfile) => {
-            p.goal = goal;
-          });
+        this.numRow('身高', () => this.profile.heightCm, '厘米', () => {
+          this.openPicker('height');
         })
-      }, (goal: Goal) => goal)
 
-      if (this.goalDays() > 0) {
-        Text(`按当前目标，约 ${this.goalDays()} 天后可减到目标体重`)
-          .fontSize(11)
+        this.numRow('体重', () => this.profile.weightKg, '公斤', () => {
+          this.openPicker('weight');
+        })
+
+        Divider().color(COLOR_DIVIDER)
+
+        // 活动水平
+        Text('日常活动量')
+          .fontSize(13)
           .fontColor(COLOR_TEXT_SUB)
           .width('100%')
+
+        ForEach(ACTIVITY_ORDER, (level: ActivityLevel) => {
+          Row() {
+            Column({ space: 2 }) {
+              Text(activityLabel(level))
+                .fontSize(14)
+                .fontColor(this.profile.activityLevel === level ? COLOR_PRIMARY : COLOR_TEXT)
+              Text(activityDesc(level))
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+
+            if (this.profile.activityLevel === level) {
+              Text('✓')
+                .fontSize(16)
+                .fontColor(COLOR_PRIMARY)
+            }
+          }
+          .width('100%')
+          .padding({ top: 8, bottom: 8 })
+          .onClick(() => {
+            this.apply((p: UserProfile) => {
+              p.activityLevel = level;
+            });
+          })
+        }, (level: ActivityLevel) => level)
+
+        Divider().color(COLOR_DIVIDER)
+
+        // 目标
+        Text('目标')
+          .fontSize(13)
+          .fontColor(COLOR_TEXT_SUB)
+          .width('100%')
+
+        ForEach(GOAL_ORDER, (goal: Goal) => {
+          Row() {
+            Column({ space: 2 }) {
+              Text(goalLabel(goal))
+                .fontSize(14)
+                .fontColor(this.profile.goal === goal ? COLOR_PRIMARY : COLOR_TEXT)
+              Text(goalDesc(goal))
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+
+            if (this.profile.goal === goal) {
+              Text('✓')
+                .fontSize(16)
+                .fontColor(COLOR_PRIMARY)
+            }
+          }
+          .width('100%')
+          .padding({ top: 8, bottom: 8 })
+          .onClick(() => {
+            this.apply((p: UserProfile) => {
+              p.goal = goal;
+            });
+          })
+        }, (goal: Goal) => goal)
+
+        if (this.goalDays() > 0) {
+          Text(`按当前目标，约 ${this.goalDays()} 天后可减到目标体重`)
+            .fontSize(11)
+            .fontColor(COLOR_TEXT_SUB)
+            .width('100%')
+        }
       }
     }
     .width('100%')
@@ -600,6 +642,18 @@ export struct ProfileTab {
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
+  }
+
+  /**
+   * 收起态的一行摘要，把当前配置念一遍。
+   *
+   * 折叠之后如果什么都不显示，用户会不知道里面是什么、也不敢乱点；
+   * 给一行摘要既保留了信息，又不用占掉半屏。
+   */
+  private profileSummary(): string {
+    const p: UserProfile = this.profile;
+    return `${genderLabel(p.gender)} · ${p.age} 岁 · ${p.heightCm} 厘米 · ${p.weightKg} 公斤`
+      + ` · ${activityLabel(p.activityLevel)} · ${goalLabel(p.goal)}`;
   }
 
   /**
