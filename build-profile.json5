@@ -1,9 +1,14 @@
 {
   "app": {
+    // 签名材料由 DevEco Studio 生成（File > Project Structure > Signing Configs，
+    // 勾选 Automatically generate signature）或执行 `devecocli signature generate`。
+    // 生成后 DevEco 会自己往这里填入证书路径；下面 product 里的 "signingConfig": "default"
+    // 就是与之对应的引用，未配置签名时构建仍会成功，只是产出 unsigned HAP。
     "signingConfigs": [],
     "products": [
       {
         "name": "default",
+        "signingConfig": "default",
         "targetSdkVersion": "26.0.0",
         "compatibleSdkVersion": "26.0.0",
         "runtimeOS": "HarmonyOS",
