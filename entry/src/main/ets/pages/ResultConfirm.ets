@@ -184,7 +184,20 @@ struct ResultConfirm {
     AppState.mirrorToday(DailyService.summaryOf(day));
     AppState.notifyDataChanged();
     promptAction.showToast({ message: `已记录 ${records.length} 项，共 ${this.totalKcal()} 千卡` });
-    router.back();
+
+    /*
+     * 回到首页，而不是退回拍照页。
+     *
+     * 照片识别的页面栈是 [Index, Camera, ResultConfirm]，
+     * 所以单次 back() 只会回到 Camera —— 用户确认记录后却回到拍照页，
+     * 还得再按两次返回才能回首页（实测反馈）。
+     *
+     * 用 back(2) 一次退两层直接回 Index。
+     * 不用 back({ url: 'pages/Index' })：官方文档写明「目标 URL 不在栈里时
+     * 不执行任何操作」，入口页是否以该 URL 入栈没有把握，失败就是「点了没反应」。
+     * 也不用 clear()：它保留的是**当前页**，单用会停在 ResultConfirm 上。
+     */
+    router.back(2);
   }
 
   build() {
@@ -197,6 +210,8 @@ struct ResultConfirm {
         .width(36).height(36).backgroundColor(COLOR_CARD)
         .onClick(() => {
           AppState.clearPending();
+          // 点返回也是退回上一步（拍照页）——用户是要改照片/重新拍，
+          // 与「确认记录后回首页」是两件事，所以这里仍然只退一层。
           router.back();
         })
 
