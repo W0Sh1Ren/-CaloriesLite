@@ -4,7 +4,7 @@
  * 只展示当日摄入的克数，不做「达标率」判断 —— 极简应用不该引入
  * 需要用户先设定营养素配比才能看懂的指标。
  */
-import { COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT, COLOR_PROTEIN, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT, COLOR_PROTEIN, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
 
 /** 单项数据 */
 class MacroItem {
@@ -78,5 +78,6 @@ export struct MacroBar {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 }

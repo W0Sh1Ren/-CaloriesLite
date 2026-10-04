@@ -1,7 +1,7 @@
 /**
  * 「记录」标签页：月历热力 + 当日明细 + 体重趋势 + 运动录入。
  */
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, router } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { DayCell, CalendarHeatmap } from '../components/CalendarHeatmap';
@@ -15,7 +15,10 @@ import { FoodRepo } from '../service/FoodRepo';
 import { BodyRepo } from '../service/BodyRepo';
 import { ExerciseRepo } from '../service/ExerciseRepo';
 import { calcExerciseKcal, MET_TABLE, MetItem } from '../service/CalorieCalc';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import {
+  CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+} from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -201,10 +204,10 @@ export struct HistoryTab {
         // ------------------------------------------------ 体重
         this.weightCard()
 
-        Row().height(16)
+        Row().height(NAV_RESERVE)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 16 })
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
     }
     .width('100%')
     .height('100%')
@@ -238,6 +241,19 @@ export struct HistoryTab {
         this.miniStat('摄入', `${this.detail.intake}`)
         this.miniStat('预算', `${this.detail.budget}`)
         this.miniStat('运动', `${this.detail.exerciseKcal}`)
+        // 手动补记入口放在这里：首页只留拍照识别，手动录入属于「修正/补充」场景
+        Button({ type: ButtonType.Capsule }) {
+          Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
+        }
+        .height(32)
+        .backgroundColor('#1AFF7A45')
+        .onClick(() => {
+          try {
+            router.pushUrl({ url: 'pages/ManualAdd' });
+          } catch (err) {
+            hilog.error(DOMAIN, 'CalorieLite', 'goManualAdd failed');
+          }
+        })
       }
       .width('100%')
       .justifyContent(FlexAlign.SpaceBetween)
@@ -290,6 +306,7 @@ export struct HistoryTab {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   @Builder
@@ -369,6 +386,7 @@ export struct HistoryTab {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   @Builder

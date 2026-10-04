@@ -5,7 +5,7 @@
  * 相比引入图表库更轻，也更容易保持一致视觉。
  */
 import { WeightRecord } from '../model/Types';
-import { COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
 
 /** 图表内的内边距，给坐标文字留位置 */
 const PAD_LEFT = 34;
@@ -146,5 +146,6 @@ export struct WeightChart {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 }

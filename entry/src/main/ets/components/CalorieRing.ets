@@ -8,7 +8,7 @@
  * 环内显示当天的热量缺口，环下方列预算 / 摄入 / 运动三项。
  */
 import { DailySummary } from '../model/Types';
-import { COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, RADIUS } from '../common/Theme';
 
 @Component
 export struct CalorieRing {
@@ -118,6 +118,7 @@ export struct CalorieRing {
     .padding(20)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   @Builder

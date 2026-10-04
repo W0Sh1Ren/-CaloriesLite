@@ -1,8 +1,13 @@
 /**
  * 轻卡记 —— 主页面。
  *
- * 三个标签页：今天 / 记录 / 我的。
- * 「今天」是核心：一个热量环讲清今天的收支，下面是四餐明细。
+ * 结构：Stack 分三层，从下往上依次是
+ *   1. 顶部柔光层（沉浸光感的来源，颜色随时段变化）
+ *   2. 内容层（三个视图按选中项切换，带淡入位移动画）
+ *   3. 悬浮导航栏（毛玻璃胶囊，浮在内容之上）
+ *
+ * 没有用 Tabs 组件：Tabs 的 tabBar 贴底且做不出毛玻璃悬浮效果，
+ * 自己搭反而更好控制动画与层次。
  */
 import { router } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
@@ -11,53 +16,74 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { MealType, FoodRecord, ExerciseRecord } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
-import { friendlyDate, todayKey, shiftDay } from '../common/DateUtil';
+import { friendlyDate, todayKey, shiftDay, hourOf } from '../common/DateUtil';
 import { DailyService, HomeData } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
 import { AppState } from '../common/AppState';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import {
+  COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB,
+  CARD_SHADOW, DUR_NORMAL, GAP, GlowPalette, NAV_MARGIN, NAV_RESERVE, PAGE_PAD, RADIUS,
+  glowForHour
+} from '../common/Theme';
 import { CalorieRing } from '../components/CalorieRing';
 import { MacroBar } from '../components/MacroBar';
 import { RecordRow } from '../components/RecordRow';
+import { FloatingNav, NavItem } from '../components/FloatingNav';
 import { HistoryTab } from './HistoryTab';
 import { ProfileTab } from './ProfileTab';
 
 const DOMAIN = 0x0000;
+
+/** 三个导航项 */
+const NAV_ITEMS: NavItem[] = [
+  new NavItem('首页', '◉'),
+  new NavItem('记录', '▤'),
+  new NavItem('我的', '☰')
+];
 
 @Entry
 @Component
 struct Index {
   @State dayKey: string = todayKey();
   @State data: HomeData = new HomeData();
-  /** 当前标签页。名字不能叫 tabIndex：ArkUI 的 CustomComponent 已有同名属性 */
+  /** 当前视图下标。名字不能叫 tabIndex：ArkUI 的 CustomComponent 已有同名属性 */
   @State activeTab: number = 0;
-  /** 每次从子页面返回自增，驱动子 Tab 刷新 */
+  /** 每次从子页面返回自增，驱动子视图重新读数据 */
   @State refreshTick: number = 0;
-
-  private controller: TabsController = new TabsController();
+  /** 顶部柔光配色，按当前时段取 */
+  @State glow: GlowPalette = glowForHour(hourOf(Date.now()));
+  /** 悬浮导航栏实测宽度，用于算高亮胶囊位置 */
+  @State navWidth: number = 0;
 
   aboutToAppear(): void {
     this.reload();
   }
 
-  /** 页面从后台或子页面返回时刷新 */
+  /** 从子页面返回或回到前台时刷新。
+   *
+   * refreshTick 必须自增：ProfileTab / HistoryTab 靠它触发 onDidUpdate 重新读配置，
+   * 否则从 AI 配置页保存后返回，「我的」页仍会显示未配置。 */
   onPageShow(): void {
+    this.glow = glowForHour(hourOf(Date.now()));
     if (AppState.needRefreshHome) {
       AppState.needRefreshHome = false;
       this.dayKey = todayKey();
-      this.reload();
-      this.activeTab = 0;
-      this.controller.changeIndex(0);
-    } else {
-      this.reload();
+      this.switchTo(0);
     }
+    this.reload();
+    this.refreshTick++;
   }
 
   private reload(): void {
     this.data = DailyService.homeData(this.dayKey);
   }
 
-  /** 计算某餐的热量合计 */
+  /** 切换视图：改下标并同时刷新数据 */
+  private switchTo(index: number): void {
+    this.activeTab = index;
+    this.reload();
+  }
+
   private mealKcal(records: FoodRecord[]): number {
     let sum: number = 0;
     for (const r of records) {
@@ -87,10 +113,8 @@ struct Index {
     }
   }
 
-  /** 切到前一天 / 后一天 */
   private shiftDate(delta: number): void {
     const next: string = shiftDay(this.dayKey, delta);
-    // 不允许翻到未来
     if (next > todayKey()) {
       return;
     }
@@ -99,101 +123,67 @@ struct Index {
   }
 
   build() {
-    Tabs({ barPosition: BarPosition.End, controller: this.controller }) {
-      // ------------------------------------------------ 今天
-      TabContent() {
-        this.todayTab()
-      }
-      .tabBar(this.tabItem('今天', 0))
+    Stack({ alignContent: Alignment.TopStart }) {
+      // ---------------------------------------------------- 1. 柔光背景
+      Column()
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 180,
+          colors: [[this.glow.from, 0.0], [this.glow.to, 0.42], [COLOR_BG, 1.0]]
+        })
 
-      // ------------------------------------------------ 记录
-      TabContent() {
-        HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
+      // ---------------------------------------------------- 2. 内容层
+      Column() {
+        if (this.activeTab === 0) {
+          this.todayView()
+        } else if (this.activeTab === 1) {
+          HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
+        } else {
+          ProfileTab({ refreshTick: this.refreshTick })
+        }
       }
-      .tabBar(this.tabItem('记录', 1))
+      .width('100%')
+      .height('100%')
+      // 切视图时的淡入 + 轻微上移，注意 key 变化才会重放
+      .transition(TransitionEffect.OPACITY
+        .combine(TransitionEffect.translate({ y: 8 }))
+        .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut }))
 
-      // ------------------------------------------------ 我的
-      TabContent() {
-        ProfileTab({ refreshTick: this.refreshTick })
+      // ---------------------------------------------------- 3. 悬浮导航栏
+      Column() {
+        FloatingNav({
+          items: NAV_ITEMS,
+          activeIndex: this.activeTab,
+          barWidth: this.navWidth,
+          onSelect: (index: number) => {
+            this.switchTo(index);
+          }
+        })
+          .onAreaChange((oldValue: Area, newValue: Area) => {
+            this.navWidth = Number.parseFloat(`${newValue.width}`);
+          })
       }
-      .tabBar(this.tabItem('我的', 2))
-    }
-    .barHeight(56)
-    .barBackgroundColor(COLOR_CARD)
-    .backgroundColor(COLOR_BG)
-    .scrollable(false)
-    .onChange((index: number) => {
-      this.activeTab = index;
-      // 从相机页回来可能改了数据，切标签时统一刷新
-      this.reload();
-    })
-  }
-
-  @Builder
-  tabItem(label: string, index: number) {
-    Column({ space: 2 }) {
-      Text(label)
-        .fontSize(14)
-        .fontWeight(this.activeTab === index ? FontWeight.Medium : FontWeight.Normal)
-        .fontColor(this.activeTab === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
-      // 选中下划线
-      Row()
-        .width(this.activeTab === index ? 18 : 0)
-        .height(2)
-        .backgroundColor(COLOR_PRIMARY)
-        .borderRadius(1)
+      .width('100%')
+      .height('100%')
+      .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: NAV_MARGIN })
+      .justifyContent(FlexAlign.End)
+      // 让整层不拦截事件，只有导航栏本身可点
+      .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
+    .backgroundColor(COLOR_BG)
   }
 
-  // ================================================== 今天
+  // ================================================== 首页
   @Builder
-  todayTab() {
+  todayView() {
     Column() {
-      // 顶部：日期切换
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Text('‹').fontSize(22).fontColor(COLOR_TEXT)
-        }
-        .width(36)
-        .height(36)
-        .backgroundColor(COLOR_CARD)
-        .onClick(() => {
-          this.shiftDate(-1);
-        })
-
-        Column({ space: 2 }) {
-          Text(this.dayKey === todayKey() ? '今天' : friendlyDate(this.dayKey))
-            .fontSize(17)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(COLOR_TEXT)
-          Text(friendlyDate(this.dayKey))
-            .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
-        }
-        .layoutWeight(1)
-
-        Button({ type: ButtonType.Circle }) {
-          Text('›')
-            .fontSize(22)
-            .fontColor(this.dayKey === todayKey() ? COLOR_DIVIDER : COLOR_TEXT)
-        }
-        .width(36)
-        .height(36)
-        .backgroundColor(COLOR_CARD)
-        .enabled(this.dayKey !== todayKey())
-        .onClick(() => {
-          this.shiftDate(1);
-        })
-      }
-      .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
+      this.dateBar()
 
       Scroll() {
         Column({ space: GAP }) {
-          // 热量环
           CalorieRing({ summary: this.data.summary })
 
           // 结算评语
@@ -206,22 +196,17 @@ struct Index {
           .width('100%')
           .padding({ left: 4, right: 4 })
 
-          // 连续达标
-          if (this.data.streak > 0) {
-            Row({ space: 6 }) {
-              Text('连续达标')
-                .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
-              Text(`${this.data.streak} 天`)
-                .fontSize(15)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(COLOR_PRIMARY)
+          Row({ space: 14 }) {
+            if (this.data.streak > 0) {
+              this.chip(`连续达标 ${this.data.streak} 天`)
             }
-            .width('100%')
-            .padding({ left: 4, right: 4 })
+            if (this.data.summary.exerciseKcal > 0) {
+              this.chip(`运动 +${this.data.summary.exerciseKcal}`)
+            }
           }
+          .width('100%')
+          .padding({ left: 4, right: 4 })
 
-          // 营养素
           if (this.data.summary.recordCount > 0) {
             MacroBar({
               protein: this.data.summary.protein,
@@ -230,30 +215,83 @@ struct Index {
             })
           }
 
-          // 四餐明细
           ForEach(MEAL_ORDER, (meal: MealType) => {
             this.mealSection(meal)
           }, (meal: MealType) => `${meal}-${this.data.summary.recordCount}`)
 
-          // 运动记录入口
           this.exerciseSection()
 
-          // 底部留白，避免被 tab 栏遮住
-          Row().height(16)
+          // 给悬浮导航栏留出空间
+          Row().height(NAV_RESERVE)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, bottom: 16 })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
 
-      // 底部主操作：拍照识别
+      // 底部主操作只剩拍照识别
       this.cameraBar()
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+  }
+
+  /** 日期切换条 */
+  @Builder
+  dateBar() {
+    Row() {
+      Button({ type: ButtonType.Circle }) {
+        Text('‹').fontSize(20).fontColor(COLOR_TEXT)
+      }
+      .width(36)
+      .height(36)
+      .backgroundColor(COLOR_CARD)
+      .shadow(CARD_SHADOW)
+      .onClick(() => {
+        this.shiftDate(-1);
+      })
+
+      Column({ space: 2 }) {
+        Text(this.dayKey === todayKey() ? '今天' : friendlyDate(this.dayKey))
+          .fontSize(17)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_TEXT)
+        Text(friendlyDate(this.dayKey))
+          .fontSize(12)
+          .fontColor(COLOR_TEXT_SUB)
+      }
+      .layoutWeight(1)
+
+      Button({ type: ButtonType.Circle }) {
+        Text('›')
+          .fontSize(20)
+          .fontColor(this.dayKey === todayKey() ? COLOR_DIVIDER : COLOR_TEXT)
+      }
+      .width(36)
+      .height(36)
+      .backgroundColor(COLOR_CARD)
+      .shadow(CARD_SHADOW)
+      .enabled(this.dayKey !== todayKey())
+      .opacity(this.dayKey === todayKey() ? 0.5 : 1)
+      .onClick(() => {
+        this.shiftDate(1);
+      })
+    }
+    .width('100%')
+    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 10, bottom: 10 })
+  }
+
+  /** 一个小标签 */
+  @Builder
+  chip(text: string) {
+    Text(text)
+      .fontSize(12)
+      .fontColor(COLOR_PRIMARY)
+      .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+      .backgroundColor('#1AFF7A45')
+      .borderRadius(12)
   }
 
   @Builder
@@ -284,6 +322,7 @@ struct Index {
         .padding(14)
         .backgroundColor(COLOR_CARD)
         .borderRadius(RADIUS)
+        .shadow(CARD_SHADOW)
       } else {
         ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
           RecordRow({
@@ -330,6 +369,7 @@ struct Index {
         .padding(14)
         .backgroundColor(COLOR_CARD)
         .borderRadius(RADIUS)
+        .shadow(CARD_SHADOW)
       } else {
         ForEach(this.data.exercises, (item: ExerciseRecord) => {
           Row({ space: 10 }) {
@@ -352,59 +392,38 @@ struct Index {
           .padding(14)
           .backgroundColor(COLOR_CARD)
           .borderRadius(RADIUS)
+          .shadow(CARD_SHADOW)
         }, (item: ExerciseRecord) => item.id)
       }
     }
     .width('100%')
   }
 
+  /** 底部唯一的操作入口：拍照识别 */
   @Builder
   cameraBar() {
-    Row({ space: 10 }) {
+    Row() {
       Button({ type: ButtonType.Capsule }) {
         Text('拍照识别热量')
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor(Color.White)
       }
-      .layoutWeight(1)
-      .height(48)
+      .width('100%')
+      .height(50)
       .backgroundColor(COLOR_PRIMARY)
+      .shadow(CARD_SHADOW)
       .onClick(() => {
-        this.goCamera();
-      })
-
-      Button({ type: ButtonType.Capsule }) {
-        Text('手动')
-          .fontSize(15)
-          .fontColor(COLOR_TEXT)
-      }
-      .height(48)
-      .backgroundColor(COLOR_CARD)
-      .onClick(() => {
-        this.goManual();
+        try {
+          router.pushUrl({ url: 'pages/Camera' });
+        } catch (err) {
+          const e: BusinessError = err as BusinessError;
+          hilog.error(DOMAIN, 'CalorieLite', 'goCamera failed: %{public}s', e.message);
+        }
       })
     }
     .width('100%')
-    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 8 })
-    .backgroundColor(COLOR_BG)
-  }
-
-  private goCamera(): void {
-    try {
-      router.pushUrl({ url: 'pages/Camera' });
-    } catch (err) {
-      const e: BusinessError = err as BusinessError;
-      hilog.error(DOMAIN, 'CalorieLite', 'goCamera failed: %{public}s', e.message);
-    }
-  }
-
-  private goManual(): void {
-    try {
-      router.pushUrl({ url: 'pages/ManualAdd' });
-    } catch (err) {
-      const e: BusinessError = err as BusinessError;
-      hilog.error(DOMAIN, 'CalorieLite', 'goManual failed: %{public}s', e.message);
-    }
+    // 不在这里为导航栏留白：内容要能滚到悬浮栏下面，才有「悬浮」的层次感
+    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 10 })
   }
 }

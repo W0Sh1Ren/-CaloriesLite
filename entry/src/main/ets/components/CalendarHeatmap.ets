@@ -6,7 +6,7 @@
  *
  * 配色含义：绿 = 当天有热量缺口（达标），橙 = 基本持平，红 = 超标，灰 = 没记录。
  */
-import { COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, RADIUS } from '../common/Theme';
 
 /** 单个格子的展示数据 */
 export class DayCell {
@@ -103,6 +103,7 @@ export struct CalendarHeatmap {
     .padding(14)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   @Builder

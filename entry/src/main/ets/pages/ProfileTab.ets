@@ -10,7 +10,10 @@ import { ACTIVITY_ORDER, GOAL_ORDER, activityDesc, activityLabel, genderLabel, g
 import { calcBmi, calcBmr, calcDailyBudget, calcTdee, bmiLabel, estimateDaysToGoal } from '../service/CalorieCalc';
 import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import {
+  CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
+} from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -73,10 +76,10 @@ export struct ProfileTab {
         // ------------------------------------------------ 关于与数据
         this.miscCard()
 
-        Row().height(16)
+        Row().height(NAV_RESERVE)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 16 })
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
     }
     .width('100%')
     .height('100%')
@@ -125,6 +128,7 @@ export struct ProfileTab {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   @Builder
@@ -279,6 +283,7 @@ export struct ProfileTab {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   /** 一行「减 / 数值 / 加」的数值调节器 */
@@ -359,6 +364,7 @@ export struct ProfileTab {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   @Builder
@@ -400,6 +406,7 @@ export struct ProfileTab {
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   private async confirmClear(): Promise<void> {

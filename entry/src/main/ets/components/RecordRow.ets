@@ -4,7 +4,7 @@
 import { FoodRecord, FoodSource, MealType } from '../model/Types';
 import { foodSourceLabel } from '../model/Enums';
 import { timeLabel } from '../common/DateUtil';
-import { COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
 
 @Component
 export struct RecordRow {
@@ -86,5 +86,6 @@ export struct RecordRow {
     .padding({ left: 12, right: 12, top: 10, bottom: 10 })
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 }
