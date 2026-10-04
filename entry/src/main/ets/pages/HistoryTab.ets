@@ -356,9 +356,15 @@ export struct HistoryTab {
             .layoutWeight(1)
 
           // 没有记录时把补记入口放在这里，指向更明确
+          /*
+           * 显式给宽度：ButtonType.Capsule 的宽度在 Row 里由内容决定，
+           * 不给宽就会紧贴文字边缘，看着像背景和文字重叠（实测反馈）。
+           * 高度 30 配 fontSize 12，宽度按文字量给足两侧留白。
+           */
           Button({ type: ButtonType.Capsule }) {
             Text('+ 补记一笔').fontSize(12).fontColor(COLOR_PRIMARY)
           }
+          .width(104)
           .height(30)
           .backgroundColor(COLOR_PRIMARY_SOFT)
           .onClick(() => {
@@ -412,9 +418,11 @@ export struct HistoryTab {
 
         // 有记录时补记入口放到底部，不打断阅读
         Row() {
+          // 同样显式给宽，避免背景紧贴文字（见上面「补记一笔」的说明）
           Button({ type: ButtonType.Capsule }) {
             Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
           }
+          .width(84)
           .height(30)
           .backgroundColor(COLOR_PRIMARY_SOFT)
           .onClick(() => {
@@ -499,11 +507,14 @@ export struct HistoryTab {
             this.weightInput = v;
           })
 
-        Button({ type: ButtonType.Capsule }) {
+        // 输入框是圆角 10 的矩形，按钮也用矩形 + 同样的圆角才成一组
+        Button({ type: ButtonType.Normal }) {
           Text('记录').fontSize(14).fontColor(Color.White)
         }
+        .width(84)
         .height(42)
         .backgroundColor(COLOR_PRIMARY)
+        .borderRadius(10)
         .onClick(() => {
           this.saveWeight();
         })

@@ -407,6 +407,8 @@ struct DayDetail {
       Button({ type: ButtonType.Capsule }) {
         Text('去补记一笔').fontSize(14).fontColor(Color.White)
       }
+      // 显式给宽：不给宽时 Capsule 会紧贴文字，背景看着和文字重叠
+      .width(148)
       .height(40)
       .backgroundColor(COLOR_PRIMARY)
       .margin({ top: 4 })
