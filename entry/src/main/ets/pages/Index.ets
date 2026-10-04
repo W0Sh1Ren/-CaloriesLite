@@ -9,7 +9,7 @@
  * 没有用 Tabs 组件：Tabs 的 tabBar 贴底且做不出毛玻璃悬浮效果，
  * 自己搭反而更好控制动画与层次。
  */
-import { router, curves, display } from '@kit.ArkUI';
+import { router, curves } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -103,30 +103,12 @@ struct Index {
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
   /**
-   * 单页宽度（vp），实测得到。
-   *
-   * **为什么不用百分比**：三页并排时 Row 是 300% 宽，
-   * 而 ArkUI 的百分比是相对**父容器**解析的——每个子页写 width('100%')
-   * 会被算成 300% 屏宽，三页合计 900%，布局直接错乱；
-   * translate 的百分比同理会被放大三倍。
-   * 所以宽度与位移都用实测像素，不再依赖百分比的参照物。
-   */
-  @State pageWidth: number = 0;
-  /**
-   * 页面平移的当前位移（vp，向左为负）。
-   *
-   * -pageWidth * activeTab：0 = 首页，-1 屏 = 记录页，-2 屏 = 「我的」页。
-   * 三页并排成一条 3 屏宽的 Row，平移它即可让视口停在某一页；
-   * 从首页切到「我的」时，视口会**连续经过**记录页。
-   */
-  @State viewOffset: number = 0;
-  /**
    * 页面切换用的曲线。
    *
-   * 选 springMotion(0.86, 1.0)：阻尼比接近临界（1.0）→ 不回弹。
-   * 这一条很重要：三页并排时如果曲线带回弹，平移会冲过头，
-   * 把邻页的边缘拖进视口再弹回去，观感像「没对齐」。
-   * 所以要的是「走完全程、稳稳停住」，而不是活泼的弹簧。
+   * Swiper 的 .curve() 接受 ICurve。选 springMotion(0.86, 1.0)：
+   * 阻尼比接近临界（1.0）→ 不回弹。跨多页平移时如果曲线欠阻尼，
+   * 会冲过头把邻页边缘拖进视口再弹回，观感像「没对齐」。
+   * 要的是「走完全程、稳稳停住」。
    */
   private static readonly VIEW_SPRING: ICurve = curves.springMotion(0.86, 1.0);
   /**
@@ -207,31 +189,6 @@ struct Index {
   private syncInsets(): void {
     this.topInset = AppState.topInset;
     this.bottomInset = AppState.bottomInset;
-    this.syncPageWidth();
-  }
-
-  /**
-   * 量出单页宽度（vp）。
-   *
-   * 用 display 而不是 onAreaChange：三页并排时那三个容器的宽度本身就由
-   * pageWidth 决定，用它们的测量值反过来算 pageWidth 会自相矛盾。
-   * display 给的是与布局无关的屏幕物理宽度，除以像素密度即 vp。
-   */
-  private syncPageWidth(): void {
-    if (this.pageWidth > 0) {
-      return;
-    }
-    try {
-      const info: display.Display = display.getDefaultDisplaySync();
-      const w: number = info.width / info.densityPixels;
-      if (w > 0) {
-        this.pageWidth = w;
-        // 首帧就要停在当前页，否则会从首页滑一下
-        this.viewOffset = -w * this.activeTab;
-      }
-    } catch (err) {
-      hilog.error(DOMAIN, 'CalorieLite', 'syncPageWidth failed: %{public}s', JSON.stringify(err));
-    }
   }
 
   /** 三个主页面并排渲染，靠平移切换 */
@@ -246,58 +203,44 @@ struct Index {
        */
       Column() {
         /*
-         * 三页并排成一行，整体平移。
+         * 用 Swiper 而不是「Row + translate」。
          *
-         * 平移而不是「淡出旧页 + 淡入新页」：从首页切到「我的」时，
-         * 视口会**连续经过**记录页——这正是「三个页面在平移」的观感。
-         * 代价是三页必须常驻（中间页不存在就没法经过）。
+         * 之前手写平移踩了一整类坑：Row 宽 3 屏时子页的百分比宽度会被
+         * 放大（ArkUI 的百分比按父容器解析），于是子页间距与位移量对不上，
+         * 表现就是「点首页显示记录、点记录显示我的、点我的空白」。
+         * 试过像素宽度、实测视口宽度，都没能同时对上宽度与间距。
          *
-         * 宽度全部用实测的 pageWidth，**不用百分比**：
-         * 百分比相对父容器解析，Row 是 3 屏宽时子页的 100% 会被算成
-         * 3 屏宽、三页合计 9 屏，布局直接错乱（这条踩过）。
+         * Swiper 内置处理分页几何，平移也是它的本意语义：
+         * 从第 0 页切到第 2 页会**连续经过**第 1 页，正是要的观感。
+         * 关掉手动滑动（disableSwipe）——切换只由底部导航驱动。
          */
-        Row() {
-          /*
-           * 三页常驻是「连续平移」的前提，但带来一个必须处理的副作用：
-           * **未激活页仍在树上，照样会参与命中测试、偷走点击**。
-           * 之前试过常驻三页用 opacity 切换，透明页把拍照按钮和
-           * 餐次折叠的点击全吃掉了（实测）。
-           * 所以每页容器都挂 hitTestBehavior(None) + enabled(false) 双保险。
-           */
+        Swiper() {
           Column() {
             this.todayView()
           }
-          .width(this.pageWidth)
+          .width('100%')
           .height('100%')
-          .hitTestBehavior(this.activeTab === 0 ? HitTestMode.Default : HitTestMode.None)
-          .enabled(this.activeTab === 0)
 
           Column() {
             HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
           }
-          .width(this.pageWidth)
+          .width('100%')
           .height('100%')
-          .hitTestBehavior(this.activeTab === 1 ? HitTestMode.Default : HitTestMode.None)
-          .enabled(this.activeTab === 1)
 
           Column() {
             ProfileTab({ refreshTick: this.refreshTick })
           }
-          .width(this.pageWidth)
+          .width('100%')
           .height('100%')
-          .hitTestBehavior(this.activeTab === 2 ? HitTestMode.Default : HitTestMode.None)
-          .enabled(this.activeTab === 2)
         }
-        .width(this.pageWidth * 3)
+        .index(this.activeTab)
+        .loop(false)
+        .disableSwipe(true)
+        .indicator(false)
+        .duration(DUR_VIEW_SWITCH)
+        .curve(Index.VIEW_SPRING)
+        .width('100%')
         .height('100%')
-        /*
-         * 平移整条 Row，让视口停在当前页。
-         *
-         * 用「@State viewOffset + animateTo」而不是 .animation()：
-         * animateTo 是显式驱动、一定能触发，不需要赌某个属性是否被
-         * 算作「可动画属性」。
-         */
-        .translate({ x: this.viewOffset })
       }
       .width('100%')
       .height('100%')
@@ -335,6 +278,7 @@ struct Index {
     return this.dayKey === todayKey() ? '今天' : friendlyDate(this.dayKey);
   }
 
+  /** 顶栏副标题 */
   /** 顶栏副标题 */
   private topSubtitle(): string {
     if (this.activeTab === 1) {
@@ -469,23 +413,14 @@ struct Index {
       AppState.profileDirty = false;
     }
     /*
-     * 先提交下标（决定哪一页可交互、顶栏显示什么标题），再平移动画。
-     * 顺序不能反：activeTab 一改，命中测试与顶栏立刻切到目标页，
-     * 而视觉上的平移由下面的 animateTo 补上——两者是同一帧发生的，
-     * 看不出时序差。
+     * 只提交下标。
+     *
+     * 平移动画交给 Swiper 自己播（.index(activeTab) + .curve(VIEW_SPRING)）：
+     * 从第 0 页切到第 2 页时它会连续经过第 1 页，正是要的观感。
+     * 之前手写 animateTo + translate，因为 Row 内子页间距无法预测
+     *（ArkUI 百分比按父容器解析），始终对不上位移量，已弃用。
      */
     this.activeTab = index;
-    /*
-     * 平移动画：把整条三页 Row 移到目标页。
-     *
-     * 从首页(0)切到「我的」(-2 屏) 时，视口会一路扫过记录页(-1 屏)，
-     * 观感就是「三个页面在平移」而不是「两页互换」。
-     * 位移用实测像素（pageWidth），不用百分比——原因见 pageWidth 的注释。
-     */
-    const target: number = -this.pageWidth * index;
-    this.getUIContext().animateTo({ curve: Index.VIEW_SPRING, duration: DUR_VIEW_SWITCH }, () => {
-      this.viewOffset = target;
-    });
     // 回到首页时按当天重读，保证刚记录的餐次立刻出现
     if (index === 0) {
       this.dayKey = todayKey();
