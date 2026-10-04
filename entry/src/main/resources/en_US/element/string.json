@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Calorie Lite main module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Calorie Lite"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Calorie Lite"
+    },
+    {
+      "name": "reason_camera",
+      "value": "Used to photograph food and recognize its calories"
+    },
+    {
+      "name": "reason_photo",
+      "value": "Used to pick a food photo from the gallery and recognize its calories"
+    }
+  ]
+}

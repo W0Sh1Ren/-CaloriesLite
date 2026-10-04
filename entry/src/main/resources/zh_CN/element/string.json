@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "轻卡记主模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "轻卡记"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "轻卡记"
+    },
+    {
+      "name": "reason_camera",
+      "value": "用于拍摄食物照片，识别其中包含的食物和热量"
+    },
+    {
+      "name": "reason_photo",
+      "value": "用于从相册选择食物照片，识别其中包含的食物和热量"
+    }
+  ]
+}

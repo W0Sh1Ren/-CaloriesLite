@@ -1,0 +1,6 @@
+# Define project specific obfuscation rules here.
+# For more details, see
+#   https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/source-obfuscation
+
+# 本项目 release 构建暂不开启混淆（obfuscation.ruleOptions.enable = false），
+# 保留此文件以便后续需要时开启。

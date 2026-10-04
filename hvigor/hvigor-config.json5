@@ -1,0 +1,15 @@
+{
+  "modelVersion": "6.0.2",
+  "dependencies": {},
+  "execution": {},
+  "logging": {},
+  "debugging": {},
+  "nodeOptions": {},
+  "properties": {
+    // 用 npm 而不是 pnpm 安装 hvigor 自身的依赖。
+    // 原因：pnpm 会在 node_modules 下创建符号链接，而 Windows 上创建符号链接
+    // 需要「开发者模式」或管理员权限，普通用户会直接撞上 EPERM。
+    // npm 用复制，没有这个限制，代价只是多占一点磁盘。
+    "hvigor.dependency.useNpm": true
+  }
+}
