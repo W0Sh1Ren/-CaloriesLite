@@ -145,7 +145,15 @@ struct CameraPage {
       AppState.needRefreshHome = true;
       AppState.targetMeal = guessMealType(hourOf(Date.now()));
 
-      router.pushUrl({ url: 'pages/ResultConfirm' });
+      /*
+       * 用 replaceUrl 而不是 pushUrl。
+       *
+       * pushUrl 会把拍照页留在栈里，于是确认页退回一层只到拍照页
+       *（用户确认完却回到拍照页，实测反馈）。
+       * 拍照页在拍完之后没有再留在栈里的意义 —— 用户不会想「返回照片选择」，
+       * 替换掉它，确认页退回一层就是首页，问题从根上消失。
+       */
+      router.replaceUrl({ url: 'pages/ResultConfirm' });
     } catch (err) {
       this.handleError(err);
     } finally {
