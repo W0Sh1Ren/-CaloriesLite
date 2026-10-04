@@ -3,7 +3,7 @@
  */
 import { Store } from '../common/Store';
 import { getNum, getStr, JsonMap, parseObject, toEnum } from '../common/JsonUtil';
-import { ACTIVITY_ORDER, GOAL_ORDER } from '../model/Enums';
+import { ACTIVITY_ORDER, GLM_BASE_URL, GLM_MODEL, GOAL_ORDER } from '../model/Enums';
 import { ActivityLevel, AiConfig, AiProvider, Gender, Goal, UserProfile } from '../model/Types';
 
 const KEY_PROFILE = 'user_profile';
@@ -19,8 +19,16 @@ function defaultProfile(): UserProfile {
 }
 
 function defaultAiConfig(): AiConfig {
-  return new AiConfig(AiProvider.OPENAI_COMPATIBLE, '', '', '');
+  // 默认就填好智谱的地址和免费识图模型，用户只需再粘一个 API Key
+  return new AiConfig(AiProvider.OPENAI_COMPATIBLE, GLM_BASE_URL, '', GLM_MODEL);
 }
+
+/** 已下线的旧模型名 → 现用模型名，避免老用户配置失效 */
+const MODEL_MIGRATIONS: Map<string, string> = (() => {
+  const m: Map<string, string> = new Map<string, string>();
+  m.set('glm-4v-flash', GLM_MODEL);
+  return m;
+})();
 
 export class SettingsRepo {
 
@@ -75,11 +83,19 @@ export class SettingsRepo {
       return defaultAiConfig();
     }
     const def: AiConfig = defaultAiConfig();
+
+    // 旧版本存的是 glm-4v-flash，这个模型已下线，自动换成当前的免费识图模型
+    let model: string = getStr(map, 'model', def.model);
+    const migrated: string | undefined = MODEL_MIGRATIONS.get(model);
+    if (migrated !== undefined) {
+      model = migrated;
+    }
+
     return new AiConfig(
       toEnum<AiProvider>(getStr(map, 'provider', def.provider), ALL_PROVIDERS, def.provider),
-      getStr(map, 'baseUrl', ''),
+      getStr(map, 'baseUrl', def.baseUrl),
       getStr(map, 'apiKey', ''),
-      getStr(map, 'model', '')
+      model
     );
   }
 

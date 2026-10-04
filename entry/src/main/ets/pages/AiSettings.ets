@@ -1,27 +1,27 @@
 /**
  * AI 识别配置页。
  *
- * 用户自带 API：填服务商、接口地址、Key、模型名，点「测试」当场验证能不能用。
+ * 用智谱开放平台的 OpenAI 兼容接口做识图：填 API Key 和模型名，点「测试」当场验证。
  * Key 只存在本机应用沙箱里，不经任何中转。
  */
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { AiConfig, AiProvider } from '../model/Types';
-import { PRESETS, ProviderPreset, providerLabel } from '../model/Enums';
+import { GLM_BASE_URL, GLM_MODEL, PRESETS, ProviderPreset } from '../model/Enums';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { VisionService, VisionError } from '../service/VisionService';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { COLOR_BG, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
 @Entry
 @Component
 struct AiSettings {
-  @State provider: AiProvider = AiProvider.OPENAI_COMPATIBLE;
-  @State baseUrl: string = '';
+  /** 固定走 OpenAI 兼容协议（智谱），不需要用户选 */
+  @State baseUrl: string = GLM_BASE_URL;
   @State apiKey: string = '';
-  @State model: string = '';
+  @State model: string = GLM_MODEL;
   @State showKey: boolean = false;
   @State testing: boolean = false;
   @State testResult: string = '';
@@ -29,18 +29,16 @@ struct AiSettings {
 
   aboutToAppear(): void {
     const c: AiConfig = SettingsRepo.loadAiConfig();
-    this.provider = c.provider;
-    this.baseUrl = c.baseUrl;
+    this.baseUrl = c.baseUrl.length > 0 ? c.baseUrl : GLM_BASE_URL;
     this.apiKey = c.apiKey;
-    this.model = c.model;
+    this.model = c.model.length > 0 ? c.model : GLM_MODEL;
   }
 
   private current(): AiConfig {
-    return new AiConfig(this.provider, this.baseUrl.trim(), this.apiKey.trim(), this.model.trim());
+    return new AiConfig(AiProvider.OPENAI_COMPATIBLE, this.baseUrl.trim(), this.apiKey.trim(), this.model.trim());
   }
 
   private applyPreset(p: ProviderPreset): void {
-    this.provider = p.provider;
     this.baseUrl = p.baseUrl;
     this.model = p.model;
     this.testResult = '';
@@ -112,7 +110,7 @@ struct AiSettings {
               .fontWeight(FontWeight.Medium)
               .fontColor(COLOR_TEXT)
               .width('100%')
-            Text('拍照识别用的是你自己的 AI 接口。下面填的信息只保存本机，识别时由手机直连你填的服务商，不经过任何中间服务器。')
+            Text('拍照识别用的是你自己的智谱 API Key。下面填的信息只保存本机，识别时由手机直连智谱开放平台，不经过任何中间服务器。')
               .fontSize(12)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
@@ -122,34 +120,17 @@ struct AiSettings {
           .backgroundColor(COLOR_CARD)
           .borderRadius(RADIUS)
 
-          // 服务商选择
-          Column({ space: 10 }) {
-            Text('接口类型')
+          // 接口类型：固定走 OpenAI 兼容协议，不再让用户选
+          Column({ space: 6 }) {
+            Text('接口协议')
               .fontSize(13)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
-
-            Row({ space: 8 }) {
-              ForEach([AiProvider.OPENAI_COMPATIBLE, AiProvider.GEMINI], (p: AiProvider) => {
-                Text(providerLabel(p))
-                  .fontSize(13)
-                  .fontColor(this.provider === p ? Color.White : COLOR_TEXT)
-                  .textAlign(TextAlign.Center)
-                  .layoutWeight(1)
-                  .height(40)
-                  .backgroundColor(this.provider === p ? COLOR_PRIMARY : COLOR_BG)
-                  .borderRadius(10)
-                  .onClick(() => {
-                    this.provider = p;
-                    this.testResult = '';
-                  })
-              }, (p: AiProvider) => p)
-            }
-            .width('100%')
-
-            Text(this.provider === AiProvider.OPENAI_COMPATIBLE
-              ? '适用于绝大多数服务商：智谱、通义、Kimi、DeepSeek、硅基流动、OpenAI 以及各类兼容接口'
-              : 'Google 官方接口，需要能访问 googleapis.com 的网络环境')
+            Text('OpenAI 兼容（智谱开放平台）')
+              .fontSize(14)
+              .fontColor(COLOR_TEXT)
+              .width('100%')
+            Text('请求发往智谱的 /chat/completions 接口，API Key 只保存在本机。')
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
@@ -159,36 +140,52 @@ struct AiSettings {
           .backgroundColor(COLOR_CARD)
           .borderRadius(RADIUS)
 
-          // 常用预设
+          // 服务商信息（当前只支持智谱 GLM）
           Column({ space: 10 }) {
-            Text('常用服务商（点一下自动填好地址和模型）')
+            Text('服务商')
               .fontSize(13)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
 
             ForEach(PRESETS, (p: ProviderPreset) => {
               Row() {
-                Column({ space: 2 }) {
+                Column({ space: 3 }) {
                   Text(p.title)
-                    .fontSize(14)
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
                     .fontColor(COLOR_TEXT)
                   Text(p.hint)
                     .fontSize(11)
                     .fontColor(COLOR_TEXT_SUB)
+                  Text(`${p.baseUrl}  ·  ${p.model}`)
+                    .fontSize(10)
+                    .fontColor(COLOR_TEXT_SUB)
+                    .maxLines(2)
                 }
                 .alignItems(HorizontalAlign.Start)
                 .layoutWeight(1)
 
-                Text(this.baseUrl === p.baseUrl && this.model === p.model ? '✓' : '填入')
-                  .fontSize(12)
-                  .fontColor(this.baseUrl === p.baseUrl && this.model === p.model ? COLOR_OK : COLOR_PRIMARY)
+                if (this.baseUrl === p.baseUrl && this.model === p.model) {
+                  Text('✓')
+                    .fontSize(16)
+                    .fontColor(COLOR_OK)
+                } else {
+                  Text('填入')
+                    .fontSize(12)
+                    .fontColor(COLOR_PRIMARY)
+                }
               }
               .width('100%')
-              .padding({ top: 8, bottom: 8 })
+              .padding({ top: 6, bottom: 6 })
               .onClick(() => {
                 this.applyPreset(p);
               })
             }, (p: ProviderPreset) => p.title)
+
+            Text('换模型不必改代码：把下面的「模型名」改成智谱平台上其它支持识图的模型即可。')
+              .fontSize(11)
+              .fontColor(COLOR_TEXT_SUB)
+              .width('100%')
           }
           .width('100%')
           .padding(16)
@@ -197,7 +194,7 @@ struct AiSettings {
 
           // 填写区
           Column({ space: 14 }) {
-            this.field('接口地址', this.baseUrl, 'https://api.example.com/v1', false, (v: string) => {
+            this.field('接口地址', this.baseUrl, GLM_BASE_URL, false, (v: string) => {
               this.baseUrl = v;
             })
 
@@ -227,14 +224,23 @@ struct AiSettings {
                 .onChange((v: string) => {
                   this.apiKey = v;
                 })
+
+              Text('在 bigmodel.cn 控制台「API Keys」里创建，形如 xxxxxxxx.yyyyyyyy')
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+                .width('100%')
             }
             .width('100%')
 
-            this.field('模型名', this.model, '例如 glm-4v-flash', false, (v: string) => {
+            this.field('模型名', this.model, GLM_MODEL, false, (v: string) => {
               this.model = v;
             })
 
-            Text('模型必须支持图片输入（识图）。纯文本模型无法识别照片。')
+            Text(`默认 ${GLM_MODEL}，是 GLM-4.6V 的免费版本，支持识图且不收费。`)
+              .fontSize(11)
+              .fontColor(COLOR_TEXT_SUB)
+              .width('100%')
+            Text('模型必须支持图片输入，纯文本模型无法识别照片。')
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')

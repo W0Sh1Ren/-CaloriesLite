@@ -193,16 +193,23 @@ export class ProviderPreset {
   }
 }
 
-/** 常见服务商预设。baseUrl 一律填到 /v1 这一层，代码里再拼具体路径。 */
+/**
+ * 智谱开放平台的接口地址。
+ *
+ * 注意结尾是 /api/paas/v4 而不是 /v1，代码里再拼 /chat/completions。
+ */
+export const GLM_BASE_URL: string = 'https://open.bigmodel.cn/api/paas/v4';
+
+/**
+ * 默认识图模型。
+ *
+ * glm-4.6v-flash 是 GLM-4.6V 的免费版本，支持图像/视频/文件理解，
+ * 128K 上下文，且完全免费。见 https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash
+ */
+export const GLM_MODEL: string = 'glm-4.6v-flash';
+
+/** 仅保留智谱 GLM 一家，其余服务商预设已移除 */
 export const PRESETS: ProviderPreset[] = [
-  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4',
-    'glm-4v-flash', '国内直连，免费模型 glm-4v-flash 可识图'),
-  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, '通义千问', 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    'qwen-vl-plus', '国内直连，需在阿里云百炼开通'),
-  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, '硅基流动', 'https://api.siliconflow.cn/v1',
-    'Qwen/Qwen2.5-VL-72B-Instruct', '国内直连，聚合多家模型'),
-  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, 'OpenAI', 'https://api.openai.com/v1',
-    'gpt-4o-mini', '需要海外网络'),
-  new ProviderPreset(AiProvider.GEMINI, 'Google Gemini', 'https://generativelanguage.googleapis.com',
-    'gemini-2.0-flash', '官方有免费额度，需要海外网络')
+  new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, '智谱 GLM', GLM_BASE_URL,
+    GLM_MODEL, '国内直连，glm-4.6v-flash 完全免费且支持识图')
 ];

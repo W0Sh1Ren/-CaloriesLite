@@ -83,10 +83,10 @@ export class UserProfile {
 /** AI 识别配置 —— 用户自备 API */
 export class AiConfig {
   provider: AiProvider = AiProvider.OPENAI_COMPATIBLE;
-  /** 形如 https://api.openai.com/v1 ，不带结尾斜杠 */
+  /** 形如 https://open.bigmodel.cn/api/paas/v4 ，不带结尾斜杠 */
   baseUrl: string = '';
   apiKey: string = '';
-  /** 模型名，如 gpt-4o-mini / glm-4v-flash / gemini-2.0-flash */
+  /** 模型名，默认 glm-4.6v-flash */
   model: string = '';
 
   constructor(provider: AiProvider, baseUrl: string, apiKey: string, model: string) {
