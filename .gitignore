@@ -27,3 +27,7 @@
 # 真机调试时抓的截图，不入库
 /tools/*.jpeg
 /tools/*.png
+
+# 调试截图
+/docs/*.jpeg
+/docs/*.png

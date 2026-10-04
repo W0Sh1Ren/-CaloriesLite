@@ -58,6 +58,8 @@ struct Index {
   @State topInset: number = 0;
   /** 底部安全区（手势条）高度，导航栏必须抬到它之上才能点到 */
   @State bottomInset: number = 0;
+  /** 已展开明细的餐次。默认为空即全部收起 */
+  @State expandedMeals: MealType[] = [];
 
   aboutToAppear(): void {
     this.syncInsets();
@@ -80,7 +82,6 @@ struct Index {
     this.reload();
     this.refreshTick++;
   }
-
   /** 把 EntryAbility 量好的安全区尺寸取到本地状态，驱动布局重算 */
   private syncInsets(): void {
     this.topInset = AppState.topInset;
@@ -93,8 +94,12 @@ struct Index {
 
   /** 切换视图：改下标并同时刷新数据 */
   private switchTo(index: number): void {
+    // 「我的」页可能刚改过档案，回到首页要按新预算重算
+    if (AppState.profileDirty) {
+      AppState.profileDirty = false;
+      this.reload();
+    }
     this.activeTab = index;
-    this.reload();
   }
 
   private mealKcal(records: FoodRecord[]): number {
@@ -317,51 +322,123 @@ struct Index {
       .borderRadius(12)
   }
 
+  /** 展开/收起某一餐 */
+  private toggleMeal(meal: MealType): void {
+    const next: MealType[] = [];
+    let removed: boolean = false;
+    for (const m of this.expandedMeals) {
+      if (m === meal) {
+        removed = true;
+      } else {
+        next.push(m);
+      }
+    }
+    if (!removed) {
+      next.push(meal);
+    }
+    this.expandedMeals = next;
+  }
+
+  private isExpanded(meal: MealType): boolean {
+    return this.expandedMeals.includes(meal);
+  }
+
+  /**
+   * 一餐的分组。
+   *
+   * 默认收起，只显示餐次名与合计热量；点标题才展开逐条明细。
+   * 刚记完一餐时列表会一下子变很长，收起是更好的默认状态。
+   */
   @Builder
   mealSection(meal: MealType) {
     Column({ space: 8 }) {
-      Row() {
+      // 标题行：整行可点，右侧箭头随展开状态旋转
+      Row({ space: 6 }) {
         Text(mealTypeLabel(meal))
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
           .fontColor(COLOR_TEXT)
+
         Blank()
+
         Text(this.mealKcal(DailyService.recordsOf(this.data.records, meal)) > 0
           ? `${this.mealKcal(DailyService.recordsOf(this.data.records, meal))} 千卡`
           : '')
           .fontSize(13)
           .fontColor(COLOR_TEXT_SUB)
+
+        Text('⌄')
+          .fontSize(14)
+          .fontColor(COLOR_TEXT_SUB)
+          .rotate({ angle: this.isExpanded(meal) ? 180 : 0 })
+          .animation({ duration: DUR_NORMAL, curve: Curve.EaseInOut })
       }
       .width('100%')
-      .padding({ left: 4, right: 4 })
+      .padding({ left: 4, right: 4, top: 4, bottom: 4 })
+      .onClick(() => {
+        this.toggleMeal(meal);
+      })
 
-      if (DailyService.recordsOf(this.data.records, meal).length === 0) {
-        Row() {
-          Text('还没有记录')
-            .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+      if (this.isExpanded(meal)) {
+        Column({ space: 8 }) {
+          if (DailyService.recordsOf(this.data.records, meal).length === 0) {
+            Row() {
+              Text('还没有记录')
+                .fontSize(13)
+                .fontColor(COLOR_TEXT_SUB)
+            }
+            .width('100%')
+            .padding(14)
+            .backgroundColor(COLOR_CARD)
+            .borderRadius(RADIUS)
+            .shadow(CARD_SHADOW)
+          } else {
+            ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
+              RecordRow({
+                record: record,
+                onDelete: (id: string) => {
+                  const target: FoodRecord | undefined =
+                    this.data.records.find((r: FoodRecord) => r.id === id);
+                  if (target !== undefined) {
+                    this.confirmDelete(target);
+                  }
+                }
+              })
+            }, (record: FoodRecord) => record.id)
+          }
         }
         .width('100%')
-        .padding(14)
-        .backgroundColor(COLOR_CARD)
-        .borderRadius(RADIUS)
-        .shadow(CARD_SHADOW)
-      } else {
-        ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
-          RecordRow({
-            record: record,
-            onDelete: (id: string) => {
-              const target: FoodRecord | undefined =
-                this.data.records.find((r: FoodRecord) => r.id === id);
-              if (target !== undefined) {
-                this.confirmDelete(target);
-              }
-            }
-          })
-        }, (record: FoodRecord) => record.id)
+        // 展开/收起都走同一个过渡，收起时自动反向播放
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.scale({ x: 1, y: 0.94, centerY: '0%' }))
+          .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut }))
+      } else if (DailyService.recordsOf(this.data.records, meal).length > 0) {
+        // 收起态给一行摘要，避免完全看不到吃了什么
+        Row() {
+          Text(this.mealSummary(meal))
+            .fontSize(12)
+            .fontColor(COLOR_TEXT_SUB)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .width('100%')
+        .padding({ left: 4, right: 4, bottom: 2 })
       }
     }
     .width('100%')
+  }
+
+  /** 收起态的一行摘要，例如「白米饭、番茄炒蛋」 */
+  private mealSummary(meal: MealType): string {
+    const list: FoodRecord[] = DailyService.recordsOf(this.data.records, meal);
+    const names: string[] = [];
+    for (const r of list) {
+      names.push(r.name);
+      if (names.length >= 4) {
+        break;
+      }
+    }
+    return names.length < list.length ? `${names.join('、')} 等 ${list.length} 项` : names.join('、');
   }
 
   @Builder

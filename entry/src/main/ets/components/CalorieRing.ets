@@ -8,7 +8,8 @@
  * 环内显示当天的热量缺口，环下方列预算 / 摄入 / 运动三项。
  */
 import { DailySummary } from '../model/Types';
-import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, RADIUS } from '../common/Theme';
+import { RollingNumber } from './RollingNumber';
 
 @Component
 export struct CalorieRing {
@@ -89,10 +90,14 @@ export struct CalorieRing {
             .fontSize(13)
             .fontColor(COLOR_TEXT_SUB)
 
-          Text(`${Math.abs(this.summary.deficit)}`)
-            .fontSize(48)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(this.summary.deficit < 0 ? COLOR_WARN : COLOR_TEXT)
+          // 数值变化时滚上去，而不是瞬间跳变
+          RollingNumber({
+            value: Math.abs(this.summary.deficit),
+            fontSize: 48,
+            fontWeight: FontWeight.Bold,
+            textColor: this.summary.deficit < 0 ? COLOR_WARN : COLOR_TEXT,
+            duration: DUR_SLOW
+          })
 
           Text('千卡')
             .fontSize(13)
@@ -105,11 +110,11 @@ export struct CalorieRing {
 
       // 预算与摄入明细
       Row() {
-        this.statCell('已摄入', `${this.summary.intake}`, COLOR_PRIMARY)
+        this.statCell('已摄入', this.summary.intake, COLOR_PRIMARY)
         Divider().vertical(true).height(28).color(COLOR_PRIMARY_SOFT)
-        this.statCell('基础预算', `${this.summary.budget}`, COLOR_TEXT)
+        this.statCell('基础预算', this.summary.budget, COLOR_TEXT)
         Divider().vertical(true).height(28).color(COLOR_PRIMARY_SOFT)
-        this.statCell('运动消耗', `${this.summary.exerciseKcal}`, COLOR_OK)
+        this.statCell('运动消耗', this.summary.exerciseKcal, COLOR_OK)
       }
       .width('100%')
       .justifyContent(FlexAlign.SpaceEvenly)
@@ -122,12 +127,15 @@ export struct CalorieRing {
   }
 
   @Builder
-  statCell(label: string, value: string, valueColor: string) {
+  statCell(label: string, value: number, valueColor: string) {
     Column({ space: 4 }) {
-      Text(value)
-        .fontSize(20)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(valueColor)
+      RollingNumber({
+        value: value,
+        fontSize: 20,
+        fontWeight: FontWeight.Medium,
+        textColor: valueColor,
+        duration: DUR_SLOW
+      })
       Text(label)
         .fontSize(12)
         .fontColor(COLOR_TEXT_SUB)

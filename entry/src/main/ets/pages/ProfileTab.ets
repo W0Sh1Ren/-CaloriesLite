@@ -10,6 +10,7 @@ import { ACTIVITY_ORDER, GOAL_ORDER, activityDesc, activityLabel, genderLabel, g
 import { calcBmi, calcBmr, calcDailyBudget, calcTdee, bmiLabel, estimateDaysToGoal } from '../service/CalorieCalc';
 import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
+import { AppState } from '../common/AppState';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
   COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
@@ -21,12 +22,22 @@ const DOMAIN = 0x0000;
 export struct ProfileTab {
   @Prop refreshTick: number = 0;
 
+  /**
+   * 个人档案。
+   *
+   * 刻意用 @State 保存整份档案，并在每次修改时**换一个新对象**：
+   * ArkUI 的 @State 只比较引用，直接改 this.profile.age 不会触发重建，
+   * 表现就是「改了年龄但卡片上的数字不动」。换对象才稳。
+   */
   @State profile: UserProfile = SettingsRepo.loadProfile();
   @State aiReady: boolean = false;
+  @State profileVersion: number = 0;
   @State bmr: number = 0;
   @State tdee: number = 0;
   @State budget: number = 0;
   @State latestWeight: number = 0;
+  /** 计算用的体重取值（可能是体重记录里的最新值，未必等于档案里的值） */
+  @State effectiveWeight: number = 0;
 
   aboutToAppear(): void {
     this.reload();
@@ -39,16 +50,33 @@ export struct ProfileTab {
   private reload(): void {
     this.profile = SettingsRepo.loadProfile();
     this.aiReady = SettingsRepo.isAiReady();
+    this.profileVersion++;
     const effective: UserProfile = DailyService.effectiveProfile();
     this.latestWeight = effective.weightKg;
+    this.effectiveWeight = effective.weightKg;
     this.bmr = Math.round(calcBmr(effective));
     this.tdee = Math.round(calcTdee(effective));
     this.budget = calcDailyBudget(effective);
   }
 
-  private save(): void {
-    SettingsRepo.saveProfile(this.profile);
-    this.reload();
+  /**
+   * 改一个字段并立刻生效。
+   *
+   * 三步缺一不可：换新对象（触发重建）→ 落盘 → 重算卡片数字。
+   */
+  private apply(update: (p: UserProfile) => void): void {
+    const next: UserProfile = SettingsRepo.loadProfile();
+    update(next);
+    SettingsRepo.saveProfile(next);
+    this.profile = next;
+    this.profileVersion++;
+    const effective: UserProfile = DailyService.effectiveProfile();
+    this.latestWeight = effective.weightKg;
+    this.bmr = Math.round(calcBmr(effective));
+    this.tdee = Math.round(calcTdee(effective));
+    this.budget = calcDailyBudget(effective);
+    // 通知首页等同进程内的其它页面按新档案重算
+    AppState.profileDirty = true;
   }
 
   private bmi(): number {
@@ -170,8 +198,9 @@ export struct ProfileTab {
             .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY : COLOR_BG)
             .borderRadius(10)
             .onClick(() => {
-              this.profile.gender = g;
-              this.save();
+              this.apply((p: UserProfile) => {
+                p.gender = g;
+              });
             })
         }, (g: Gender) => g)
       }
@@ -179,27 +208,33 @@ export struct ProfileTab {
 
       // 数值项
       this.numRow('年龄', `${this.profile.age}`, '岁', () => {
-        this.profile.age = Math.max(10, this.profile.age - 1);
-        this.save();
+        this.apply((p: UserProfile) => {
+          p.age = Math.max(10, p.age - 1);
+        });
       }, () => {
-        this.profile.age = Math.min(120, this.profile.age + 1);
-        this.save();
+        this.apply((p: UserProfile) => {
+          p.age = Math.min(120, p.age + 1);
+        });
       })
 
       this.numRow('身高', `${this.profile.heightCm}`, '厘米', () => {
-        this.profile.heightCm = Math.max(100, this.profile.heightCm - 1);
-        this.save();
+        this.apply((p: UserProfile) => {
+          p.heightCm = Math.max(100, p.heightCm - 1);
+        });
       }, () => {
-        this.profile.heightCm = Math.min(250, this.profile.heightCm + 1);
-        this.save();
+        this.apply((p: UserProfile) => {
+          p.heightCm = Math.min(250, p.heightCm + 1);
+        });
       })
 
       this.numRow('体重', `${this.profile.weightKg}`, '公斤', () => {
-        this.profile.weightKg = Math.max(25, Math.round((this.profile.weightKg - 0.5) * 10) / 10);
-        this.save();
+        this.apply((p: UserProfile) => {
+          p.weightKg = Math.max(25, Math.round((p.weightKg - 0.5) * 10) / 10);
+        });
       }, () => {
-        this.profile.weightKg = Math.min(300, Math.round((this.profile.weightKg + 0.5) * 10) / 10);
-        this.save();
+        this.apply((p: UserProfile) => {
+          p.weightKg = Math.min(300, Math.round((p.weightKg + 0.5) * 10) / 10);
+        });
       })
 
       Divider().color(COLOR_DIVIDER)
@@ -232,8 +267,9 @@ export struct ProfileTab {
         .width('100%')
         .padding({ top: 8, bottom: 8 })
         .onClick(() => {
-          this.profile.activityLevel = level;
-          this.save();
+          this.apply((p: UserProfile) => {
+            p.activityLevel = level;
+          });
         })
       }, (level: ActivityLevel) => level)
 
@@ -267,8 +303,9 @@ export struct ProfileTab {
         .width('100%')
         .padding({ top: 8, bottom: 8 })
         .onClick(() => {
-          this.profile.goal = goal;
-          this.save();
+          this.apply((p: UserProfile) => {
+            p.goal = goal;
+          });
         })
       }, (goal: Goal) => goal)
 

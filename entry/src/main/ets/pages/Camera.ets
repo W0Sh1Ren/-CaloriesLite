@@ -8,7 +8,7 @@ import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
-import { AiConfig, FoodDraft } from '../model/Types';
+import { AiConfig } from '../model/Types';
 import { guessMealType } from '../model/Enums';
 import { hourOf } from '../common/DateUtil';
 import { SettingsRepo } from '../service/SettingsRepo';
@@ -81,14 +81,8 @@ struct CameraPage {
       const prepared: PreparedImage = await ImageService.prepare(uri, this.uiContext());
 
       this.statusText = `正在用 ${config.model} 识别…`;
+      // 热量与三大营养素由模型在同一次请求里给出，不再有第二次补问
       const result: VisionResult = await VisionService.recognize(config, prepared.base64, prepared.mimeType);
-
-      // 食物表里没有的条目，再补问一次营养值
-      const missing: FoodDraft[] = result.drafts.filter((d: FoodDraft) => d.kcal <= 0);
-      if (missing.length > 0) {
-        this.statusText = '正在估算热量…';
-        result.drafts = await VisionService.estimateNutrition(config, result.drafts);
-      }
 
       AppState.pending = new PendingResult(
         prepared.localUri.length > 0 ? prepared.localUri : uri,

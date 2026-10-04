@@ -12,7 +12,7 @@
 import { http } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AiConfig, AiProvider, FoodDraft, FoodSource } from '../model/Types';
-import { draftFromDatabase, estimateGrams } from './FoodMatcher';
+import { estimateGrams } from './FoodMatcher';
 import { getNum, getStr, JsonMap, parseObject } from '../common/JsonUtil';
 
 const DOMAIN = 0x0000;
@@ -35,31 +35,49 @@ export class VisionResult {
   model: string = '';
 }
 
-/** 让模型返回结构化 JSON 的系统提示词 */
-const SYSTEM_PROMPT: string = `你是一位专业的中餐营养师，擅长通过照片估算食物份量与热量。
+/**
+ * 让模型返回结构化 JSON 的系统提示词。
+ *
+ * 营养值全部由模型直接给出，不查内置食物表：
+ * 模型能结合画面判断烹饪方式与份量（比如「红烧」比「清蒸」油多），
+ * 比按食物名查表更贴近照片里的实际情况。代价是数值是估算值，
+ * 所以结果页仍然允许逐条修改。
+ */
+const SYSTEM_PROMPT: string = `你是一位专业的中餐营养师，擅长通过照片估算食物份量与营养。
 请仔细观察照片中的食物，只输出一个 JSON 对象，不要输出任何解释文字、不要用 markdown 代码块包裹。
 JSON 格式严格如下：
-{"foods":[{"name":"食物中文名","amount":"份量描述","grams":估算克重,"confidence":0到100的整数,"note":"判断依据，20字以内"}],"summary":"整张照片的一句话总结"}
+{"foods":[{"name":"食物中文名","amount":"份量描述","grams":估算克重,"kcal":该份量的总热量,"protein":蛋白质克数,"fat":脂肪克数,"carb":碳水克数,"confidence":0到100的整数,"note":"判断依据，20字以内"}],"summary":"整张照片的一句话总结"}
 要求：
 1. name 用最常见的中文食物名，不要带品牌名、不要带形容词，例如「红烧肉」而不是「妈妈做的红烧肉」。
 2. amount 用中文写份量，例如「一碗」「两块」「约150克」。
 3. grams 是你对这份食物克重的整数估算，针对照片中实际可见的份量，不是每100克。
-4. 如果照片里没有食物，foods 返回空数组，summary 说明原因。
-5. 如果画面里有餐具或手，请借助它们推算份量大小。
-6. 最多识别 8 种食物，合并同类项。`;
+4. kcal / protein / fat / carb 都是**照片中这份实际份量**的总量，不是每100克；热量与三大营养素要能对得上。
+5. 估算时把烹饪方式算进去：同样一块肉，油炸/红烧的脂肪明显高于清蒸/水煮。
+6. 如果照片里没有食物，foods 返回空数组，summary 说明原因。
+7. 如果画面里有餐具或手，请借助它们推算份量大小。
+8. 最多识别 8 种食物，合并同类项。`;
 
 /** 供最终解析使用的中间结构 */
 class ParsedFood {
   name: string = '';
   amount: string = '';
   grams: number = 0;
+  kcal: number = 0;
+  protein: number = 0;
+  fat: number = 0;
+  carb: number = 0;
   confidence: number = 0;
   note: string = '';
 
-  constructor(name: string, amount: string, grams: number, confidence: number, note: string) {
+  constructor(name: string, amount: string, grams: number, kcal: number, protein: number,
+    fat: number, carb: number, confidence: number, note: string) {
     this.name = name;
     this.amount = amount;
     this.grams = grams;
+    this.kcal = kcal;
+    this.protein = protein;
+    this.fat = fat;
+    this.carb = carb;
     this.confidence = confidence;
     this.note = note;
   }
@@ -432,6 +450,10 @@ export class VisionService {
         name,
         getStr(f, 'amount', ''),
         getNum(f, 'grams', 0),
+        getNum(f, 'kcal', 0),
+        getNum(f, 'protein', 0),
+        getNum(f, 'fat', 0),
+        getNum(f, 'carb', 0),
         getNum(f, 'confidence', 60),
         getStr(f, 'note', '')
       ));
@@ -451,97 +473,29 @@ export class VisionService {
   // ---------------------------------------------------------------- 结果落地
 
   /**
-   * 把 AI 结果转成草稿：先查表，命中用表内数值，否则沿用 AI 的估算。
+   * 把 AI 结果转成可编辑草稿。
+   *
+   * 热量与三大营养素全部采用模型给的值，不再查内置食物表——
+   * 模型能结合画面判断烹饪方式，比按名字查表更贴近真实情况。
+   * 克重缺失时按份量描述兜底估一个，保证界面有值可改。
    */
   private static toDrafts(parsed: ParsedFood[]): FoodDraft[] {
     const out: FoodDraft[] = [];
     for (const p of parsed) {
-      const hit: FoodDraft | null = draftFromDatabase(p.name, p.amount);
-      if (hit !== null) {
-        hit.confidence = VisionService.mergeConfidence(p.confidence, hit.confidence);
-        hit.note = p.note.length > 0 ? `${hit.note}；AI：${p.note}` : hit.note;
-        out.push(hit);
-        continue;
-      }
-
-      // 表里没有：只能用 AI 的克重与热量估算
       const grams: number = p.grams > 0 ? Math.round(p.grams) : estimateGrams(p.amount, 150);
       out.push(new FoodDraft(
         p.name,
         grams,
-        0, // 热量留空，交给 AI 估算步骤补
-        0,
-        0,
-        0,
+        Math.round(p.kcal),
+        round1(p.protein),
+        round1(p.fat),
+        round1(p.carb),
         VisionService.confidenceLabel(p.confidence),
         FoodSource.AI,
-        p.note.length > 0 ? `食物表中未收录，需 AI 估算热量；AI 判断：${p.note}` : '食物表中未收录，需 AI 估算热量'
+        p.note
       ));
     }
     return out;
-  }
-
-  /**
-   * 对食物表未收录的条目，再问一次模型要营养数值。
-   *
-   * 只在必要时发起第二次请求，避免每次都双倍消耗额度。
-   */
-  static async estimateNutrition(config: AiConfig, drafts: FoodDraft[]): Promise<FoodDraft[]> {
-    const need: FoodDraft[] = drafts.filter((d: FoodDraft) => d.kcal <= 0);
-    if (need.length === 0) {
-      return drafts;
-    }
-
-    const lines: string[] = need.map((d: FoodDraft) => `- ${d.name}，${d.grams} 克`);
-    const prompt: string = `请估算下面这些食物在指定克重下的营养值。
-${lines.join('\n')}
-
-只输出 JSON，不要解释，格式严格如下：
-{"items":[{"name":"食物名","kcal":该克重下的总热量整数,"protein":蛋白质克数,"fat":脂肪克数,"carb":碳水克数}]}
-注意 kcal 是「该克重下的总热量」，不是每 100 克。`;
-
-    let content: string = '';
-    try {
-      content = config.provider === AiProvider.GEMINI
-        ? await VisionService.textGemini(config, prompt)
-        : await VisionService.textOpenAi(config, prompt);
-    } catch (err) {
-      // 第二次请求失败不该让整个流程失败，保留待用户手填
-      hilog.warn(DOMAIN, 'CalorieLite', 'nutrition estimate failed, leave for manual input');
-      return drafts;
-    }
-
-    const map: JsonMap | null = parseObject(VisionService.stripCodeFence(content));
-    if (map === null) {
-      return drafts;
-    }
-    const itemsRaw: Object | undefined = map['items'];
-    if (!Array.isArray(itemsRaw)) {
-      return drafts;
-    }
-
-    const items: Object[] = itemsRaw as Object[];
-    for (const d of drafts) {
-      if (d.kcal > 0) {
-        continue;
-      }
-      for (const el of items) {
-        if (el === null || el === undefined || typeof el !== 'object') {
-          continue;
-        }
-        const it: JsonMap = el as JsonMap;
-        if (getStr(it, 'name', '') !== d.name) {
-          continue;
-        }
-        d.kcal = Math.round(getNum(it, 'kcal', 0));
-        d.protein = Math.round(getNum(it, 'protein', 0) * 10) / 10;
-        d.fat = Math.round(getNum(it, 'fat', 0) * 10) / 10;
-        d.carb = Math.round(getNum(it, 'carb', 0) * 10) / 10;
-        d.source = FoodSource.AI;
-        break;
-      }
-    }
-    return drafts;
   }
 
   /** 纯文本补问：OpenAI 兼容 */
@@ -636,18 +590,6 @@ ${lines.join('\n')}
     return 'low';
   }
 
-  /** 两处置信度取更保守的那个 */
-  private static mergeConfidence(aiScore: number, matchLevel: string): string {
-    const aiLabel: string = VisionService.confidenceLabel(aiScore);
-    const rank: Map<string, number> = new Map<string, number>();
-    rank.set('low', 0);
-    rank.set('medium', 1);
-    rank.set('high', 2);
-    const a: number = rank.get(aiLabel) ?? 0;
-    const b: number = rank.get(matchLevel) ?? 0;
-    return a < b ? aiLabel : matchLevel;
-  }
-
   private static trimSlash(url: string): string {
     let s: string = url.trim();
     while (s.endsWith('/')) {
@@ -655,4 +597,9 @@ ${lines.join('\n')}
     }
     return s;
   }
+}
+
+/** 保留一位小数，营养值不需要更高精度 */
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
 }

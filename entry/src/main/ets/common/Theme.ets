@@ -62,11 +62,21 @@ export const NAV_MARGIN: number = 18;
  */
 export const NAV_RESERVE: number = NAV_HEIGHT + NAV_MARGIN * 2 + 6;
 
-/** 动效时长（毫秒） */
+/** 动效时长（毫秒）。任何状态变化都要有过渡，时长统一在这里取 */
 export const DUR_FAST: number = 180;
 export const DUR_NORMAL: number = 260;
+export const DUR_SLOW: number = 420;
 /** 弹性曲线，用于导航指示器的滑动 */
 export const CURVE_SPRING: ICurve = curves.springMotion(0.42, 0.9);
+/** 更「弹」一点的曲线，用于页面切换、展开收起这类需要存在感的地方 */
+export const CURVE_BOUNCE: ICurve = curves.springMotion(0.34, 0.72);
+/** 数字滚动用的曲线：先快后慢，像是「滚到位」 */
+export const CURVE_COUNT: ICurve = curves.responsiveSpringMotion(0.5, 0.86);
+
+/** 按压反馈：按下时缩到的比例 */
+export const PRESS_SCALE: number = 0.9;
+/** 按压/高亮光效的底色 */
+export const COLOR_PRESS_GLOW: string = '#26FF7A45';
 
 /**
  * 顶部柔光渐变的配色。

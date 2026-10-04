@@ -53,6 +53,14 @@ export class AppState {
    */
   static bottomInset: number = 0;
 
+  /**
+   * 个人档案是否被改过。
+   *
+   * 「我的」页改完年龄/性别/活动量后，首页的热量预算要跟着变。
+   * 页面之间没有直接引用关系，用这个标记让首页在下次显示时重算。
+   */
+  static profileDirty: boolean = false;
+
   static clearPending(): void {
     AppState.pending = null;
   }
