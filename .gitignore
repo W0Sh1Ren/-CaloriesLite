@@ -23,3 +23,7 @@
 
 # DevEco Studio 的 AI 助手插件自动创建的仓库
 /.codegenie
+
+# 真机调试时抓的截图，不入库
+/tools/*.jpeg
+/tools/*.png
