@@ -1,4 +1,4 @@
-/node_modules
+﻿/node_modules
 /oh_modules
 /local.properties
 /.idea
@@ -11,23 +11,25 @@
 **/.test
 /.appanalyzer
 
-# ---- 本地构建支撑（不进版本库�?---
-# tools/local  是从 DevEco Studio 复制进来的工具链副本（约 410 MB）�?# 复制它是因为受限环境下不允许创建指向工作区之外的链接�?# 在新机器上执�?tools\prepare-toolchain.ps1 重新生成即可�?/tools/local
+# ---- local build support (not committed) ----
+# tools/local is a copy of the DevEco Studio toolchain (~410 MB).
+# It lives inside the workspace because the sandbox forbids links
+# pointing outside it. Regenerate with tools\prepare-toolchain.ps1.
+/tools/local
 /tools/proj
 /tools/.hvigorhome
 /tools/.npmcache
 /tools/build.log
 
-# 构建产物副本
+# build artifacts (binary; rebuild on demand)
 /build-output
+/hap
 
-# DevEco Studio �� AI ���ֲ���Զ������Ĳֿ�
+# created by the DevEco AI assistant plugin
 /.codegenie
 
-# �������ʱץ�Ľ�ͼ�������
+# debug screenshots
 /tools/*.jpeg
 /tools/*.png
-
-# ���Խ�ͼ
 /docs/*.jpeg
 /docs/*.png
