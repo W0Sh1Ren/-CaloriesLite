@@ -39,12 +39,81 @@ export struct ProfileTab {
   /** 计算用的体重取值（可能是体重记录里的最新值，未必等于档案里的值） */
   @State effectiveWeight: number = 0;
 
+  // ---- 底部选择面板 ----
+  /** 是否展示面板 */
+  @State sheetShown: boolean = false;
+  /** 当前在编辑哪一项：age / height / weight */
+  @State editing: string = 'age';
+  /** 滚轮的候选项：年龄与身高用 */
+  @State pickerOptions: string[] = [];
+  /** 滚轮选中的下标 */
+  @State pickerIndex: number = 0;
+  /** 体重输入框的值 */
+  @State weightText: string = '';
+
   aboutToAppear(): void {
     this.reload();
   }
 
   onDidUpdate(): void {
     this.reload();
+  }
+
+  /** 面板标题 */
+  private sheetTitle(): string {
+    if (this.editing === 'age') {
+      return '年龄';
+    }
+    return this.editing === 'height' ? '身高' : '体重';
+  }
+
+  /** 打开选择面板，并按当前值定位滚轮 */
+  private openPicker(which: string): void {
+    this.editing = which;
+    if (which === 'weight') {
+      // 体重用输入框：0.1 公斤的精度用滚轮太难拨
+      this.weightText = `${this.profile.weightKg}`;
+    } else {
+      const from: number = which === 'age' ? 10 : 100;
+      const to: number = which === 'age' ? 120 : 250;
+      const cur: number = which === 'age' ? this.profile.age : this.profile.heightCm;
+      const opts: string[] = [];
+      for (let v = from; v <= to; v++) {
+        opts.push(`${v}`);
+      }
+      this.pickerOptions = opts;
+      const idx: number = cur - from;
+      this.pickerIndex = idx >= 0 && idx < opts.length ? idx : 0;
+    }
+    this.sheetShown = true;
+  }
+
+  /** 确认写入 */
+  private confirmPicker(): void {
+    const which: string = this.editing;
+    if (which === 'weight') {
+      const v: number = Number.parseFloat(this.weightText);
+      if (Number.isNaN(v) || v < 20 || v > 400) {
+        promptAction.showToast({ message: '请输入 20-400 之间的体重' });
+        return;
+      }
+      const rounded: number = Math.round(v * 10) / 10;
+      this.apply((p: UserProfile) => {
+        p.weightKg = rounded;
+      });
+    } else if (this.pickerOptions.length > 0) {
+      const chosen: number = Number.parseInt(this.pickerOptions[this.pickerIndex]);
+      if (which === 'age') {
+        this.apply((p: UserProfile) => {
+          p.age = chosen;
+        });
+      } else {
+        this.apply((p: UserProfile) => {
+          p.heightCm = chosen;
+        });
+      }
+    }
+    this.sheetShown = false;
   }
 
   private reload(): void {
@@ -114,6 +183,81 @@ export struct ProfileTab {
     .backgroundColor(COLOR_BG)
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
+    // 底部半模态面板：改年龄/身高用滚轮，改体重用带小数点的键盘
+    .bindSheet($$this.sheetShown, this.valueSheet(), {
+      height: SheetSize.FIT_CONTENT,
+      dragBar: true,
+      backgroundColor: COLOR_CARD,
+      onDisappear: () => {
+        this.sheetShown = false;
+      }
+    })
+  }
+
+  /** 数值选择面板 */
+  @Builder
+  valueSheet() {
+    Column({ space: 12 }) {
+      Row() {
+        Button({ type: ButtonType.Capsule }) {
+          Text('取消').fontSize(14).fontColor(COLOR_TEXT_SUB)
+        }
+        .height(34)
+        .backgroundColor(COLOR_BG)
+        .onClick(() => {
+          this.sheetShown = false;
+        })
+
+        Text(this.sheetTitle())
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_TEXT)
+          .layoutWeight(1)
+          .textAlign(TextAlign.Center)
+
+        Button({ type: ButtonType.Capsule }) {
+          Text('确定').fontSize(14).fontColor(Color.White)
+        }
+        .height(34)
+        .backgroundColor(COLOR_PRIMARY)
+        .onClick(() => {
+          this.confirmPicker();
+        })
+      }
+      .width('100%')
+
+      if (this.editing === 'weight') {
+        // 体重：直接调起数字键盘，允许一位小数
+        TextInput({ text: this.weightText, placeholder: '输入体重' })
+          .type(InputType.NUMBER_DECIMAL)
+          .fontSize(24)
+          .fontWeight(FontWeight.Medium)
+          .textAlign(TextAlign.Center)
+          .height(64)
+          .width('100%')
+          .backgroundColor(COLOR_BG)
+          .borderRadius(12)
+          .onChange((v: string) => {
+            this.weightText = v;
+          })
+
+        Text('公斤，可精确到 0.1')
+          .fontSize(11)
+          .fontColor(COLOR_TEXT_SUB)
+      } else {
+        TextPicker({ range: this.pickerOptions, selected: this.pickerIndex })
+          .width('100%')
+          .height(180)
+          .selectedTextStyle({ color: COLOR_PRIMARY, font: { size: 20, weight: FontWeight.Medium } })
+          .onChange((value: string | string[], index: number | number[]) => {
+            this.pickerIndex = typeof index === 'number' ? index : index[0];
+          })
+      }
+
+      Row().height(8)
+    }
+    .width('100%')
+    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
   }
 
   @Builder
@@ -210,35 +354,17 @@ export struct ProfileTab {
       }
       .width('100%')
 
-      // 数值项
+      // 数值项：点击弹出底部选择面板
       this.numRow('年龄', () => this.profile.age, '岁', () => {
-        this.apply((p: UserProfile) => {
-          p.age = Math.max(10, p.age - 1);
-        });
-      }, () => {
-        this.apply((p: UserProfile) => {
-          p.age = Math.min(120, p.age + 1);
-        });
+        this.openPicker('age');
       })
 
       this.numRow('身高', () => this.profile.heightCm, '厘米', () => {
-        this.apply((p: UserProfile) => {
-          p.heightCm = Math.max(100, p.heightCm - 1);
-        });
-      }, () => {
-        this.apply((p: UserProfile) => {
-          p.heightCm = Math.min(250, p.heightCm + 1);
-        });
+        this.openPicker('height');
       })
 
       this.numRow('体重', () => this.profile.weightKg, '公斤', () => {
-        this.apply((p: UserProfile) => {
-          p.weightKg = Math.max(25, Math.round((p.weightKg - 0.5) * 10) / 10);
-        });
-      }, () => {
-        this.apply((p: UserProfile) => {
-          p.weightKg = Math.min(300, Math.round((p.weightKg + 0.5) * 10) / 10);
-        });
+        this.openPicker('weight');
       })
 
       Divider().color(COLOR_DIVIDER)
@@ -328,43 +454,44 @@ export struct ProfileTab {
   }
 
   /**
-   * 一行「减 / 数值 / 加」的数值调节器。
+   * 一行数值项：点击数值弹出底部选择面板。
+   *
+   * 去掉了原来的「−」「+」小按钮——每点一次只挪一格，改 10 岁要点 10 次，
+   * 而且两个按钮挤在行里让整行显得零碎。改成点数值直接调起
+   * 底部半模态面板，年龄/身高用滚轮，体重用带小数点的键盘。
    *
    * value 用取值函数而不是直接传值：@Builder 的参数在容器构建时求值一次，
-   * 之后状态变化不会重新求值，传值会表现为「点了加减，数字不动」。
-   * 传函数则在 build 内部实时读取，改完立刻反映。
+   * 之后状态变化不会重新求值，传值会表现为「改完数字不动」。
    */
   @Builder
-  numRow(label: string, value: () => number, unit: string,
-    onMinus: () => void, onPlus: () => void) {
+  numRow(label: string, value: () => number, unit: string, onTap: () => void) {
     Row({ space: 8 }) {
       Text(label)
         .fontSize(14)
         .fontColor(COLOR_TEXT_SUB)
         .width(56)
 
-      Button({ type: ButtonType.Circle }) {
-        Text('−').fontSize(18).fontColor(COLOR_TEXT)
+      Blank()
+
+      // 只有数值本身可点，热区抬到 40vp 保证好按
+      Row({ space: 4 }) {
+        Text(`${value()}`)
+          .fontSize(17)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_PRIMARY)
+        Text(unit)
+          .fontSize(12)
+          .fontColor(COLOR_TEXT_SUB)
+        Text('›')
+          .fontSize(14)
+          .fontColor(COLOR_TEXT_SUB)
+          .margin({ left: 2 })
       }
-      .width(32).height(32).backgroundColor(COLOR_BG)
-      .onClick(onMinus)
-
-      Text(`${value()}`)
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
-        .textAlign(TextAlign.Center)
-        .layoutWeight(1)
-
-      Text(unit)
-        .fontSize(12)
-        .fontColor(COLOR_TEXT_SUB)
-
-      Button({ type: ButtonType.Circle }) {
-        Text('+').fontSize(18).fontColor(COLOR_TEXT)
-      }
-      .width(32).height(32).backgroundColor(COLOR_BG)
-      .onClick(onPlus)
+      .height(40)
+      .padding({ left: 12, right: 6 })
+      .backgroundColor(COLOR_BG)
+      .borderRadius(10)
+      .onClick(onTap)
     }
     .width('100%')
   }

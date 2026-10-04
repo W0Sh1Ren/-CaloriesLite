@@ -16,7 +16,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { MealType, FoodRecord, ExerciseRecord } from '../model/Types';
-import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
+import { MEAL_ORDER, mealTypeLabel, macroTargetFor } from '../model/Enums';
 import { friendlyDate, todayKey, shiftDay, hourOf } from '../common/DateUtil';
 import { DailyService, HomeData } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
@@ -98,12 +98,26 @@ struct Index {
     this.refreshTick++;
   }
   /**
+   * 全局数据版本号。
+   *
+   * 任何页面写入记录后调 AppState.notifyDataChanged() 会改这个值，
+   * 这里通过 @Watch 收到通知并重读当日数据。
+   * 相比只靠 onPageShow，这条链路不依赖页面栈何时回调，更可靠。
+   */
+  @StorageLink('dataStamp') @Watch('onDataStamp') dataStamp: number = 0;
+
+  /**
    * refreshTick 变化时重读当日数据。
    *
    * 注意 dayKey 也要在这里重新取一次：识别可能跨过零点，
    * 或者页面在后台待了很久，回来时应显示当天而不是离开时那一天。
    */
   onRefreshTick(): void {
+    this.reload();
+  }
+
+  /** 全局数据变更通知 */
+  onDataStamp(): void {
     this.reload();
   }
 
@@ -197,7 +211,10 @@ struct Index {
 
   private reload(): void {
     this.data = DailyService.homeData(this.dayKey);
+    AppState.mirrorToday(this.data.summary);
     this.persistImages();
+    // 让其它页面（记录页等）也收到变更通知
+    this.refreshTick++;
   }
 
   /** 切换视图：改下标并同时刷新数据 */
@@ -354,13 +371,18 @@ struct Index {
           .width('100%')
           .padding({ left: 4, right: 4 })
 
-          if (this.data.summary.recordCount > 0) {
-            MacroBar({
-              protein: this.data.summary.protein,
-              fat: this.data.summary.fat,
-              carb: this.data.summary.carb
-            })
-          }
+          // 营养素卡片常显：没有记录时也要能看到推荐量，
+          // 否则用户不知道今天该吃多少
+          MacroBar({
+            protein: this.data.summary.protein,
+            fat: this.data.summary.fat,
+            carb: this.data.summary.carb,
+            // 推荐克数按当日实际预算推算，不写死数字：
+            // 写死会在换人/换目标后与顶部预算自相矛盾
+            carbTarget: macroTargetFor(this.data.summary.budget).carb,
+            proteinTarget: macroTargetFor(this.data.summary.budget).protein,
+            fatTarget: macroTargetFor(this.data.summary.budget).fat
+          })
 
           ForEach(MEAL_ORDER, (meal: MealType) => {
             this.mealSection(meal)

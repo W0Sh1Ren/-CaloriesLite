@@ -20,6 +20,22 @@ export struct WeightChart {
 
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private ctx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+  /** Canvas 是否已经完成布局。未就绪时 draw 拿不到真实宽高 */
+  private canvasReady: boolean = false;
+
+  /**
+   * 数据变化时重绘。
+   *
+   * 这里必须显式重绘：Canvas 的内容不是声明式的，onReady 只在
+   * 组件首次布局完成时触发一次。少了这一步就会出现
+   * 「记录了体重、『1 次记录』也变了，但图里还写着还没有体重记录」，
+   * 因为 records 更新后根本没人再调用 draw。
+   */
+  onDidUpdate(): void {
+    if (this.canvasReady) {
+      this.draw(this.ctx.width, this.ctx.height);
+    }
+  }
 
   /** 按当前数据重绘 */
   private draw(width: number, height: number): void {
@@ -139,6 +155,7 @@ export struct WeightChart {
         .height(this.chartHeight)
         .onReady(() => {
           // onReady 时才能拿到真实绘制尺寸
+          this.canvasReady = true;
           this.draw(this.ctx.width, this.ctx.height);
         })
     }

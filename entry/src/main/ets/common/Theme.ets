@@ -16,7 +16,7 @@ export const COLOR_WARN: string = '#E5533D';
 export const COLOR_OK: string = '#2FA36B';
 
 /** 页面背景 */
-export const COLOR_BG: string = '#F6F7F9';
+export const COLOR_BG: string = '#F5F8F6';
 /** 卡片背景 */
 export const COLOR_CARD: string = '#FFFFFF';
 /** 主文字 */
@@ -27,9 +27,12 @@ export const COLOR_TEXT_SUB: string = '#8A8F99';
 export const COLOR_DIVIDER: string = '#EEF0F3';
 
 /** 三大营养素配色 */
-export const COLOR_PROTEIN: string = '#4C8DFF';
-export const COLOR_FAT: string = '#FFB020';
-export const COLOR_CARB: string = '#2FA36B';
+/** 碳水：浅蓝 */
+export const COLOR_CARB: string = '#4C8DFF';
+/** 蛋白质：浅绿（与主色同系） */
+export const COLOR_PROTEIN: string = '#22C55E';
+/** 脂肪：淡黄 */
+export const COLOR_FAT: string = '#F5C142';
 
 /** 常规间距 */
 export const GAP: number = 12;

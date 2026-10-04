@@ -12,6 +12,7 @@ import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { todayKey } from '../common/DateUtil';
 import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
+import { DailyService } from '../service/DailyService';
 import { AppState, PendingResult } from '../common/AppState';
 import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
 
@@ -178,6 +179,10 @@ struct ResultConfirm {
     FoodRepo.addMany(records);
     AppState.clearPending();
     AppState.needRefreshHome = true;
+    // 显式通知全局：首页/记录页绑定的汇总值当帧就会更新，
+    // 不用等页面生命周期回调（这正是「必须退出重进才显示」的根因）
+    AppState.mirrorToday(DailyService.summaryOf(day));
+    AppState.notifyDataChanged();
     promptAction.showToast({ message: `已记录 ${records.length} 项，共 ${this.totalKcal()} 千卡` });
     router.back();
   }

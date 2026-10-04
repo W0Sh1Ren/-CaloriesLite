@@ -218,3 +218,46 @@ export const PRESETS: ProviderPreset[] = [
   new ProviderPreset(AiProvider.OPENAI_COMPATIBLE, 'DeepSeek', AI_BASE_URL,
     AI_MODEL, '国内直连，识别一张照片约 0.4 分钱（空闲时段减半）')
 ];
+
+/**
+ * 三大营养素的推荐热量占比：碳水 50%、蛋白质 30%、脂肪 20%。
+ *
+ * 用一个明确的配比而不是「相对比例」，是为了让进度条有确定的基准——
+ * 否则只能拿三项里的最大值当分母，那种条形看不出「离推荐量还差多少」。
+ */
+export const MACRO_CARB_RATIO: number = 0.50;
+export const MACRO_PROTEIN_RATIO: number = 0.30;
+export const MACRO_FAT_RATIO: number = 0.20;
+
+/** 每克营养素的热量（千卡） */
+export const KCAL_PER_G_CARB: number = 4;
+export const KCAL_PER_G_PROTEIN: number = 4;
+export const KCAL_PER_G_FAT: number = 9;
+
+/** 按每日总消耗推算三大营养素的推荐克数 */
+export class MacroTarget {
+  carb: number = 0;
+  protein: number = 0;
+  fat: number = 0;
+
+  constructor(carb: number, protein: number, fat: number) {
+    this.carb = carb;
+    this.protein = protein;
+    this.fat = fat;
+  }
+}
+
+/**
+ * 由每日总消耗算出推荐克数。
+ *
+ * 用实际预算而不是写死 2295：换个人、换个目标，预算就变了，
+ * 写死会让用户看到自相矛盾的两个数（顶部预算 2301、营养素却按 2295 算）。
+ */
+export function macroTargetFor(dailyBudget: number): MacroTarget {
+  const b: number = dailyBudget > 0 ? dailyBudget : 0;
+  return new MacroTarget(
+    Math.round(b * MACRO_CARB_RATIO / KCAL_PER_G_CARB),
+    Math.round(b * MACRO_PROTEIN_RATIO / KCAL_PER_G_PROTEIN),
+    Math.round(b * MACRO_FAT_RATIO / KCAL_PER_G_FAT)
+  );
+}

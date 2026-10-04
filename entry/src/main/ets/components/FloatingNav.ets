@@ -16,7 +16,7 @@
 import { uiMaterial } from '@kit.ArkUI';
 import {
   CARD_SHADOW, COLOR_PRESS_GLOW, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT_SUB,
-  CURVE_SPRING, DUR_FAST, NAV_HEIGHT, PRESS_SCALE
+  CURVE_SPRING, DUR_FAST, DUR_NORMAL, NAV_HEIGHT, PRESS_SCALE
 } from '../common/Theme';
 import { immersiveSupported, systemMaterial } from '../common/Material';
 
@@ -72,32 +72,23 @@ export struct FloatingNav {
   /**
    * 不支持沉浸材质时的兜底底色。
    *
-   * 支持时整条栏交给 systemMaterial 渲染，这里什么都不画——
-   * 自绘底色会盖住系统材质的效果。
+   * 支持材质时整条栏交给 systemMaterial 渲染，这里什么都不画——
+   * 自绘底色或另加模糊都会盖住系统材质的效果。
    */
   @Builder
   fallbackBackdrop() {
-    Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#D9FFFFFF')
-      Column()
-        .width('100%')
-        .height('100%')
-        .linearGradient({
-          angle: 180,
-          colors: [['#66FFFFFF', 0.0], ['#1AFFFFFF', 0.45], ['#00FFFFFF', 1.0]]
-        })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK, {
-      colorMode: ThemeColorMode.LIGHT,
-      adaptiveColor: AdaptiveColor.DEFAULT,
-      scale: 1.0
-    })
-    .hitTestBehavior(HitTestMode.None)
+    Column()
+      .width('100%')
+      .height('100%')
+      // BACKGROUND_ULTRA_THICK 是系统提供的最厚一档背景模糊，玻璃感最强
+      // （枚举里没有 ULTRA_THICK，只有 Thick 和 BACKGROUND_ULTRA_THICK）
+      .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK, {
+        colorMode: ThemeColorMode.LIGHT,
+        adaptiveColor: AdaptiveColor.DEFAULT,
+        scale: 1.0
+      })
+      .backgroundColor('#26FFFFFF')
+      .hitTestBehavior(HitTestMode.None)
   }
 
   /** 手指按压处的柔光 */
@@ -126,15 +117,35 @@ export struct FloatingNav {
       }
 
       Stack({ alignContent: Alignment.Start }) {
-        // 高亮胶囊：弹簧曲线跟随，滑动而不是跳变
-        Row()
-          .width(this.cellWidth() > 0 ? this.cellWidth() - 16 : 0)
-          .height(NAV_HEIGHT - 14)
-          .backgroundColor(COLOR_PRIMARY_SOFT)
-          .borderRadius((NAV_HEIGHT - 14) / 2)
-          .margin({ left: this.cellWidth() * this.pillIndex() + 8, top: 7 })
-          .animation({ curve: CURVE_SPRING })
-          .hitTestBehavior(HitTestMode.None)
+        /*
+         * 高亮胶囊。
+         *
+         * 用「占满整宽的容器 + translate 位移」定位，而不是
+         * 「固定宽度 + 左外边距」：后者要手算左偏移，浮点取整会带来
+         * 一两像素的偏心，视觉上就是选中气泡不在格子正中间。
+         * 这里每个子项都套一层等宽的 Column，胶囊占满同一格再整体平移，
+         * 与文字用的是同一套等分布局，几何上必然对齐。
+         */
+        Row() {
+          ForEach(this.items, (item: NavItem, index: number) => {
+            Column() {
+              Row()
+                .width('100%')
+                .height(NAV_HEIGHT - 14)
+                .backgroundColor(COLOR_PRIMARY_SOFT)
+                .borderRadius((NAV_HEIGHT - 14) / 2)
+                .padding({ left: 8, right: 8 })
+            }
+            .layoutWeight(1)
+            .height(NAV_HEIGHT)
+            .justifyContent(FlexAlign.Center)
+            .opacity(this.pillIndex() === index ? 1 : 0)
+            .animation({ curve: CURVE_SPRING, duration: DUR_NORMAL })
+          }, (item: NavItem, index: number) => `pill-${index}`)
+        }
+        .width('100%')
+        .height(NAV_HEIGHT)
+        .hitTestBehavior(HitTestMode.None)
 
         // 按压柔光垫在胶囊与文字之间
         this.pressGlow()
@@ -179,17 +190,21 @@ export struct FloatingNav {
     }
     .width('100%')
     .height(NAV_HEIGHT)
+    .clip(true)
+    .borderRadius(NAV_HEIGHT / 2)
+    // 1px 白色高光描边，玻璃的「边」
+    .border({ width: 1, color: '#99FFFFFF' })
     // 系统沉浸光感材质：模糊、亮度、描边、投影都由系统按设备算力决定，
     // 并带光感交互反馈——按下时材质上会浮起一层光。
     // interactive 打开交互动效变形；lightEffect 指定反馈光的颜色。
+    // 注意不要在这里再叠 backgroundBlurStyle：两者会互相盖住，
+    // 不支持材质的设备由内部条件渲染的 fallbackBackdrop() 顶上。
     .systemMaterial(systemMaterial(
       uiMaterial.ImmersiveStyle.THICK,
       '#2EFFFFFF',
       true,
       '#6622C55E'
     ))
-    .clip(true)
-    .borderRadius(NAV_HEIGHT / 2)
     // 整条栏统一接管手势：按下即出光效，移动即跟手，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {

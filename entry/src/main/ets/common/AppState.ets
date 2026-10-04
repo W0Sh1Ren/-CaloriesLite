@@ -7,7 +7,7 @@
  * 另外这里存一份窗口安全区尺寸：EntryAbility 把窗口设为全屏布局后，
  * 状态栏和底部手势区会盖在内容上，各页面需要据此自行避让。
  */
-import { FoodDraft, MealType } from '../model/Types';
+import { DailySummary, FoodDraft, MealType } from '../model/Types';
 
 /** 拍照识别页 → 首页 的待确认结果 */
 export class PendingResult {
@@ -49,6 +49,33 @@ export class AppState {
 
   /** 识别页选中的餐次，跳转前设置 */
   static targetMeal: MealType = MealType.LUNCH;
+
+  /**
+   * 把当日数据镜像到 AppStorage，供各页面响应式读取。
+   *
+   * 为什么不只靠 @Watch(refreshTick) / onPageShow：
+   * 那些回调的触发时机依赖页面栈实现，实测出现过「识别完回到首页，
+   * 热量和营养素还是旧值，退出重进才更新」。AppStorage 是全局的，
+   * 写入方一 set，所有 @StorageLink 绑定的界面当帧就会重算，
+   * 不依赖任何页面生命周期。
+   *
+   * 这里只镜像「汇总数字」，记录明细仍由各页自己查存储——
+   * 把整个列表塞进全局状态会带来不必要的耦合。
+   */
+  static mirrorToday(summary: DailySummary): void {
+    AppStorage.setOrCreate('todayIntake', summary.intake);
+    AppStorage.setOrCreate('todayProtein', summary.protein);
+    AppStorage.setOrCreate('todayFat', summary.fat);
+    AppStorage.setOrCreate('todayCarb', summary.carb);
+    AppStorage.setOrCreate('todayBudget', summary.budget);
+    AppStorage.setOrCreate('todayDeficit', summary.deficit);
+  }
+
+  /** 写入方在数据变动后调用，强制所有绑定界面重算 */
+  static notifyDataChanged(): void {
+    const stamp: number = Date.now();
+    AppStorage.setOrCreate('dataStamp', stamp);
+  }
 
   /**
    * 顶部安全区高度（vp）。

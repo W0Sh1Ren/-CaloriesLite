@@ -13,6 +13,7 @@ import { todayKey } from '../common/DateUtil';
 import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
 import { AppState } from '../common/AppState';
+import { DailyService } from '../service/DailyService';
 import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
 
 @Entry
@@ -72,6 +73,9 @@ struct ManualAdd {
       FoodSource.DATABASE, '', '手动从食物表添加'
     ));
     AppState.needRefreshHome = true;
+    // 显式推送到全局，首页与记录页当帧刷新
+    AppState.mirrorToday(DailyService.summaryOf(todayKey()));
+    AppState.notifyDataChanged();
     promptAction.showToast({ message: `已记录 ${draft.name} ${draft.kcal} 千卡` });
     router.back();
   }

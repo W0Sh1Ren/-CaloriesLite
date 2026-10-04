@@ -115,7 +115,12 @@ export struct HistoryTab {
     }
     BodyRepo.upsert(new WeightRecord(this.selectedDay, Math.round(v * 10) / 10, Date.now()));
     this.weightInput = '';
-    this.weights = BodyRepo.recent(60);
+    // 换新数组而不是原地改：@Prop 只比较引用，
+    // 引用不变时子组件不会重建，Canvas 也就不会重绘
+    this.weights = BodyRepo.recent(60).slice();
+    // 体重会影响预算（TDEE 按体重算），推给全局让首页一起更新
+    AppState.mirrorToday(DailyService.summaryOf(this.selectedDay));
+    AppState.notifyDataChanged();
     promptAction.showToast({ message: '已记录体重' });
   }
 
