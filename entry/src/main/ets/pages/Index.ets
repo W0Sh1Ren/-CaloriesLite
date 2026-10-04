@@ -106,11 +106,18 @@ struct Index {
   aboutToAppear(): void {
     this.syncInsets();
     // 注册为「当日数据变更」的接收方：别的页面写入记录后会直接回调这里，
-    // 不需要等页面生命周期，这正是「必须退出重进才更新」的解法
+    // 不需要等页面生命周期，这正是「必须退出重进才更新」的解法。
+    //
+    // 这个回调同时也是「模态面板开关」的同步点：ProfileTab 打开底部面板时
+    // 会置 AppState.modalOpen 再调 notifyDataChanged()，
+    // 这里必须把它同步到本地 @State，导航栏才会隐藏。
+    // （onRefreshTick 走的是 refreshTick 那条线，通知不到这里。）
     AppState.setDataListener(() => {
+      this.modalOpen = AppState.modalOpen;
       this.dayKey = todayKey();
       this.reload();
     });
+    this.modalOpen = AppState.modalOpen;
     this.reload();
   }
 
