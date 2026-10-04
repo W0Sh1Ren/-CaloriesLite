@@ -11,6 +11,7 @@ import { calcBmi, calcBmr, calcDailyBudget, calcTdee, bmiLabel, estimateDaysToGo
 import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { AppState } from '../common/AppState';
+import { topReserve } from '../components/GlassTopBar';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
   COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, NAV_RESERVE, PAGE_PAD, RADIUS
@@ -217,11 +218,13 @@ export struct ProfileTab {
           Row().height(AppState.bottomInset + NAV_RESERVE + 40)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
+        // 顶部留出毛玻璃顶栏的高度
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
       }
       .width('100%')
       .height('100%')
-      .backgroundColor(COLOR_BG)
+      // 背景交给外层 Stack 的柔光层，这里透明让毛玻璃顶栏透出内容
+      .backgroundColor(Color.Transparent)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
 

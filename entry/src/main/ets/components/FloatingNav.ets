@@ -13,7 +13,7 @@
  * 注意：底部安全区（手势条）会吃掉点击，整条栏必须由父组件抬到 bottomInset 之上。
  */
 import {
-  COLOR_NAV_IDLE, COLOR_PRIMARY, DUR_FAST, NAV_HEIGHT, NAV_RADIUS
+  COLOR_NAV_ACTIVE, COLOR_NAV_IDLE, DUR_FAST, NAV_HEIGHT, NAV_RADIUS
 } from '../common/Theme';
 
 /** 一个导航项 */
@@ -51,13 +51,13 @@ export struct FloatingNav {
   }
 
   /**
-   * 一项的颜色：选中是品牌绿，未选中是中性灰。
+   * 一项的颜色：选中是明亮的绿，未选中是中性灰。
    *
    * 图标与文字共用同一个颜色，所以选中态完全由颜色表达，
    * 不需要任何背景块。
    */
   private itemColor(index: number): string {
-    return index === this.activeIndex ? COLOR_PRIMARY : COLOR_NAV_IDLE;
+    return index === this.activeIndex ? COLOR_NAV_ACTIVE : COLOR_NAV_IDLE;
   }
 
   /** 把 x 坐标换算成项下标 */
@@ -152,8 +152,21 @@ export struct FloatingNav {
     .clip(true)
     // 大圆角：正好是高度的一半，形成完整胶囊
     .borderRadius(NAV_RADIUS)
-    // 玻璃高光边框：极细的半透明白，模拟玻璃边缘的折射
-    .border({ width: 1, color: '#99FFFFFF' })
+    // 底色要非常通透，观感主要靠下面的模糊和描边撑起来。
+    // 25% 白：再高就变成一块灰色实心板，液态玻璃的通透感全无。
+    .backgroundColor('#40FFFFFF')
+    // 最厚一档背景模糊，把透上来的内容磨成砂面。
+    // 注意：backgroundBlurStyle 没有 blurRadius 参数
+    //（那是前景 blur() 的入参），模糊强度只能选 BlurStyle 档位。
+    .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK, {
+      colorMode: ThemeColorMode.LIGHT,
+      adaptiveColor: AdaptiveColor.DEFAULT,
+      scale: 1.0
+    })
+    // 玻璃高光边缘：这圈白边是「玻璃感」的灵魂，比底色更重要
+    .border({ width: 1.5, color: '#CCFFFFFF' })
+    // 内部白色光晕：让边缘有一层柔和的内发光，模拟光线在玻璃里的折射
+    .shadow({ radius: 4, color: 'rgba(255,255,255,0.5)', offsetX: 0, offsetY: 0 })
     // 整条栏统一接管手势：按下即反馈，移动即跟随，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {

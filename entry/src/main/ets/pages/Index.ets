@@ -30,6 +30,7 @@ import {
 import { CalorieRing } from '../components/CalorieRing';
 import { MacroBar } from '../components/MacroBar';
 import { RollingNumber } from '../components/RollingNumber';
+import { GlassTopBar, topReserve } from '../components/GlassTopBar';
 import { RecordRow } from '../components/RecordRow';
 import { FloatingNav, NavItem } from '../components/FloatingNav';
 import { HistoryTab } from './HistoryTab';
@@ -169,14 +170,30 @@ struct Index {
   /** 按当前下标渲染视图，并播放从切换方向滑入的入场动画 */
   @Builder
   contentView() {
-    Column() {
-      if (this.activeTab === 0) {
-        this.todayView()
-      } else if (this.activeTab === 1) {
-        HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
-      } else {
-        ProfileTab({ refreshTick: this.refreshTick })
+    Stack({ alignContent: Alignment.Top }) {
+      // 底层：当前页内容。各页自己用 topReserve() 留出顶栏高度，
+      // 这样内容向上滚动时会从顶栏下面穿过去，被顶栏的模糊吃掉。
+      Column() {
+        if (this.activeTab === 0) {
+          this.todayView()
+        } else if (this.activeTab === 1) {
+          HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
+        } else {
+          ProfileTab({ refreshTick: this.refreshTick })
+        }
       }
+      .width('100%')
+      .height('100%')
+
+      // 顶层：毛玻璃顶栏。zIndex(1) 保证盖在内容之上。
+      GlassTopBar({
+        title: this.topTitle(),
+        subtitle: this.topSubtitle(),
+        backGlyph: '',
+        rightWidth: 0
+      })
+        .zIndex(1)
+        .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')
@@ -189,6 +206,28 @@ struct Index {
       TransitionEffect.OPACITY
         .animation({ duration: 120, curve: Curve.EaseIn })
     ))
+  }
+
+  /** 顶栏主标题 */
+  private topTitle(): string {
+    if (this.activeTab === 1) {
+      return '记录';
+    }
+    if (this.activeTab === 2) {
+      return '我的';
+    }
+    return this.dayKey === todayKey() ? '今天' : friendlyDate(this.dayKey);
+  }
+
+  /** 顶栏副标题 */
+  private topSubtitle(): string {
+    if (this.activeTab === 1) {
+      return '查看历史与体重趋势';
+    }
+    if (this.activeTab === 2) {
+      return '个人情况与 AI 配置';
+    }
+    return this.dayKey === todayKey() ? friendlyDate(this.dayKey) : '查看历史';
   }
 
   /**
@@ -380,12 +419,14 @@ struct Index {
       // 之前试过让三个视图常驻 Stack、用 opacity 切换，结果未激活视图
       // 虽然透明但仍参与命中测试，把下面的按钮点击全吃掉了
       // （实测拍照按钮和餐次折叠都点不动）。条件渲染没有这个问题。
+      //
+      // 这里不再加 topInset 内边距：毛玻璃顶栏是覆盖在内容之上的，
+      // 由顶栏自己避让状态栏，内容则用 topReserve() 在滚动区内部留白。
       Column() {
         this.contentView()
       }
       .width('100%')
       .height('100%')
-      .padding({ top: this.topInset })
       .clip(true)
 
       // ---------------------------------------------------- 3. 悬浮导航栏
@@ -408,11 +449,12 @@ struct Index {
             this.navWidth = Number.parseFloat(`${newValue.width}`);
           })
       }
-      .width('100%')
+      .width('92%')
       .height('100%')
-      // 底部再让出手势条：实测根节点下沿离屏幕底还有约 63px，
-      // 不留这一截，导航栏的圆角指示器会贴到屏幕边缘被视觉裁切
-      .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: this.bottomInset + NAV_MARGIN + 18 })
+      // 底部让出手势条：导航栏整体抬到 bottomInset 之上，
+      // 否则手势条区域会吃掉点击（实测「点了没反应」的成因）。
+      // 再留 30vp 的视觉外边距，让它像浮在内容之上的一颗气泡。
+      .padding({ bottom: this.bottomInset + 30 })
       .justifyContent(FlexAlign.End)
       .visibility(this.modalOpen ? Visibility.Hidden : Visibility.Visible)
       // 整层只是定位容器：自己不响应点击，也不拦截，事件留给下面的导航栏与内容
@@ -430,9 +472,8 @@ struct Index {
   @Builder
   todayView() {
     Column() {
-      this.dateBar()
-
       Scroll() {
+        // 顶部留出毛玻璃顶栏的高度，否则第一张卡片会被顶栏压住
         Column({ space: GAP }) {
           CalorieRing({
             intake: this.data.summary.intake,
@@ -486,7 +527,7 @@ struct Index {
           Row().height(NAV_RESERVE)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)

@@ -33,10 +33,12 @@ export const COLOR_TEXT_SUB: string = '#8A8F99';
 /**
  * 底部导航未选中项的颜色。
  *
- * 用中性灰而不是次级文字色：导航栏浮在内容之上、背景不可控，
+ * 用 iOS 系的中性灰：导航栏浮在内容之上、背景不可控，
  * 纯中性灰在任何底色上都能保持「未选中」的语义，不会和品牌绿抢注意力。
  */
-export const COLOR_NAV_IDLE: string = '#999999';
+export const COLOR_NAV_IDLE: string = '#8E8E93';
+/** 底部导航选中项的颜色：比主色更亮的绿，浮在玻璃上更醒目 */
+export const COLOR_NAV_ACTIVE: string = '#10B981';
 /** 分割线 */
 export const COLOR_DIVIDER: string = '#EEF0F3';
 

@@ -7,6 +7,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DayCell, CalendarHeatmap } from '../components/CalendarHeatmap';
 import { WeightChart } from '../components/WeightChart';
 import { RollingNumber } from '../components/RollingNumber';
+import { topReserve } from '../components/GlassTopBar';
 import { MealType, FoodRecord, WeightRecord, ExerciseRecord, DailySummary } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { buildMonthGrid, friendlyDate, fromDayKey, todayKey, timeLabel } from '../common/DateUtil';
@@ -168,18 +169,19 @@ export struct HistoryTab {
     Scroll() {
       Column({ space: 14 }) {
         // ------------------------------------------------ 月份切换
-        // Apple 风格：大标题 + 右侧一对圆形步进按钮，不再把标题夹在两键之间
-        Row() {
+        // 收成一行次级控件（原来是个 26pt 大标题，和毛玻璃顶栏的
+        // 「记录」重复，一条屏幕上出现两个同级标题）。
+        Row({ space: 8 }) {
           Text(`${this.viewYear}年${this.viewMonth0 + 1}月`)
-            .fontSize(26)
-            .fontWeight(FontWeight.Bold)
+            .fontSize(17)
+            .fontWeight(FontWeight.Medium)
             .fontColor(COLOR_TEXT)
             .layoutWeight(1)
 
           Button({ type: ButtonType.Circle }) {
-            Text('‹').fontSize(20).fontColor(COLOR_TEXT)
+            Text('‹').fontSize(18).fontColor(COLOR_TEXT)
           }
-          .width(36).height(36)
+          .width(32).height(32)
           .backgroundColor(COLOR_CARD)
           .shadow(CARD_SHADOW)
           .onClick(() => {
@@ -187,10 +189,9 @@ export struct HistoryTab {
           })
 
           Button({ type: ButtonType.Circle }) {
-            Text('›').fontSize(20).fontColor(COLOR_TEXT)
+            Text('›').fontSize(18).fontColor(COLOR_TEXT)
           }
-          .width(36).height(36)
-          .margin({ left: 8 })
+          .width(32).height(32)
           .backgroundColor(COLOR_CARD)
           .shadow(CARD_SHADOW)
           .onClick(() => {
@@ -198,7 +199,7 @@ export struct HistoryTab {
           })
         }
         .width('100%')
-        .padding({ left: 4, right: 4, top: 6 })
+        .padding({ left: 4, right: 4, top: 4, bottom: 2 })
 
         // ------------------------------------------------ 月历
         // 点击有记录的日期直接进当日详情页（那里能看照片和完整营养明细）
@@ -224,11 +225,13 @@ export struct HistoryTab {
         Row().height(this.bottomInset + NAV_RESERVE + 12)
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
+      // 顶部留出毛玻璃顶栏的高度，避免月份行被压住
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    // 背景交给外层 Stack 的柔光层，这里保持透明让毛玻璃顶栏能透出内容
+    .backgroundColor(Color.Transparent)
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
   }
