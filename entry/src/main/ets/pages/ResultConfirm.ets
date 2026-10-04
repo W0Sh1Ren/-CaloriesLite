@@ -189,15 +189,19 @@ struct ResultConfirm {
      * 回到首页，而不是退回拍照页。
      *
      * 照片识别的页面栈是 [Index, Camera, ResultConfirm]，
-     * 所以单次 back() 只会回到 Camera —— 用户确认记录后却回到拍照页，
-     * 还得再按两次返回才能回首页（实测反馈）。
+     * 单次 back() 只会回到 Camera（用户确认完却回到拍照页，实测反馈）。
      *
-     * 用 back(2) 一次退两层直接回 Index。
-     * 不用 back({ url: 'pages/Index' })：官方文档写明「目标 URL 不在栈里时
-     * 不执行任何操作」，入口页是否以该 URL 入栈没有把握，失败就是「点了没反应」。
-     * 也不用 clear()：它保留的是**当前页**，单用会停在 ResultConfirm 上。
+     * `'/'` 是官方约定的**首页特殊值**（见 RouterOptions.url 的文档：
+     * "If the value of url is '/', the application navigates to the home page"），
+     * 所以 back({ url: '/' }) 就是「返回首页」的标准写法。
+     *
+     * 两个试过但不对的写法，记下来避免重走：
+     *   back(2)                    —— 实测无效（index 语义不是「退几层」）
+     *   back({ url: 'pages/Index' }) —— 文档写明目标 URL 不在栈里时
+     *                                  「不执行任何操作」，入口页的入栈 URL
+     *                                  没有把握，失败就是点了没反应
      */
-    router.back(2);
+    router.back({ url: '/' });
   }
 
   build() {
