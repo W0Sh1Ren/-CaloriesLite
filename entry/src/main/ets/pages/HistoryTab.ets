@@ -238,9 +238,9 @@ export struct HistoryTab {
       .width('100%')
 
       Row() {
-        this.miniStat('摄入', `${this.detail.intake}`)
-        this.miniStat('预算', `${this.detail.budget}`)
-        this.miniStat('运动', `${this.detail.exerciseKcal}`)
+        this.miniStat('摄入', () => `${this.detail.intake}`)
+        this.miniStat('预算', () => `${this.detail.budget}`)
+        this.miniStat('运动', () => `${this.detail.exerciseKcal}`)
         // 手动补记入口放在这里：首页只留拍照识别，手动录入属于「修正/补充」场景
         Button({ type: ButtonType.Capsule }) {
           Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
@@ -309,10 +309,14 @@ export struct HistoryTab {
     .shadow(CARD_SHADOW)
   }
 
+  /**
+   * 一项指标。value 用取值函数：@Builder 参数只求值一次，
+   * 传值会导致切换日期后数字不跟着变。
+   */
   @Builder
-  miniStat(label: string, value: string) {
+  miniStat(label: string, value: () => string) {
     Column({ space: 2 }) {
-      Text(value)
+      Text(value())
         .fontSize(18)
         .fontWeight(FontWeight.Medium)
         .fontColor(COLOR_TEXT)

@@ -140,9 +140,9 @@ export struct ProfileTab {
       Divider().color(COLOR_DIVIDER)
 
       Row() {
-        this.metric('基础代谢', `${this.bmr}`)
-        this.metric('总消耗', `${this.tdee}`)
-        this.metric('BMI', `${this.bmi()}`, bmiLabel(this.bmi()))
+        this.metric('基础代谢', () => `${this.bmr}`)
+        this.metric('总消耗', () => `${this.tdee}`)
+        this.metric('BMI', () => `${this.bmi()}`, () => bmiLabel(this.bmi()))
       }
       .width('100%')
       .justifyContent(FlexAlign.SpaceBetween)
@@ -159,14 +159,18 @@ export struct ProfileTab {
     .shadow(CARD_SHADOW)
   }
 
+  /**
+   * 一项指标。value 与 sub 都用取值函数，理由同 numRow：
+   * @Builder 参数求值一次，传值不会随状态更新。
+   */
   @Builder
-  metric(label: string, value: string, sub: string = '') {
+  metric(label: string, value: () => string, sub: () => string = () => '') {
     Column({ space: 2 }) {
-      Text(value)
+      Text(value())
         .fontSize(18)
         .fontWeight(FontWeight.Medium)
         .fontColor(COLOR_TEXT)
-      Text(sub.length > 0 ? `${label} · ${sub}` : label)
+      Text(sub().length > 0 ? `${label} · ${sub()}` : label)
         .fontSize(11)
         .fontColor(COLOR_TEXT_SUB)
     }
@@ -207,7 +211,7 @@ export struct ProfileTab {
       .width('100%')
 
       // 数值项
-      this.numRow('年龄', `${this.profile.age}`, '岁', () => {
+      this.numRow('年龄', () => this.profile.age, '岁', () => {
         this.apply((p: UserProfile) => {
           p.age = Math.max(10, p.age - 1);
         });
@@ -217,7 +221,7 @@ export struct ProfileTab {
         });
       })
 
-      this.numRow('身高', `${this.profile.heightCm}`, '厘米', () => {
+      this.numRow('身高', () => this.profile.heightCm, '厘米', () => {
         this.apply((p: UserProfile) => {
           p.heightCm = Math.max(100, p.heightCm - 1);
         });
@@ -227,7 +231,7 @@ export struct ProfileTab {
         });
       })
 
-      this.numRow('体重', `${this.profile.weightKg}`, '公斤', () => {
+      this.numRow('体重', () => this.profile.weightKg, '公斤', () => {
         this.apply((p: UserProfile) => {
           p.weightKg = Math.max(25, Math.round((p.weightKg - 0.5) * 10) / 10);
         });
@@ -323,9 +327,15 @@ export struct ProfileTab {
     .shadow(CARD_SHADOW)
   }
 
-  /** 一行「减 / 数值 / 加」的数值调节器 */
+  /**
+   * 一行「减 / 数值 / 加」的数值调节器。
+   *
+   * value 用取值函数而不是直接传值：@Builder 的参数在容器构建时求值一次，
+   * 之后状态变化不会重新求值，传值会表现为「点了加减，数字不动」。
+   * 传函数则在 build 内部实时读取，改完立刻反映。
+   */
   @Builder
-  numRow(label: string, value: string, unit: string,
+  numRow(label: string, value: () => number, unit: string,
     onMinus: () => void, onPlus: () => void) {
     Row({ space: 8 }) {
       Text(label)
@@ -339,7 +349,7 @@ export struct ProfileTab {
       .width(32).height(32).backgroundColor(COLOR_BG)
       .onClick(onMinus)
 
-      Text(value)
+      Text(`${value()}`)
         .fontSize(16)
         .fontWeight(FontWeight.Medium)
         .fontColor(COLOR_TEXT)
