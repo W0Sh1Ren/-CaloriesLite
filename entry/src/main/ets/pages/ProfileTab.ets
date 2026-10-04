@@ -86,7 +86,21 @@ export struct ProfileTab {
       const idx: number = cur - from;
       this.pickerIndex = idx >= 0 && idx < opts.length ? idx : 0;
     }
+    this.showSheet();
+  }
+
+  /** 显示面板，并通知首页隐藏悬浮导航栏（否则会压住体重输入框） */
+  private showSheet(): void {
     this.sheetShown = true;
+    AppState.modalOpen = true;
+    AppState.notifyDataChanged();
+  }
+
+  /** 关闭面板 */
+  private hideSheet(): void {
+    this.sheetShown = false;
+    AppState.modalOpen = false;
+    AppState.notifyDataChanged();
   }
 
   /** 确认写入 */
@@ -114,7 +128,7 @@ export struct ProfileTab {
         });
       }
     }
-    this.sheetShown = false;
+    this.hideSheet();
   }
 
   private reload(): void {
@@ -203,7 +217,7 @@ export struct ProfileTab {
           .height('100%')
           .backgroundColor('#66000000')
           .onClick(() => {
-            this.sheetShown = false;
+            this.hideSheet();
           })
 
         this.valueSheet()
@@ -241,7 +255,7 @@ export struct ProfileTab {
         .height(34)
         .backgroundColor(COLOR_BG)
         .onClick(() => {
-          this.sheetShown = false;
+          this.hideSheet();
         })
 
         Text(this.sheetTitle())
@@ -299,7 +313,9 @@ export struct ProfileTab {
     // 底部弹层外观：上方圆角 + 卡片底色 + 让开手势条
     .backgroundColor(COLOR_CARD)
     .borderRadius({ topLeft: 20, topRight: 20 })
-    .padding({ bottom: AppState.bottomInset + 12 })
+    // 底部让位：导航栏此时已被隐藏，但手势条区域仍要避开。
+    // 再补一截高度，保证体重输入框完整露出来。
+    .padding({ bottom: AppState.bottomInset + 88 })
     // 从下方滑入，配合遮罩淡入
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 240 }))

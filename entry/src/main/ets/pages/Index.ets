@@ -87,6 +87,14 @@ struct Index {
   /** 视图入场动画的重放键：每次切换自增，迫使动画重新播放 */
   @State viewAnimKey: number = 0;
   /**
+   * 是否正有模态面板打开（由「我的」页通过 AppState 通知）。
+   *
+   * 必须是 @State：.visibility() 的参数要能在 build 里读到，
+   * 而 AppState 的静态字段变化不会触发重建。
+   */
+  @State modalOpen: boolean = false;
+
+  /**
    * 数据版本号：每次重读当日数据就自增，传给环等自绘组件做强制重绘。
    *
    * 为什么不只依赖子组件的 onDidUpdate / @Watch：
@@ -140,6 +148,8 @@ struct Index {
    * 万一以后有人在 reload() 里又写了 refreshTick，也只会被挡掉而不会爆栈。
    */
   onRefreshTick(): void {
+    // 顺带同步模态面板状态，用于隐藏导航栏
+    this.modalOpen = AppState.modalOpen;
     this.reload();
   }
 
@@ -374,6 +384,10 @@ struct Index {
       // ---------------------------------------------------- 3. 悬浮导航栏
       // 关键：bottom 里必须加上 bottomInset。
       // 底部手势条区域会吃掉点击，导航栏压在上面就会「点了没反应」。
+      //
+      // 「我的」页弹出数值面板时整体隐藏：面板是模态的，
+      // 遮罩下不该还能点导航；而且导航栏在最上层，会把面板下半部分
+      //（体重输入框）压住。用 visibility 而不是 if，避免每次开关都重建整条导航。
       Column() {
         FloatingNav({
           items: NAV_ITEMS,
@@ -393,6 +407,7 @@ struct Index {
       // 不留这一截，导航栏的圆角指示器会贴到屏幕边缘被视觉裁切
       .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: this.bottomInset + NAV_MARGIN + 18 })
       .justifyContent(FlexAlign.End)
+      .visibility(this.modalOpen ? Visibility.Hidden : Visibility.Visible)
       // 整层只是定位容器：自己不响应点击，也不拦截，事件留给下面的导航栏与内容
       .hitTestBehavior(HitTestMode.None)
     }

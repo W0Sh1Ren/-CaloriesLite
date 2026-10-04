@@ -90,6 +90,15 @@ export class AppState {
     AppStorage.setOrCreate('todayDeficit', summary.deficit);
   }
 
+  /**
+   * 是否正有模态面板（底部弹层）打开。
+   *
+   * 打开时首页会把悬浮导航栏隐藏：面板是模态的，
+   * 遮罩下不该还能点导航；而且导航栏在最上层，
+   * 会把面板下半部分（体重输入框）压住。
+   */
+  static modalOpen: boolean = false;
+
   /** 写入方在数据变动后调用，通知当前页面立即重读 */
   static notifyDataChanged(): void {
     const fn: (() => void) | null = AppState.dataListener;
