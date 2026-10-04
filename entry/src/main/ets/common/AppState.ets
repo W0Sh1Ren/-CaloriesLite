@@ -51,16 +51,35 @@ export class AppState {
   static targetMeal: MealType = MealType.LUNCH;
 
   /**
-   * 把当日数据镜像到 AppStorage，供各页面响应式读取。
+   * 当日数据变更的订阅回调。
    *
-   * 为什么不只靠 @Watch(refreshTick) / onPageShow：
-   * 那些回调的触发时机依赖页面栈实现，实测出现过「识别完回到首页，
-   * 热量和营养素还是旧值，退出重进才更新」。AppStorage 是全局的，
-   * 写入方一 set，所有 @StorageLink 绑定的界面当帧就会重算，
-   * 不依赖任何页面生命周期。
+   * 为什么不用 AppStorage + @StorageLink：
+   * @StorageLink 在装饰器绑定那一刻就要求 AppStorage 里存在同名键，
+   * 而键是首次写入时才创建的，于是冷启动时绑定失败、整个应用起不来
+   * （实测：加上 @StorageLink('dataStamp') 后进程启动即退出）。
+   * 而且同一变量只能挂一个状态装饰器，没法用 @Watch 兜。
    *
-   * 这里只镜像「汇总数字」，记录明细仍由各页自己查存储——
-   * 把整个列表塞进全局状态会带来不必要的耦合。
+   * 改用静态回调：谁持有数据谁把自己注册进来，写入方调
+   * notifyDataChanged()，当前显示的页面立刻重读。
+   * 无时序陷阱，也不依赖页面栈何时回调生命周期。
+   */
+  private static dataListener: (() => void) | null = null;
+
+  /** 页面注册自己的刷新方法（在 aboutToAppear 里调用） */
+  static setDataListener(fn: () => void): void {
+    AppState.dataListener = fn;
+  }
+
+  /** 页面销毁时注销，避免回调指向已销毁的组件 */
+  static clearDataListener(): void {
+    AppState.dataListener = null;
+  }
+
+  /**
+   * 把当日汇总镜像到 AppStorage，供将来需要跨页只读订阅的场景使用。
+   *
+   * 这里只是「写」：setOrCreate 会在键不存在时创建，
+   * 不会触发上面那种绑定期异常。
    */
   static mirrorToday(summary: DailySummary): void {
     AppStorage.setOrCreate('todayIntake', summary.intake);
@@ -71,10 +90,12 @@ export class AppState {
     AppStorage.setOrCreate('todayDeficit', summary.deficit);
   }
 
-  /** 写入方在数据变动后调用，强制所有绑定界面重算 */
+  /** 写入方在数据变动后调用，通知当前页面立即重读 */
   static notifyDataChanged(): void {
-    const stamp: number = Date.now();
-    AppStorage.setOrCreate('dataStamp', stamp);
+    const fn: (() => void) | null = AppState.dataListener;
+    if (fn !== null) {
+      fn();
+    }
   }
 
   /**

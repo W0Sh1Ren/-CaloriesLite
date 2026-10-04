@@ -87,7 +87,10 @@ export struct FloatingNav {
         adaptiveColor: AdaptiveColor.DEFAULT,
         scale: 1.0
       })
-      .backgroundColor('#26FFFFFF')
+      // 底色只给极淡的一层，透明度靠模糊本身撑。
+      // 之前 #26FFFFFF（15%）在浅色背景上几乎等于纯白，玻璃感全无；
+      // 降到 8% 让模糊透出底下的内容，「液态」的观感才出来。
+      .backgroundColor('#14FFFFFF')
       .hitTestBehavior(HitTestMode.None)
   }
 
@@ -201,7 +204,9 @@ export struct FloatingNav {
     // 不支持材质的设备由内部条件渲染的 fallbackBackdrop() 顶上。
     .systemMaterial(systemMaterial(
       uiMaterial.ImmersiveStyle.THICK,
-      '#2EFFFFFF',
+      // 着色层要足够淡，否则会把材质自身的模糊与透光盖住。
+      // 从 18% 降到 8%，配合兜底底色一起降低整体不透明度。
+      '#14FFFFFF',
       true,
       '#6622C55E'
     ))

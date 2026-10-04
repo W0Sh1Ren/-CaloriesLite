@@ -60,7 +60,17 @@ struct Index {
    * 「识别完回到首页，热量和营养素还是旧值，退出重进才更新」。
    * 走 @Watch 就是把「刷新」和「生命周期」解耦，只要计数器变了就一定重读。
    */
+  /**
+   * 子组件刷新信号：+1 只用于驱动 ProfileTab / HistoryTab 重新读取配置。
+   *
+   * 幂等，绝对不能在 reload() 内部自增！
+   * reload() 一旦写这个变量就会触发 @Watch('onRefreshTick')
+   * → reload() → 再写 → 无限递归，实测 60 多层后 RangeError: Stack overflow。
+   * 它的唯一合法写入点是 onPageShow() 与 switchTo()（用户主动触发的路径）。
+   */
   @State @Watch('onRefreshTick') refreshTick: number = 0;
+  /** 重入守卫：兜住任何意外的自我触发，避免再次爆栈 */
+  private isReloading: boolean = false;
   /** 顶部柔光配色，按当前时段取 */
   @State glow: GlowPalette = glowForHour(hourOf(Date.now()));
   /** 悬浮导航栏实测宽度，用于算高亮胶囊位置 */
@@ -78,7 +88,17 @@ struct Index {
 
   aboutToAppear(): void {
     this.syncInsets();
+    // 注册为「当日数据变更」的接收方：别的页面写入记录后会直接回调这里，
+    // 不需要等页面生命周期，这正是「必须退出重进才更新」的解法
+    AppState.setDataListener(() => {
+      this.dayKey = todayKey();
+      this.reload();
+    });
     this.reload();
+  }
+
+  aboutToDisappear(): void {
+    AppState.clearDataListener();
   }
 
   /** 从子页面返回或回到前台时刷新。
@@ -94,30 +114,23 @@ struct Index {
       this.dayKey = todayKey();
       this.switchTo(0);
     }
-    this.reload();
+    // 这里只自增信号、不直接调 reload()：onRefreshTick 会重读数据。
+    // 两条路都写会重读两遍，而且容易忘了 reload 里不能再动 refreshTick。
     this.refreshTick++;
   }
-  /**
-   * 全局数据版本号。
-   *
-   * 任何页面写入记录后调 AppState.notifyDataChanged() 会改这个值，
-   * 这里通过 @Watch 收到通知并重读当日数据。
-   * 相比只靠 onPageShow，这条链路不依赖页面栈何时回调，更可靠。
-   */
-  @StorageLink('dataStamp') @Watch('onDataStamp') dataStamp: number = 0;
+  // 注意：这里不要改用 @StorageLink('dataStamp')。
+  // 该装饰器在绑定那一刻就要求 AppStorage 里已存在同名键，
+  // 而键只在首次写入时创建，冷启动会直接崩（实测进程启动即退出）。
+  // 刷新走 AppState.setDataListener 注册的静态回调，见 aboutToAppear。
 
   /**
    * refreshTick 变化时重读当日数据。
    *
-   * 注意 dayKey 也要在这里重新取一次：识别可能跨过零点，
-   * 或者页面在后台待了很久，回来时应显示当天而不是离开时那一天。
+   * 这条链路本身是安全的：reload() 不再回写 refreshTick，
+   * 环被打断了。isReloading 只是额外兜一层，
+   * 万一以后有人在 reload() 里又写了 refreshTick，也只会被挡掉而不会爆栈。
    */
   onRefreshTick(): void {
-    this.reload();
-  }
-
-  /** 全局数据变更通知 */
-  onDataStamp(): void {
     this.reload();
   }
 
@@ -209,28 +222,68 @@ struct Index {
     return this.getUIContext().getHostContext() as common.UIAbilityContext;
   }
 
+  /** 图片维护是否已跑过，避免重复转存 */
+  private imageTaskDone: boolean = false;
+
+  /**
+   * 重读当日数据。
+   *
+   * 两个硬性约束，改这个函数前务必先看懂：
+   *   1. 绝对不要在这里写 this.refreshTick！它是 @Watch('onRefreshTick')
+   *      的触发源，而 onRefreshTick 又会调回本函数，
+   *      于是 reload → tick++ → watch → reload → … 无限递归，
+   *      60 多层后直接 RangeError: Stack overflow（已实测）。
+   *      子组件的刷新信号只在 onPageShow / switchTo 里 +1。
+   *   2. 不要在这里同步调用需要 UIContext 的操作（如取沙箱路径），
+   *      aboutToAppear 阶段组件尚未挂载，getUIContext 会失败。
+   *      图片相关的维护交给 scheduleImageMaintenance 延后执行。
+   */
   private reload(): void {
-    this.data = DailyService.homeData(this.dayKey);
-    AppState.mirrorToday(this.data.summary);
-    this.persistImages();
-    // 让其它页面（记录页等）也收到变更通知
-    this.refreshTick++;
+    // 重入守卫：任何意外触发的嵌套调用直接返回，避免栈被撑爆
+    if (this.isReloading) {
+      return;
+    }
+    this.isReloading = true;
+    try {
+      this.data = DailyService.homeData(this.dayKey);
+      AppState.mirrorToday(this.data.summary);
+      this.scheduleImageMaintenance();
+    } catch (err) {
+      const e: Error = err as Error;
+      hilog.error(DOMAIN, 'CalorieLite', 'reload failed: %{public}s', e.message);
+    } finally {
+      this.isReloading = false;
+    }
   }
 
-  /** 切换视图：改下标并同时刷新数据 */
+  /** 布局完成后再做图片转存/去重，避免在构建期取 UIContext */
+  private scheduleImageMaintenance(): void {
+    if (this.imageTaskDone) {
+      return;
+    }
+    setTimeout(() => {
+      if (this.imageTaskDone) {
+        return;
+      }
+      this.imageTaskDone = true;
+      this.persistImages();
+    }, 300);
+  }
+
+  /** 切换视图：改下标并刷新数据 */
   private switchTo(index: number): void {
     if (index === this.activeTab) {
-      // 已经在这一页：仍然重读一次，避免「点了没反应但数据其实变了」的情况
+      // 已经在这一页：仍然刷新一次，避免「点了没反应但数据其实变了」的情况
       if (index === 0) {
         this.dayKey = todayKey();
         this.refreshTick++;
       }
       return;
     }
-    // 「我的」页可能刚改过档案，回到首页要按新预算重算
+    // 「我的」页可能刚改过档案，清掉脏标记；
+    // 实际重算由下面 index === 0 分支的自增信号统一触发
     if (AppState.profileDirty) {
       AppState.profileDirty = false;
-      this.reload();
     }
     this.navDir = index > this.activeTab ? 1 : -1;
     this.activeTab = index;

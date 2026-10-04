@@ -22,7 +22,6 @@ import { friendlyDate, todayKey, timeLabel } from '../common/DateUtil';
 import { DailyService } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
 import { ImageService } from '../service/ImageService';
-import { MacroBar } from '../components/MacroBar';
 import { MealGallery } from '../components/MealGallery';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
@@ -271,14 +270,9 @@ struct DayDetail {
         .fontSize(11)
         .fontColor(COLOR_TEXT_SUB)
         .width('100%')
-
-      Divider().color(COLOR_DIVIDER)
-
-      MacroBar({
-        protein: this.summary.protein,
-        fat: this.summary.fat,
-        carb: this.summary.carb
-      })
+      // 这里刻意不放三大营养素：详情页的主角是「这天吃了什么」，
+      // 营养素属于首页的当日总览。放在这里会把汇总卡撑得很高，
+      // 一进页面先看到一堆进度条、看不到记录列表。
     }
     .width('100%')
     .padding(16)
