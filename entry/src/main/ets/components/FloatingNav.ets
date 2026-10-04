@@ -1,15 +1,21 @@
 /**
  * 悬浮导航栏。
  *
- * 做成独立组件而不是用 Tabs 自带的 tabBar，原因有三：
- *   1. Tabs 的 tabBar 贴着屏幕底边，做不出「悬浮」的观感；
- *   2. 悬浮栏需要毛玻璃材质（backgroundBlurStyle）透出下方滚动的内容，tabBar 做不到；
- *   3. 指示滑块的弹性动画要自己控制，才能和页面切换动画对齐。
+ * 做成独立组件而不是用 Tabs 自带的 tabBar，原因：
+ *   1. Tabs 的 tabBar 贴着屏幕底边并占布局空间，做不出「悬浮在内容之上」的观感；
+ *   2. 悬浮栏需要毛玻璃材质透出下方滚动的内容，tabBar 做不到；
+ *   3. 高亮胶囊的弹性滑动、图标的按压反馈都要自己控制。
  *
- * 视觉：一条圆角胶囊，毛玻璃底 + 柔和投影；选中项主色高亮，
- * 底下有一个会滑动的高亮胶囊。
+ * 液态玻璃质感的做法（三层叠加）：
+ *   底：backgroundEffect 强模糊 + 提饱和 + 提亮，让下方内容透出来并带一点「厚度」
+ *   中：很淡的白色半透明，保证文字在任何背景上都可读
+ *   上：一条自上而下由亮到透明的线性渐变，模拟玻璃边缘的高光
+ * 外面再套一圈半透明白边，玻璃的「边缘」就出来了。
+ *
+ * 注意：底部安全区（手势条）会吃掉点击，所以整条导航栏必须由父组件
+ * 抬到 bottomInset 之上，否则表现为「点了没反应」。
  */
-import { CARD_SHADOW, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT_SUB, CURVE_SPRING, DUR_FAST, DUR_NORMAL, NAV_HEIGHT } from '../common/Theme';
+import { CARD_SHADOW, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT_SUB, CURVE_SPRING, DUR_FAST, NAV_HEIGHT } from '../common/Theme';
 
 /** 一个导航项 */
 export class NavItem {
@@ -32,67 +38,108 @@ export struct FloatingNav {
   onSelect: (index: number) => void = () => {
   };
 
-  /** 单个格子的宽度 */
+  /** 按下的项，用于做按压反馈；-1 表示没有 */
+  @State pressedIndex: number = -1;
+
   private cellWidth(): number {
     const n: number = this.items.length > 0 ? this.items.length : 1;
     return this.barWidth > 0 ? this.barWidth / n : 0;
   }
 
   build() {
-    // Stack 让高亮胶囊垫在文字下层，同时自己不吃点击事件
     Stack({ alignContent: Alignment.Start }) {
-      // 高亮胶囊
-      Row()
-        .width(this.cellWidth() > 0 ? this.cellWidth() - 16 : 0)
-        .height(NAV_HEIGHT - 14)
-        .backgroundColor(COLOR_PRIMARY_SOFT)
-        .borderRadius((NAV_HEIGHT - 14) / 2)
-        .margin({ left: this.cellWidth() * this.activeIndex + 8, top: 7 })
-        // 弹性曲线：切换标签时胶囊是「滑过去」而不是「跳过去」
-        .animation({ curve: CURVE_SPRING })
-        .hitTestBehavior(HitTestMode.Transparent)
+      // ------------------------------------------------ 液态玻璃三层
+      // 中：淡白底，保证可读性
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#8CFFFFFF')
+        .hitTestBehavior(HitTestMode.None)
 
-      // 三个导航项
-      Row() {
-        ForEach(this.items, (item: NavItem, index: number) => {
-          Column({ space: 2 }) {
-            Text(item.glyph)
-              .fontSize(19)
-              .fontColor(this.activeIndex === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
-              .scale({
-                x: this.activeIndex === index ? 1.15 : 1,
-                y: this.activeIndex === index ? 1.15 : 1
-              })
-              .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut })
+      // 上：自上而下的高光渐变，玻璃的「光泽」
+      Column()
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 180,
+          colors: [['#66FFFFFF', 0.0], ['#1AFFFFFF', 0.45], ['#00FFFFFF', 1.0]]
+        })
+        .hitTestBehavior(HitTestMode.None)
 
-            Text(item.label)
-              .fontSize(11)
-              .fontWeight(this.activeIndex === index ? FontWeight.Medium : FontWeight.Normal)
-              .fontColor(this.activeIndex === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
-              .animation({ duration: DUR_FAST })
-          }
-          .width(this.cellWidth())
-          .height(NAV_HEIGHT)
-          .justifyContent(FlexAlign.Center)
-          .onClick(() => {
-            this.onSelect(index);
-          })
-        }, (item: NavItem, index: number) => `${index}-${item.label}`)
+      // ------------------------------------------------ 内容
+      Stack({ alignContent: Alignment.Start }) {
+        // 高亮胶囊，垫在文字下层且自己不吃点击
+        Row()
+          .width(this.cellWidth() > 0 ? this.cellWidth() - 16 : 0)
+          .height(NAV_HEIGHT - 14)
+          .backgroundColor(COLOR_PRIMARY_SOFT)
+          .borderRadius((NAV_HEIGHT - 14) / 2)
+          .margin({ left: this.cellWidth() * this.activeIndex + 8, top: 7 })
+          // 弹性曲线：切换标签时胶囊是「滑过去」而不是「跳过去」
+          .animation({ curve: CURVE_SPRING })
+          .hitTestBehavior(HitTestMode.None)
+
+        Row() {
+          ForEach(this.items, (item: NavItem, index: number) => {
+            Column({ space: 2 }) {
+              Text(item.glyph)
+                .fontSize(19)
+                .fontColor(this.activeIndex === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
+                .scale({
+                  x: this.activeIndex === index ? 1.15 : 1,
+                  y: this.activeIndex === index ? 1.15 : 1
+                })
+                .animation({ duration: DUR_FAST, curve: Curve.EaseOut })
+
+              Text(item.label)
+                .fontSize(11)
+                .fontWeight(this.activeIndex === index ? FontWeight.Medium : FontWeight.Normal)
+                .fontColor(this.activeIndex === index ? COLOR_PRIMARY : COLOR_TEXT_SUB)
+                .animation({ duration: DUR_FAST })
+            }
+            .width(this.cellWidth())
+            .height(NAV_HEIGHT)
+            .justifyContent(FlexAlign.Center)
+            // 跟手：按下立刻缩小并压暗，抬起恢复，反馈时长压到 90ms 才不显得拖沓
+            .scale({
+              x: this.pressedIndex === index ? 0.9 : 1,
+              y: this.pressedIndex === index ? 0.9 : 1
+            })
+            .opacity(this.pressedIndex === index ? 0.6 : 1)
+            .animation({ duration: 90, curve: Curve.EaseOut })
+            .onTouch((event: TouchEvent) => {
+              if (event.type === TouchType.Down) {
+                this.pressedIndex = index;
+              } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                this.pressedIndex = -1;
+              }
+            })
+            .onClick(() => {
+              this.pressedIndex = -1;
+              this.onSelect(index);
+            })
+          }, (item: NavItem, index: number) => `${index}-${item.label}`)
+        }
+        .width('100%')
+        .height(NAV_HEIGHT)
       }
       .width('100%')
       .height(NAV_HEIGHT)
     }
     .width('100%')
     .height(NAV_HEIGHT)
-    // 毛玻璃底：透出下方滚动的内容，这是「悬浮」观感的关键
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK, {
-      colorMode: ThemeColorMode.LIGHT,
-      adaptiveColor: AdaptiveColor.DEFAULT,
-      scale: 1.0
+    // 底：强模糊 + 提饱和提亮。radius 越大越糊，saturation 给玻璃一点通透感
+    .backgroundEffect({
+      radius: 36,
+      saturation: 1.8,
+      brightness: 1.08,
+      color: '#33FFFFFF'
     })
-    .backgroundColor('#D9FFFFFF')
+    .backgroundColor(Color.Transparent)
+    .clip(true)
     .borderRadius(NAV_HEIGHT / 2)
-    .border({ width: 1, color: '#33FFFFFF' })
+    // 半透明白边＝玻璃的边缘
+    .border({ width: 1, color: '#59FFFFFF' })
     .shadow(CARD_SHADOW)
   }
 }

@@ -54,8 +54,13 @@ struct Index {
   @State glow: GlowPalette = glowForHour(hourOf(Date.now()));
   /** 悬浮导航栏实测宽度，用于算高亮胶囊位置 */
   @State navWidth: number = 0;
+  /** 顶部安全区（状态栏）高度，全屏布局后需要自行避让 */
+  @State topInset: number = 0;
+  /** 底部安全区（手势条）高度，导航栏必须抬到它之上才能点到 */
+  @State bottomInset: number = 0;
 
   aboutToAppear(): void {
+    this.syncInsets();
     this.reload();
   }
 
@@ -65,6 +70,8 @@ struct Index {
    * 否则从 AI 配置页保存后返回，「我的」页仍会显示未配置。 */
   onPageShow(): void {
     this.glow = glowForHour(hourOf(Date.now()));
+    // 安全区是窗口异步量出来的，首次渲染时可能还是 0，回到前台再取一次
+    this.syncInsets();
     if (AppState.needRefreshHome) {
       AppState.needRefreshHome = false;
       this.dayKey = todayKey();
@@ -72,6 +79,12 @@ struct Index {
     }
     this.reload();
     this.refreshTick++;
+  }
+
+  /** 把 EntryAbility 量好的安全区尺寸取到本地状态，驱动布局重算 */
+  private syncInsets(): void {
+    this.topInset = AppState.topInset;
+    this.bottomInset = AppState.bottomInset;
   }
 
   private reload(): void {
@@ -125,6 +138,7 @@ struct Index {
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       // ---------------------------------------------------- 1. 柔光背景
+      // 铺满整屏（含状态栏区域），这才是「沉浸」的前提
       Column()
         .width('100%')
         .height('100%')
@@ -134,6 +148,7 @@ struct Index {
         })
 
       // ---------------------------------------------------- 2. 内容层
+      // 全屏布局后内容会顶到状态栏和手势条下面，这里按安全区让开
       Column() {
         if (this.activeTab === 0) {
           this.todayView()
@@ -145,12 +160,15 @@ struct Index {
       }
       .width('100%')
       .height('100%')
+      .padding({ top: this.topInset })
       // 切视图时的淡入 + 轻微上移，注意 key 变化才会重放
       .transition(TransitionEffect.OPACITY
         .combine(TransitionEffect.translate({ y: 8 }))
         .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut }))
 
       // ---------------------------------------------------- 3. 悬浮导航栏
+      // 关键：bottom 里必须加上 bottomInset。
+      // 底部手势条区域会吃掉点击，导航栏压在上面就会「点了没反应」。
       Column() {
         FloatingNav({
           items: NAV_ITEMS,
@@ -166,10 +184,10 @@ struct Index {
       }
       .width('100%')
       .height('100%')
-      .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: NAV_MARGIN })
+      .padding({ left: NAV_MARGIN, right: NAV_MARGIN, bottom: this.bottomInset + NAV_MARGIN })
       .justifyContent(FlexAlign.End)
-      // 让整层不拦截事件，只有导航栏本身可点
-      .hitTestBehavior(HitTestMode.Transparent)
+      // 整层只是定位容器：自己不响应点击，也不拦截，事件留给下面的导航栏与内容
+      .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')
     .height('100%')
