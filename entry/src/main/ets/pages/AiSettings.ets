@@ -11,7 +11,7 @@ import { AiConfig, AiProvider } from '../model/Types';
 import { GLM_BASE_URL, GLM_MODEL, PRESETS, ProviderPreset } from '../model/Enums';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { VisionService, VisionError } from '../service/VisionService';
-import { COLOR_BG, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -22,6 +22,8 @@ struct AiSettings {
   @State baseUrl: string = GLM_BASE_URL;
   @State apiKey: string = '';
   @State model: string = GLM_MODEL;
+  /** 思考模式，默认关；开了更准但更贵更慢 */
+  @State thinking: boolean = false;
   @State showKey: boolean = false;
   @State testing: boolean = false;
   @State testResult: string = '';
@@ -32,10 +34,12 @@ struct AiSettings {
     this.baseUrl = c.baseUrl.length > 0 ? c.baseUrl : GLM_BASE_URL;
     this.apiKey = c.apiKey;
     this.model = c.model.length > 0 ? c.model : GLM_MODEL;
+    this.thinking = c.thinking;
   }
 
   private current(): AiConfig {
-    return new AiConfig(AiProvider.OPENAI_COMPATIBLE, this.baseUrl.trim(), this.apiKey.trim(), this.model.trim());
+    return new AiConfig(AiProvider.OPENAI_COMPATIBLE, this.baseUrl.trim(), this.apiKey.trim(),
+      this.model.trim(), this.thinking);
   }
 
   private applyPreset(p: ProviderPreset): void {
@@ -244,11 +248,39 @@ struct AiSettings {
               .fontSize(11)
               .fontColor(COLOR_TEXT_SUB)
               .width('100%')
+
+            Divider().color(COLOR_DIVIDER)
+
+            // 思考模式开关
+            Row() {
+              Column({ space: 3 }) {
+                Text('深度思考')
+                  .fontSize(14)
+                  .fontColor(COLOR_TEXT)
+                Text(this.thinking
+                  ? '开启：更准，但思维链按输出计费，单次可能贵 5 倍且更慢'
+                  : '关闭：更快更省。识图列清单不需要深思，建议保持关闭')
+                  .fontSize(11)
+                  .fontColor(COLOR_TEXT_SUB)
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+
+              Toggle({ type: ToggleType.Switch, isOn: this.thinking })
+                .selectedColor(COLOR_PRIMARY)
+                .onChange((on: boolean) => {
+                  this.thinking = on;
+                  this.testResult = '';
+                })
+            }
+            .width('100%')
+            .padding({ top: 4 })
           }
           .width('100%')
           .padding(16)
           .backgroundColor(COLOR_CARD)
           .borderRadius(RADIUS)
+          .shadow(CARD_SHADOW)
 
           // 测试结果
           if (this.testResult.length > 0) {

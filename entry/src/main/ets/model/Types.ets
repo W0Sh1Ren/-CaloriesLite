@@ -89,11 +89,25 @@ export class AiConfig {
   /** 模型名，默认 glm-4.6v-flash */
   model: string = '';
 
-  constructor(provider: AiProvider, baseUrl: string, apiKey: string, model: string) {
+  /**
+   * 是否开启模型的「思考模式」。
+   *
+   * 默认关闭，原因有两个：
+   *   1. 成本——思维链按输出 token 计费，而输出单价通常是输入的 4 倍。
+   *      DeepSeek 的 thinking 默认开启，一次识图可能先思考两三千 token，
+   *      费用会从约 0.004 元涨到约 0.02 元。
+   *   2. 速度——思考要等，拍照识图这种「看一眼列清单」的任务不需要深思。
+   * 只有在模型经常认错复杂菜品时才值得打开。
+   */
+  thinking: boolean = false;
+
+  constructor(provider: AiProvider, baseUrl: string, apiKey: string, model: string,
+    thinking: boolean = false) {
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
     this.model = model;
+    this.thinking = thinking;
   }
 }
 

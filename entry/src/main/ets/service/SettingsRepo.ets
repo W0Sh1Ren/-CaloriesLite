@@ -2,7 +2,7 @@
  * 设置仓库：个人基本情况与 AI 识别配置。
  */
 import { Store } from '../common/Store';
-import { getNum, getStr, JsonMap, parseObject, toEnum } from '../common/JsonUtil';
+import { getBool, getNum, getStr, JsonMap, parseObject, toEnum } from '../common/JsonUtil';
 import { ACTIVITY_ORDER, GLM_BASE_URL, GLM_MODEL, GOAL_ORDER } from '../model/Enums';
 import { ActivityLevel, AiConfig, AiProvider, Gender, Goal, UserProfile } from '../model/Types';
 
@@ -95,7 +95,8 @@ export class SettingsRepo {
       toEnum<AiProvider>(getStr(map, 'provider', def.provider), ALL_PROVIDERS, def.provider),
       getStr(map, 'baseUrl', def.baseUrl),
       getStr(map, 'apiKey', ''),
-      model
+      model,
+      getBool(map, 'thinking', def.thinking)
     );
   }
 

@@ -134,8 +134,22 @@ export class VisionService {
 
     const body: Record<string, Object> = {};
     body['model'] = config.model;
-    body['temperature'] = 0.2;
     body['max_tokens'] = 1500;
+
+    // 思考模式显式关掉或打开。
+    // 不传时由服务端默认值决定——DeepSeek 的默认是「开启且 effort=high」，
+    // 思维链按输出 token 计费（约为输入单价的 4 倍），一次识图能贵到 5 倍，
+    // 所以这里必须显式下发，不能依赖服务端默认。
+    const thinking: Record<string, Object> = {};
+    thinking['type'] = config.thinking ? 'enabled' : 'disabled';
+    body['thinking'] = thinking;
+    if (config.thinking) {
+      // 开启时用 low 档：这个任务不需要深度推理，省 token 也快
+      body['reasoning_effort'] = 'low';
+    } else {
+      // 思考模式不支持 temperature，只有关闭时才设置
+      body['temperature'] = 0.2;
+    }
 
     const userContent: Record<string, Object>[] = [];
     const textPart: Record<string, Object> = {};
