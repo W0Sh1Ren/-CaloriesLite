@@ -182,7 +182,10 @@ export struct ProfileTab {
           // ------------------------------------------------ 关于与数据
           this.miscCard()
 
-          Row().height(NAV_RESERVE)
+          // 底部留白要够：导航栏浮在内容之上，留少了最后一张卡片
+          // （体重输入、清空数据等）会被压住点不到。
+          // 用实测的 bottomInset 叠加导航栏自身高度再留一点余量。
+          Row().height(AppState.bottomInset + NAV_RESERVE + 40)
         }
         .width('100%')
         .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
@@ -224,9 +227,17 @@ export struct ProfileTab {
         .margin({ top: 8, bottom: 2 })
 
       Row() {
+        /*
+         * 两个按钮都给定宽（88vp）。
+         *
+         * 不能只靠 Capsule 造型：ButtonType.Capsule 的宽度由父容器决定，
+         * 在 Row 里会被拉伸或压扁，看上去就不像个规整的胶囊。
+         * 给定宽以后取消/确定的尺寸一致、文字左右留白也均匀。
+         */
         Button({ type: ButtonType.Capsule }) {
           Text('取消').fontSize(14).fontColor(COLOR_TEXT_SUB)
         }
+        .width(88)
         .height(34)
         .backgroundColor(COLOR_BG)
         .onClick(() => {
@@ -244,6 +255,7 @@ export struct ProfileTab {
         Button({ type: ButtonType.Capsule }) {
           Text('确定').fontSize(14).fontColor(Color.White)
         }
+        .width(88)
         .height(34)
         .backgroundColor(COLOR_PRIMARY)
         .onClick(() => {
