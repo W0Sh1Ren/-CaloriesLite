@@ -186,11 +186,19 @@ struct Index {
       .height('100%')
 
       // 顶层：毛玻璃顶栏。zIndex(1) 保证盖在内容之上。
+      // 顶层：毛玻璃顶栏。zIndex(1) 保证盖在内容之上。
+      // 首页的右上角放一对步进按钮用于切换日期——之前把内嵌日期栏删掉时
+      // 忘了把入口搬过来，导致首页没法切日期了。
       GlassTopBar({
         title: this.topTitle(),
         subtitle: this.topSubtitle(),
-        backGlyph: '',
-        rightWidth: 0
+        leadingGlyph: '',
+        trailingGlyphs: this.activeTab === 0 ? ['‹', '›'] : [],
+        // 「今天」时不能再往后翻，把右箭头置灰
+        trailingEnabled: [true, this.dayKey !== todayKey()],
+        onTrailing: (index: number) => {
+          this.shiftDate(index === 0 ? -1 : 1);
+        }
       })
         .zIndex(1)
         .hitTestBehavior(HitTestMode.Transparent)
@@ -402,7 +410,14 @@ struct Index {
   }
 
   build() {
-    Stack({ alignContent: Alignment.TopStart }) {
+    /*
+     * 用 Alignment.Top（水平居中）而不是 TopStart（左对齐）。
+     *
+     * 底部导航栏是 92% 宽的胶囊，父层若左对齐它就会贴在屏幕左边
+     * ——实测 left=0 / right=1178 / 屏宽 1280，整体左偏 51px，
+     * 看起来就是「导航栏歪了」。改成水平居中后左右留白相等。
+     */
+    Stack({ alignContent: Alignment.Top }) {
       // ---------------------------------------------------- 1. 柔光背景
       // 铺满整屏（含状态栏区域），这才是「沉浸」的前提
       Column()

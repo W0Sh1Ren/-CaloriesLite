@@ -44,10 +44,19 @@ export struct FloatingNav {
   @State pressX: number = 0;
   /** 手指当前落在第几项；-1 表示没按 */
   @State hoverIndex: number = -1;
+  /**
+   * 实测宽度（vp），由 onAreaChange 更新。
+   *
+   * 只用于把触摸 x 换算成项下标，**不参与布局**：
+   * 布局一律用 layoutWeight 等分，这样即使测量值缺失或延迟，
+   * 图标也是均匀对称的。之前命中判定用父组件传进来的 barWidth，
+   * 那个值在导航栏改成 92% 宽后不可靠，点到别的格子就会「选错项」。
+   */
+  @State measuredWidth: number = 0;
 
   private cellWidth(): number {
     const n: number = this.items.length > 0 ? this.items.length : 1;
-    return this.barWidth > 0 ? this.barWidth / n : 0;
+    return this.measuredWidth > 0 ? this.measuredWidth / n : 0;
   }
 
   /**
@@ -60,14 +69,22 @@ export struct FloatingNav {
     return index === this.activeIndex ? COLOR_NAV_ACTIVE : COLOR_NAV_IDLE;
   }
 
-  /** 把 x 坐标换算成项下标 */
+  /**
+   * 把 x 坐标换算成项下标。
+   *
+   * 取不到实测宽度时按「等分整条栏」估算：既然布局是等分的，
+   * 命中判定按同一规则均分就不会错位。
+   */
   private indexAt(x: number): number {
-    const w: number = this.cellWidth();
-    if (w <= 0) {
+    const n: number = this.items.length;
+    if (n <= 0) {
       return -1;
     }
-    const i: number = Math.floor(x / w);
-    return Math.max(0, Math.min(this.items.length - 1, i));
+    const w: number = this.cellWidth();
+    if (w > 0) {
+      return Math.max(0, Math.min(n - 1, Math.floor(x / w)));
+    }
+    return -1;
   }
 
   /**
@@ -131,6 +148,10 @@ export struct FloatingNav {
               .fontWeight(index === this.activeIndex ? FontWeight.Medium : FontWeight.Normal)
               .fontColor(this.itemColor(index))
           }
+          // 等宽格子：三项严格均分整条栏，视觉上必然对称。
+          // 若改成自然宽度 + SpaceEvenly，格子宽度会随文字长短变化，
+          // 看起来就是「歪的」（实测反馈过）。
+          .layoutWeight(1)
           .height(NAV_HEIGHT)
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
@@ -144,29 +165,35 @@ export struct FloatingNav {
       }
       .width('100%')
       .height(NAV_HEIGHT)
-      // 三个入口等距分布，不依赖任何格子宽度计算
-      .justifyContent(FlexAlign.SpaceEvenly)
+      // 三项用 layoutWeight 等分，不需要 SpaceEvenly 再分间隙
+      .justifyContent(FlexAlign.Start)
+      // 实测整条栏宽度，供把触摸坐标换算成项下标
+      .onAreaChange((oldValue: Area, newValue: Area) => {
+        const w: number = Number.parseFloat(`${newValue.width}`);
+        if (!Number.isNaN(w) && w > 0) {
+          this.measuredWidth = w;
+        }
+      })
     }
     .width('100%')
     .height(NAV_HEIGHT)
     .clip(true)
     // 大圆角：正好是高度的一半，形成完整胶囊
     .borderRadius(NAV_RADIUS)
-    // 底色要非常通透，观感主要靠下面的模糊和描边撑起来。
-    // 25% 白：再高就变成一块灰色实心板，液态玻璃的通透感全无。
+    /*
+     * 液态玻璃。
+     *
+     * 用 backdropBlur 而不是 backgroundBlurStyle：后者会按档位一并调整
+     * 亮度与饱和度，在浅色页面上把整条压成一块灰板（实测就是「灰色实心
+     * 塑料板」的来源）。backdropBlur 只做模糊，亮度交给底色，
+     * 这样 25% 白就是通透的玻璃，而不是发灰的塑料。
+     */
     .backgroundColor('#40FFFFFF')
-    // 最厚一档背景模糊，把透上来的内容磨成砂面。
-    // 注意：backgroundBlurStyle 没有 blurRadius 参数
-    //（那是前景 blur() 的入参），模糊强度只能选 BlurStyle 档位。
-    .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK, {
-      colorMode: ThemeColorMode.LIGHT,
-      adaptiveColor: AdaptiveColor.DEFAULT,
-      scale: 1.0
-    })
+    .backdropBlur(40)
     // 玻璃高光边缘：这圈白边是「玻璃感」的灵魂，比底色更重要
-    .border({ width: 1.5, color: '#CCFFFFFF' })
+    .border({ width: 1.5, color: '#E6FFFFFF' })
     // 内部白色光晕：让边缘有一层柔和的内发光，模拟光线在玻璃里的折射
-    .shadow({ radius: 4, color: 'rgba(255,255,255,0.5)', offsetX: 0, offsetY: 0 })
+    .shadow({ radius: 6, color: 'rgba(255,255,255,0.65)', offsetX: 0, offsetY: 0 })
     // 整条栏统一接管手势：按下即反馈，移动即跟随，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {

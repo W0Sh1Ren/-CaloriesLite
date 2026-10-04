@@ -35,31 +35,43 @@ export struct GlassTopBar {
   @Prop title: string = '';
   /** 副标题，可为空 */
   @Prop subtitle: string = '';
-  /** 左侧返回按钮的文字（如 '‹'）。为空则不显示 */
-  @Prop backGlyph: string = '';
-  onBack: () => void = () => {
+  /** 左上角按钮文字（如 '‹'）。为空则不显示 */
+  @Prop leadingGlyph: string = '';
+  onLeading: () => void = () => {
   };
-  /** 右侧额外内容的高度占位，保证标题居中 */
-  @Prop rightWidth: number = 0;
+  /** 右上角一组步进按钮的文字（如 ['‹','›']）。空数组则不显示 */
+  @Prop trailingGlyphs: string[] = [];
+  onTrailing: (index: number) => void = () => {
+  };
+  /** 右上角按钮是否可用（如「今天」时不能再往后翻） */
+  @Prop trailingEnabled: boolean[] = [];
+
+  /** 右上角一组按钮的总宽度，用于让标题保持居中 */
+  private trailingWidth(): number {
+    if (this.trailingGlyphs.length === 0) {
+      return 0;
+    }
+    // 每个 32 + 间距 8，末尾不留间距
+    return this.trailingGlyphs.length * 32 + (this.trailingGlyphs.length - 1) * 8;
+  }
 
   build() {
     Column() {
       // 状态栏占位：让标题不会顶到系统时间
       Row().height(AppState.topInset)
 
-      Row() {
-        if (this.backGlyph.length > 0) {
+      Row({ space: 8 }) {
+        if (this.leadingGlyph.length > 0) {
           Button({ type: ButtonType.Circle }) {
-            Text(this.backGlyph)
+            Text(this.leadingGlyph)
               .fontSize(20)
               .fontColor(COLOR_TEXT)
           }
           .width(36)
           .height(36)
-          .backgroundColor('#FFFFFF')
-          .shadow(CARD_SHADOW)
+          .backgroundColor('#F2FFFFFF')
           .onClick(() => {
-            this.onBack();
+            this.onLeading();
           })
         }
 
@@ -78,12 +90,28 @@ export struct GlassTopBar {
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
         }
-        .alignItems(this.backGlyph.length > 0 ? HorizontalAlign.Center : HorizontalAlign.Start)
+        .alignItems(this.leadingGlyph.length > 0 ? HorizontalAlign.Center : HorizontalAlign.Start)
         .layoutWeight(1)
 
-        // 右侧对称占位，避免标题因左侧按钮而偏移
-        if (this.backGlyph.length > 0) {
-          Row().width(36).height(36)
+        // 右上角步进按钮（首页用它切换日期）
+        if (this.trailingGlyphs.length > 0) {
+          Row({ space: 8 }) {
+            ForEach(this.trailingGlyphs, (glyph: string, index: number) => {
+              Button({ type: ButtonType.Circle }) {
+                Text(glyph)
+                  .fontSize(18)
+                  .fontColor(this.isTrailingEnabled(index) ? COLOR_TEXT : '#33000000')
+              }
+              .width(32)
+              .height(32)
+              .backgroundColor('#F2FFFFFF')
+              .enabled(this.isTrailingEnabled(index))
+              .onClick(() => {
+                this.onTrailing(index);
+              })
+            }, (glyph: string, index: number) => `${index}-${glyph}`)
+          }
+          .width(this.trailingWidth())
         }
       }
       .width('100%')
@@ -92,14 +120,22 @@ export struct GlassTopBar {
       .alignItems(VerticalAlign.Center)
     }
     .width('100%')
-    // 半透明底 + 最厚一档背景模糊 = 毛玻璃
-    .backgroundColor('#99FFFFFF')
-    .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK, {
-      colorMode: ThemeColorMode.LIGHT,
-      adaptiveColor: AdaptiveColor.DEFAULT,
-      scale: 1.0
-    })
+    /*
+     * 毛玻璃。
+     *
+     * 用 backdropBlur 而不是 backgroundBlurStyle：后者会按 BlurStyle 档位
+     * 一并施加亮度/饱和度调整，在浅色页面上会把整条压成灰板
+     * （实测顶栏和底部导航都因此发灰）。backdropBlur 只做背景模糊，
+     * 亮度完全由底色决定，这里给 70% 白 → 干净通透的磨砂白。
+     */
+    .backgroundColor('#B3FFFFFF')
+    .backdropBlur(24)
     // 底缘极淡的投影，把顶栏和内容分开但不显生硬
     .shadow({ radius: 12, color: 'rgba(0,0,0,0.03)', offsetX: 0, offsetY: 4 })
+  }
+
+  /** 第 index 个右侧按钮是否可用；没传就默认可用 */
+  private isTrailingEnabled(index: number): boolean {
+    return index < this.trailingEnabled.length ? this.trailingEnabled[index] : true;
   }
 }
