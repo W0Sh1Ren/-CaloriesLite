@@ -9,7 +9,7 @@
  * 没有用 Tabs 组件：Tabs 的 tabBar 贴底且做不出毛玻璃悬浮效果，
  * 自己搭反而更好控制动画与层次。
  */
-import { router, curves } from '@kit.ArkUI';
+import { router, curves, display } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -103,12 +103,21 @@ struct Index {
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
   /**
-   * 页面平移的当前位移（百分比，相对单页宽度）。
+   * 单页宽度（vp），实测得到。
    *
-   * 0 = 首页，-100 = 记录页，-200 = 「我的」页。
-   * 三页并排成一条 300% 宽的 Row，平移它即可让视口停在某一页；
-   * 从首页切到「我的」时，视口会**连续经过**记录页，
-   * 这正是「三个页面在平移」的观感。
+   * **为什么不用百分比**：三页并排时 Row 是 300% 宽，
+   * 而 ArkUI 的百分比是相对**父容器**解析的——每个子页写 width('100%')
+   * 会被算成 300% 屏宽，三页合计 900%，布局直接错乱；
+   * translate 的百分比同理会被放大三倍。
+   * 所以宽度与位移都用实测像素，不再依赖百分比的参照物。
+   */
+  @State pageWidth: number = 0;
+  /**
+   * 页面平移的当前位移（vp，向左为负）。
+   *
+   * -pageWidth * activeTab：0 = 首页，-1 屏 = 记录页，-2 屏 = 「我的」页。
+   * 三页并排成一条 3 屏宽的 Row，平移它即可让视口停在某一页；
+   * 从首页切到「我的」时，视口会**连续经过**记录页。
    */
   @State viewOffset: number = 0;
   /**
@@ -198,6 +207,31 @@ struct Index {
   private syncInsets(): void {
     this.topInset = AppState.topInset;
     this.bottomInset = AppState.bottomInset;
+    this.syncPageWidth();
+  }
+
+  /**
+   * 量出单页宽度（vp）。
+   *
+   * 用 display 而不是 onAreaChange：三页并排时那三个容器的宽度本身就由
+   * pageWidth 决定，用它们的测量值反过来算 pageWidth 会自相矛盾。
+   * display 给的是与布局无关的屏幕物理宽度，除以像素密度即 vp。
+   */
+  private syncPageWidth(): void {
+    if (this.pageWidth > 0) {
+      return;
+    }
+    try {
+      const info: display.Display = display.getDefaultDisplaySync();
+      const w: number = info.width / info.densityPixels;
+      if (w > 0) {
+        this.pageWidth = w;
+        // 首帧就要停在当前页，否则会从首页滑一下
+        this.viewOffset = -w * this.activeTab;
+      }
+    } catch (err) {
+      hilog.error(DOMAIN, 'CalorieLite', 'syncPageWidth failed: %{public}s', JSON.stringify(err));
+    }
   }
 
   /** 三个主页面并排渲染，靠平移切换 */
@@ -207,7 +241,7 @@ struct Index {
       /*
        * 视口容器：只负责裁切。
        *
-       * 内部那个 Row 宽 300%（三页 × 100%），必须裁掉溢出部分，
+       * 内部那条 Row 有 3 屏宽，必须裁掉溢出部分，
        * 否则整条 Row 会溢出屏幕、把页面顶歪。
        */
       Column() {
@@ -217,22 +251,23 @@ struct Index {
          * 平移而不是「淡出旧页 + 淡入新页」：从首页切到「我的」时，
          * 视口会**连续经过**记录页——这正是「三个页面在平移」的观感。
          * 代价是三页必须常驻（中间页不存在就没法经过）。
+         *
+         * 宽度全部用实测的 pageWidth，**不用百分比**：
+         * 百分比相对父容器解析，Row 是 3 屏宽时子页的 100% 会被算成
+         * 3 屏宽、三页合计 9 屏，布局直接错乱（这条踩过）。
          */
         Row() {
           /*
-           * 三页常驻是「连续平移」的前提（中间页不存在就没法经过），
-           * 但常驻带来一个必须处理的副作用：**未激活页仍在树上，
-           * 照样会参与命中测试、偷走点击**。
+           * 三页常驻是「连续平移」的前提，但带来一个必须处理的副作用：
+           * **未激活页仍在树上，照样会参与命中测试、偷走点击**。
            * 之前试过常驻三页用 opacity 切换，透明页把拍照按钮和
            * 餐次折叠的点击全吃掉了（实测）。
-           *
-           * 所以每一页的容器都挂 hitTestBehavior(None) + enabled(false)：
-           * 前者让它不参与触摸测试，后者连事件派发都关掉，双保险。
+           * 所以每页容器都挂 hitTestBehavior(None) + enabled(false) 双保险。
            */
           Column() {
             this.todayView()
           }
-          .width('100%')
+          .width(this.pageWidth)
           .height('100%')
           .hitTestBehavior(this.activeTab === 0 ? HitTestMode.Default : HitTestMode.None)
           .enabled(this.activeTab === 0)
@@ -240,7 +275,7 @@ struct Index {
           Column() {
             HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
           }
-          .width('100%')
+          .width(this.pageWidth)
           .height('100%')
           .hitTestBehavior(this.activeTab === 1 ? HitTestMode.Default : HitTestMode.None)
           .enabled(this.activeTab === 1)
@@ -248,12 +283,12 @@ struct Index {
           Column() {
             ProfileTab({ refreshTick: this.refreshTick })
           }
-          .width('100%')
+          .width(this.pageWidth)
           .height('100%')
           .hitTestBehavior(this.activeTab === 2 ? HitTestMode.Default : HitTestMode.None)
           .enabled(this.activeTab === 2)
         }
-        .width('300%')
+        .width(this.pageWidth * 3)
         .height('100%')
         /*
          * 平移整条 Row，让视口停在当前页。
@@ -262,7 +297,7 @@ struct Index {
          * animateTo 是显式驱动、一定能触发，不需要赌某个属性是否被
          * 算作「可动画属性」。
          */
-        .translate({ x: `${this.viewOffset}%` })
+        .translate({ x: this.viewOffset })
       }
       .width('100%')
       .height('100%')
@@ -443,12 +478,11 @@ struct Index {
     /*
      * 平移动画：把整条三页 Row 移到目标页。
      *
-     * 从首页(0)切到「我的」(-200) 时，视口会一路扫过记录页(-100)，
+     * 从首页(0)切到「我的」(-2 屏) 时，视口会一路扫过记录页(-1 屏)，
      * 观感就是「三个页面在平移」而不是「两页互换」。
-     * 位移是百分比、相对 Row 自身宽度（300% 屏宽），
-     * 所以 -100% 恰好等于一屏。
+     * 位移用实测像素（pageWidth），不用百分比——原因见 pageWidth 的注释。
      */
-    const target: number = -index * 100;
+    const target: number = -this.pageWidth * index;
     this.getUIContext().animateTo({ curve: Index.VIEW_SPRING, duration: DUR_VIEW_SWITCH }, () => {
       this.viewOffset = target;
     });
