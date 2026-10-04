@@ -39,18 +39,16 @@ export struct HistoryTab {
    */
   @Prop @Watch('onRefreshTick') refreshTick: number = 0;
 
-  /** 父组件要求重读数据（日期变了、或别的页面写了记录） */
+  /**
+   * 父组件要求重读数据。
+   *
+   * 两类触发要区分开：
+   *   1. 主页面真的翻了日期 → 日历要跟过去
+   *   2. 从二级页返回 / 别的页面写了记录 → 只重读数据，**不能动日历视口**
+   * 靠 syncToMainDay() 里的 lastSyncedDay 判断，见该方法注释。
+   */
   onRefreshTick(): void {
-    /*
-     * 同步选中日期。主页面翻日期后 refreshTick 与 dayKey 会一起变，
-     * 这里要跟过去，否则日历高亮的还是旧那天。
-     */
-    if (this.dayKey.length > 0) {
-      this.selectedDay = this.dayKey;
-      const d = new Date(fromDayKey(this.dayKey));
-      this.viewYear = d.getFullYear();
-      this.viewMonth0 = d.getMonth();
-    }
+    this.syncToMainDay();
     this.bottomInset = AppState.bottomInset;
     this.rebuild();
   }
@@ -80,12 +78,21 @@ export struct HistoryTab {
   @State weightInput: string = '';
   /** 底部安全区高度，由 EntryAbility 实测后写入 AppState */
   @State bottomInset: number = 0;
+  /**
+   * 上一次从主页面同步过来的日期。
+   *
+   * 用来区分「主页面真的翻了日期」与「只是子页面返回触发了刷新」：
+   * 后者不能重置日历视口，否则从详情页返回时会被拉回主页面日期所在的月份
+   *（实测反馈：翻到非本月、点进去再返回，回到了当前月）。
+   */
+  @State lastSyncedDay: string = '';
 
   aboutToAppear(): void {
     const now = new Date();
     this.viewYear = now.getFullYear();
     this.viewMonth0 = now.getMonth();
     this.selectedDay = this.dayKey;
+    this.lastSyncedDay = this.dayKey;
     this.bottomInset = AppState.bottomInset;
     this.rebuild();
   }
@@ -93,13 +100,26 @@ export struct HistoryTab {
   /** 主页面翻日期或恢复前台时同步过来 */
   onDidUpdate(): void {
     this.bottomInset = AppState.bottomInset;
-    if (this.selectedDay !== this.dayKey && this.dayKey.length > 0) {
-      this.selectedDay = this.dayKey;
-      const d = new Date(fromDayKey(this.dayKey));
-      this.viewYear = d.getFullYear();
-      this.viewMonth0 = d.getMonth();
-    }
+    this.syncToMainDay();
     this.rebuild();
+  }
+
+  /**
+   * 跟随主页面的选中日期。
+   *
+   * 只在**主页面日期真的变了**时才动日历视口。
+   * 从二级页返回也会触发刷新，但那时 dayKey 没变，
+   * 不能把用户自己翻到的月份重置掉。
+   */
+  private syncToMainDay(): void {
+    if (this.dayKey.length === 0 || this.dayKey === this.lastSyncedDay) {
+      return;
+    }
+    this.lastSyncedDay = this.dayKey;
+    this.selectedDay = this.dayKey;
+    const d = new Date(fromDayKey(this.dayKey));
+    this.viewYear = d.getFullYear();
+    this.viewMonth0 = d.getMonth();
   }
 
   /** 重算月历格子与当日明细 */
