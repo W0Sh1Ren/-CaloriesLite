@@ -13,7 +13,7 @@
  */
 import {
   COLOR_GLASS_BORDER, COLOR_NAV_ACTIVE, COLOR_NAV_IDLE,
-  DUR_FAST, GLASS_GLOW, GLASS_HAIRLINE, GLASS_LIFT_SHADOW,
+  DUR_FAST, GLASS_GLOW, GLASS_HAIRLINE, GLASS_INNER_GRADIENT, GLASS_LIFT_SHADOW,
   NAV_HEIGHT, NAV_RADIUS
 } from '../common/Theme';
 
@@ -224,6 +224,19 @@ export struct FloatingNav {
         .hitTestBehavior(HitTestMode.None)
 
       /*
+       * 玻璃内层的纵向高光。
+       *
+       * 单纯一个半透明底看起来像「半透明色板」；加上这层渐变后，
+       * 上缘比下缘亮一点 —— 眼睛立刻把它读成「一块有厚度的玻璃」。
+       * 这是模拟折射最省事也最有效的一层。
+       */
+      Column()
+        .width('100%')
+        .height('100%')
+        .linearGradient({ angle: 180, colors: GLASS_INNER_GRADIENT })
+        .hitTestBehavior(HitTestMode.None)
+
+      /*
        * 三个入口均匀排布，没有任何选中背景块。
        *
        * 选中态完全靠颜色表达（图标与文字一起变绿）。
@@ -281,25 +294,27 @@ export struct FloatingNav {
     // 大圆角：正好是高度的一半，形成完整胶囊
     .borderRadius(NAV_RADIUS)
     /*
-     * 液态玻璃。
+     * 液态玻璃（折射感加强版）。
      *
      * 用 backdropBlur 而不是 backgroundBlurStyle：后者会按 BlurStyle 档位
      * 一并施加亮度/饱和度调整，在浅色页面上会把整条压成灰板
      *（实测顶栏和底部导航都因此发灰）。backdropBlur 只做背景模糊，
      * 亮度完全由底色决定。
      *
-     * 底色比上一版更透（25% → 20%），模糊更重（32 → 48）：
-     * 通透感与「磨砂」是此消彼长的——底色越淡越像玻璃，
-     * 但透上来的内容也更清楚，所以要靠更重的模糊把它磨掉。
+     * 底色 20% → 35%：让玻璃更「实」。
+     * 之前 20% 太透，透上来的内容抢注意力，反而像一层薄塑料膜；
+     * 厚玻璃的特征是「能看到后面，但看不清楚」——
+     * 靠更实的白底 + 更重的模糊（48）一起实现。
      */
-    .backgroundColor('#33FFFFFF')
+    .backgroundColor('#59FFFFFF')
     .backdropBlur(48)
     /*
-     * 玻璃的「质感三件套」，顺序有讲究：
-     *   1. 0.5vp 中性白描边 —— 勾出玻璃厚度（粗了就变实体边框，通透感下降）
-     *   2. 深色大半径投影   —— 与下方内容拉开层次，这是「浮起来」的来源
-     *   3. 白色内光晕       —— 边缘内发光，模拟光线折射
-     * 只留第 3 条会显得贴在内容上、没有高度；只留第 2 条会像一块塑料板。
+     * 玻璃的「折射四件套」：
+     *   1. 0.5vp 亮白描边   —— 玻璃厚度；边缘的折射最直观
+     *   2. 内部纵向渐变     —— 上缘亮、下缘暗，光线斜射进玻璃的衰减
+     *   3. 顶部方向性内光   —— offsetY 为负的白光晕，顶部弧形高光
+     *   4. 深色大半径投影   —— 与下方内容拉开层次（浮起来）
+     * 缺 2 / 3 会像一块半透明色板而不是玻璃；缺 4 会贴在内容上没有高度。
      */
     .border({ width: GLASS_HAIRLINE, color: COLOR_GLASS_BORDER })
     .shadow(GLASS_LIFT_SHADOW)

@@ -84,8 +84,13 @@ export const CARD_SHADOW: ShadowOptions = {
  * 通透感反而下降。
  */
 export const GLASS_HAIRLINE: number = 0.5;
-/** 玻璃描边颜色：中性白，不掺任何色调，避免与品牌绿打架 */
-export const COLOR_GLASS_BORDER: string = 'rgba(255, 255, 255, 0.72)';
+/**
+ * 玻璃描边颜色。
+ *
+ * 偏亮的白 —— 这圈边是「折射」最直接的视觉信号：
+ * 光线在玻璃边缘被折弯，看起来就是一条比底色亮得多的细边。
+ */
+export const COLOR_GLASS_BORDER: string = 'rgba(255, 255, 255, 0.92)';
 
 /**
  * 玻璃的深色大半径投影 —— 「浮起感」的来源。
@@ -102,13 +107,30 @@ export const GLASS_LIFT_SHADOW: ShadowOptions = {
   offsetY: 8
 };
 
-/** 玻璃边缘的白色内发光，模拟光线在玻璃里的折射 */
+/**
+ * 玻璃边缘的白色内发光，模拟光线在玻璃里的折射。
+ *
+ * offsetY 取负：把光晕推到**上缘**，形成顶部的弧形高光。
+ * 真实的厚玻璃受光主要在上沿，方向性内光比均匀发光更像玻璃。
+ */
 export const GLASS_GLOW: ShadowOptions = {
-  radius: 6,
-  color: 'rgba(255, 255, 255, 0.65)',
+  radius: 8,
+  color: 'rgba(255, 255, 255, 0.75)',
   offsetX: 0,
-  offsetY: 0
+  offsetY: -2
 };
+
+/**
+ * 玻璃内部的纵向高光渐变。
+ *
+ * 上端略亮、下端接近透明 —— 模拟光线斜射进玻璃后在内侧的衰减。
+ * 这是「折射」里最容易被眼睛识别的一层：玻璃上缘总比下缘亮一点。
+ */
+export const GLASS_INNER_GRADIENT: Array<[ResourceColor, number]> = [
+  ['rgba(255, 255, 255, 0.34)', 0.0],
+  ['rgba(255, 255, 255, 0.06)', 0.55],
+  ['rgba(255, 255, 255, 0.0)', 1.0]
+];
 
 /** 顶栏底缘的分隔投影：比悬浮件更轻，只把顶栏和滚动内容分开 */
 export const TOP_BAR_SHADOW: ShadowOptions = {
