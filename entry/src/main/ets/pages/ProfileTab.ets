@@ -220,7 +220,18 @@ export struct ProfileTab {
             this.hideSheet();
           })
 
-        this.valueSheet()
+        /*
+         * 用一个撑满高度的容器把面板压到底部，而不是依赖 Stack 的
+         * alignContent(Bottom)：容器高度 100% + 内容贴底，
+         * 面板本身就是内容高度，不会出现「面板被拉高、底下留一大片空白」。
+         */
+        Column() {
+          this.valueSheet()
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.End)
+        .hitTestBehavior(HitTestMode.Transparent)
       }
     }
     .width('100%')
@@ -313,9 +324,9 @@ export struct ProfileTab {
     // 底部弹层外观：上方圆角 + 卡片底色 + 让开手势条
     .backgroundColor(COLOR_CARD)
     .borderRadius({ topLeft: 20, topRight: 20 })
-    // 底部让位：导航栏此时已被隐藏，但手势条区域仍要避开。
-    // 再补一截高度，保证体重输入框完整露出来。
-    .padding({ bottom: AppState.bottomInset + 88 })
+    // 底部只让开手势条即可：面板打开时导航栏已被隐藏，
+    // 之前按导航栏高度留的 88vp 会变成一大片空白。
+    .padding({ bottom: AppState.bottomInset + 24 })
     // 从下方滑入，配合遮罩淡入
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 240 }))
