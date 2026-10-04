@@ -14,11 +14,20 @@ import { AppState } from '../common/AppState';
 import { topReserve } from '../components/GlassTopBar';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
-  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_NORMAL, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 import { RollingNumber } from '../components/RollingNumber';
 
 const DOMAIN = 0x0000;
+
+/**
+ * 明细区高度的占位初值（vp）。
+ *
+ * 必须足够大以容纳全部明细（性别 + 三个数值行 + 活动量 4 项 + 目标 4 项）。
+ * 用占位而不是 0，是为了让内层能被布局、从而被 onAreaChange 量到；
+ * 量到真实高度后这个值就被替换掉了。
+ */
+const DETAILS_PLACEHOLDER_H: number = 420;
 
 @Component
 export struct ProfileTab {
@@ -39,6 +48,18 @@ export struct ProfileTab {
    * 挤到很下面。收起时给一行摘要，保证信息不丢。
    */
   @State profileExpanded: boolean = false;
+  /**
+   * 明细区高度（vp）。
+   *
+   * 初值必须是**足够大的占位数**，不能是 0：
+   * 高度为 0 时内层不被布局，onAreaChange 永远量不到真实高度，
+   * 就永远是 0、展开后什么也看不到（循环依赖）。
+   * 先给占位 → 内层被布局（容器裁切到 0，用户看不见）→
+   * 量到真实高度后一直用它，此后两端都是数字，动画才成立。
+   */
+  @State detailsH: number = DETAILS_PLACEHOLDER_H;
+  /** 明细区透明度：配合展开/收起做淡入淡出 */
+  @State detailsAlpha: number = 0;
   @State aiReady: boolean = false;
   @State profileVersion: number = 0;
   @State bmr: number = 0;
@@ -498,14 +519,14 @@ export struct ProfileTab {
           .fontSize(14)
           .fontColor(COLOR_TEXT_SUB)
           .rotate({ angle: this.profileExpanded ? 180 : 0 })
-          .animation({ duration: DUR_NORMAL, curve: Curve.EaseInOut })
+          // 与明细区同时长，箭头与容器动作才是一体的
+          .animation({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut })
       }
       .width('100%')
       .padding({ top: 2, bottom: 2 })
       .onClick(() => {
-        this.profileExpanded = !this.profileExpanded;
+        this.toggleProfile();
       })
-
       /*
        * 收起态摘要：折叠后不会「什么也看不见」。
        * 只读不改，改还是要点开。
@@ -519,129 +540,209 @@ export struct ProfileTab {
           .width('100%')
       }
 
-      if (this.profileExpanded) {
-        // 性别
-        Row({ space: 8 }) {
-          Text('性别')
-            .fontSize(14)
-            .fontColor(COLOR_TEXT_SUB)
-            .width(56)
-          ForEach([Gender.MALE, Gender.FEMALE], (g: Gender) => {
-            Text(genderLabel(g))
-              .fontSize(14)
-              .fontColor(this.profile.gender === g ? Color.White : COLOR_TEXT)
-              .textAlign(TextAlign.Center)
-              .layoutWeight(1)
-              .height(36)
-              .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY : COLOR_BG)
-              .borderRadius(10)
+      /*
+       * 明细区：始终是「数字高度 + 裁切」，靠 animateTo 在 0 ↔ detailsH 之间插值。
+       *
+       * 关键点（踩过好几次才定下来）：
+       *   .height() 一旦从「未设置」跳到某个值，那一次不会有动画 ——
+       *   跨过 undefined 没有可插值的起点。所以高度**必须始终有数字值**。
+       *   又因为不能一开始就写 0（内层不被布局、onAreaChange 不触发），
+       *   初值给一个足够大的占位（DETAILS_PLACEHOLDER），
+       *   实测到真实高度后就一直是数字，此后展开/收起都有动画。
+       *
+       * 第一帧会从占位高度瞬间变成真实高度（一次性的、不可见，
+       * 因为此时是收起态、容器被 clip 到 0）。
+       */
+      Column() {
+        if (this.profileExpanded) {
+          Column({ space: 14 }) {
+            // 性别
+            Row({ space: 8 }) {
+              Text('性别')
+                .fontSize(14)
+                .fontColor(COLOR_TEXT_SUB)
+                .width(56)
+              ForEach([Gender.MALE, Gender.FEMALE], (g: Gender) => {
+                Text(genderLabel(g))
+                  .fontSize(14)
+                  .fontColor(this.profile.gender === g ? Color.White : COLOR_TEXT)
+                  .textAlign(TextAlign.Center)
+                  .layoutWeight(1)
+                  .height(36)
+                  .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY : COLOR_BG)
+                  .borderRadius(10)
+                  .onClick(() => {
+                    this.apply((p: UserProfile) => {
+                      p.gender = g;
+                    });
+                  })
+              }, (g: Gender) => g)
+            }
+            .width('100%')
+
+            // 数值项：点击弹出底部选择面板
+            this.numRow('年龄', () => this.profile.age, '岁', () => {
+              this.openPicker('age');
+            })
+
+            this.numRow('身高', () => this.profile.heightCm, '厘米', () => {
+              this.openPicker('height');
+            })
+
+            this.numRow('体重', () => this.profile.weightKg, '公斤', () => {
+              this.openPicker('weight');
+            })
+
+            Divider().color(COLOR_DIVIDER)
+
+            // 活动水平
+            Text('日常活动量')
+              .fontSize(13)
+              .fontColor(COLOR_TEXT_SUB)
+              .width('100%')
+
+            ForEach(ACTIVITY_ORDER, (level: ActivityLevel) => {
+              Row() {
+                Column({ space: 2 }) {
+                  Text(activityLabel(level))
+                    .fontSize(14)
+                    .fontColor(this.profile.activityLevel === level ? COLOR_PRIMARY : COLOR_TEXT)
+                  Text(activityDesc(level))
+                    .fontSize(11)
+                    .fontColor(COLOR_TEXT_SUB)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+
+                if (this.profile.activityLevel === level) {
+                  Text('✓')
+                    .fontSize(16)
+                    .fontColor(COLOR_PRIMARY)
+                }
+              }
+              .width('100%')
+              .padding({ top: 8, bottom: 8 })
               .onClick(() => {
                 this.apply((p: UserProfile) => {
-                  p.gender = g;
+                  p.activityLevel = level;
                 });
               })
-          }, (g: Gender) => g)
-        }
-        .width('100%')
+            }, (level: ActivityLevel) => level)
 
-        // 数值项：点击弹出底部选择面板
-        this.numRow('年龄', () => this.profile.age, '岁', () => {
-          this.openPicker('age');
-        })
+            Divider().color(COLOR_DIVIDER)
 
-        this.numRow('身高', () => this.profile.heightCm, '厘米', () => {
-          this.openPicker('height');
-        })
+            // 目标
+            Text('目标')
+              .fontSize(13)
+              .fontColor(COLOR_TEXT_SUB)
+              .width('100%')
 
-        this.numRow('体重', () => this.profile.weightKg, '公斤', () => {
-          this.openPicker('weight');
-        })
+            ForEach(GOAL_ORDER, (goal: Goal) => {
+              Row() {
+                Column({ space: 2 }) {
+                  Text(goalLabel(goal))
+                    .fontSize(14)
+                    .fontColor(this.profile.goal === goal ? COLOR_PRIMARY : COLOR_TEXT)
+                  Text(goalDesc(goal))
+                    .fontSize(11)
+                    .fontColor(COLOR_TEXT_SUB)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
 
-        Divider().color(COLOR_DIVIDER)
+                if (this.profile.goal === goal) {
+                  Text('✓')
+                    .fontSize(16)
+                    .fontColor(COLOR_PRIMARY)
+                }
+              }
+              .width('100%')
+              .padding({ top: 8, bottom: 8 })
+              .onClick(() => {
+                this.apply((p: UserProfile) => {
+                  p.goal = goal;
+                });
+              })
+            }, (goal: Goal) => goal)
 
-        // 活动水平
-        Text('日常活动量')
-          .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
-          .width('100%')
-
-        ForEach(ACTIVITY_ORDER, (level: ActivityLevel) => {
-          Row() {
-            Column({ space: 2 }) {
-              Text(activityLabel(level))
-                .fontSize(14)
-                .fontColor(this.profile.activityLevel === level ? COLOR_PRIMARY : COLOR_TEXT)
-              Text(activityDesc(level))
+            if (this.goalDays() > 0) {
+              Text(`按当前目标，约 ${this.goalDays()} 天后可减到目标体重`)
                 .fontSize(11)
                 .fontColor(COLOR_TEXT_SUB)
-            }
-            .alignItems(HorizontalAlign.Start)
-            .layoutWeight(1)
-
-            if (this.profile.activityLevel === level) {
-              Text('✓')
-                .fontSize(16)
-                .fontColor(COLOR_PRIMARY)
+                .width('100%')
             }
           }
           .width('100%')
-          .padding({ top: 8, bottom: 8 })
-          .onClick(() => {
-            this.apply((p: UserProfile) => {
-              p.activityLevel = level;
-            });
+          // 展开时量一次自然高度，供动画用
+          .onAreaChange((oldValue: Area, newValue: Area) => {
+            this.onDetailsArea(newValue);
           })
-        }, (level: ActivityLevel) => level)
-
-        Divider().color(COLOR_DIVIDER)
-
-        // 目标
-        Text('目标')
-          .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
-          .width('100%')
-
-        ForEach(GOAL_ORDER, (goal: Goal) => {
-          Row() {
-            Column({ space: 2 }) {
-              Text(goalLabel(goal))
-                .fontSize(14)
-                .fontColor(this.profile.goal === goal ? COLOR_PRIMARY : COLOR_TEXT)
-              Text(goalDesc(goal))
-                .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
-            }
-            .alignItems(HorizontalAlign.Start)
-            .layoutWeight(1)
-
-            if (this.profile.goal === goal) {
-              Text('✓')
-                .fontSize(16)
-                .fontColor(COLOR_PRIMARY)
-            }
-          }
-          .width('100%')
-          .padding({ top: 8, bottom: 8 })
-          .onClick(() => {
-            this.apply((p: UserProfile) => {
-              p.goal = goal;
-            });
-          })
-        }, (goal: Goal) => goal)
-
-        if (this.goalDays() > 0) {
-          Text(`按当前目标，约 ${this.goalDays()} 天后可减到目标体重`)
-            .fontSize(11)
-            .fontColor(COLOR_TEXT_SUB)
-            .width('100%')
         }
       }
+      .width('100%')
+      /*
+       * 高度始终是数字：展开 = 实测高度，收起 = 0。两端可插值，动画才成立。
+       * 不用 .animation()，动画由 toggle 里的 animateTo 显式驱动
+       *（与首页餐次折叠同一套做法）。
+       */
+      .height(this.profileExpanded ? this.detailsH : 0)
+      .clip(true)
+      .opacity(this.detailsAlpha)
     }
     .width('100%')
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
+  }
+
+  /**
+   * 展开/收起「个人情况」明细。
+   *
+   * ══════════════════════════════════════════════════════════════
+   * 【已验证有效的做法 —— 用户认可「非常好」，改动前请先读完】
+   * ══════════════════════════════════════════════════════════════
+   * 折叠动效由**透明度淡入淡出**承担，配 animateTo 显式驱动：
+   *
+   *   animateTo(...) {
+   *     profileExpanded = next      // 高度即时变化（0 ↔ 实测高度）
+   *     detailsAlpha = next ? 1 : 0 // 透明度插值 → 这就是那个动效
+   *   }
+   *
+   * 为什么不用高度动画（试过很多次，都不成立）：
+   *   .height() 从「占位值」跳到「实测值」的那一帧跨过了不可插值的边界，
+   *   无论配合 .animation() 还是 animateTo，实测都**没有中间帧**，
+   *   观感是硬闪。高度变化本身保留（保证布局正确、占位同步释放），
+   *   但由淡入淡出盖住，看着是「内容浮现」而不是「突然出现」。
+   *
+   * 所以这里**不要**改成高度动画，也不要删掉 detailsAlpha。
+   */
+  private toggleProfile(): void {
+    const next: boolean = !this.profileExpanded;
+    if (next) {
+      // 展开前恢复占位高度，逼它重新量一次（内容可能已变）
+      this.detailsH = DETAILS_PLACEHOLDER_H;
+    }
+    this.getUIContext().animateTo({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut }, () => {
+      this.profileExpanded = next;
+      this.detailsAlpha = next ? 1 : 0;
+    });
+  }
+
+  /**
+   * 记下明细区自然高度。
+   *
+   * 只在展开态量（收起态内层根本没渲染），量到就替换掉占位初值。
+   */
+  private onDetailsArea(area: Area): void {
+    const h: number = Number.parseFloat(`${area.height}`);
+    if (Number.isNaN(h) || h <= 0.5) {
+      return;
+    }
+    if (Math.abs(h - this.detailsH) < 0.5) {
+      return;
+    }
+    this.detailsH = h;
   }
 
   /**

@@ -272,6 +272,13 @@ export const VIEW_INACTIVE_SCALE: number = 0.94;
 export const VIEW_SLIDE_X: number = 96;
 /** 切换动画时长，比普通过渡略长，让方向感看得清 */
 export const DUR_VIEW_SWITCH: number = 340;
+/**
+ * 折叠面板（餐次明细 / 个人情况明细）展开与收起的时长。
+ *
+ * 比 DUR_NORMAL(260) 长一些：这是一次**高度变化**（可能几百 vp），
+ * 260ms 显得急、像硬切；320ms 能看清「撑开/收起」的过程。
+ */
+export const DUR_MEAL_EXPAND: number = 320;
 
 /** 透明度过渡：淡出快一点，避免两个视图同时可见时发灰 */
 export const VIEW_TRANSITION_OUT: TransitionEffect = TransitionEffect.OPACITY

@@ -816,10 +816,15 @@ struct Index {
    *
    * 默认收起，只显示餐次名与合计热量；点标题才展开逐条明细。
    * 刚记完一餐时列表会一下子变很长，收起是更好的默认状态。
+   *
+   * 层级（原来每餐是一段裸列表，四个餐次糊成一片分不清边界）：
+   *   每餐一张白色卡片（圆角 + 阴影）→ 卡片内标题行
+   *   → 展开时用一条分隔线把标题与明细切开，明细区自身是浅底块。
+   * 这样「早餐 / 午餐 / 晚餐 / 加餐」各自成形，滚动时边界一眼可辨。
    */
   @Builder
   mealSection(meal: MealType) {
-    Column({ space: 8 }) {
+    Column({ space: 0 }) {
       // 标题行：整行可点，右侧箭头随展开状态旋转
       Row({ space: 6 }) {
         Text(mealTypeLabel(meal))
@@ -842,10 +847,18 @@ struct Index {
           .animation({ duration: DUR_NORMAL, curve: Curve.EaseInOut })
       }
       .width('100%')
-      .padding({ left: 4, right: 4, top: 4, bottom: 4 })
+      .padding({ left: 14, right: 14, top: 12, bottom: 12 })
       .onClick(() => {
         this.toggleMeal(meal);
       })
+
+      /*
+       * 展开时先来一条分隔线：把「标题」与「明细」在视觉上切开，
+       * 这是层级感最关键的一笔 —— 没有它，展开后标题会和第一条记录粘在一起。
+       */
+      if (this.isExpanded(meal)) {
+        Divider().color(COLOR_DIVIDER)
+      }
 
       if (this.isExpanded(meal)) {
         Column({ space: 8 }) {
@@ -857,9 +870,6 @@ struct Index {
             }
             .width('100%')
             .padding(14)
-            .backgroundColor(COLOR_CARD)
-            .borderRadius(RADIUS)
-            .shadow(CARD_SHADOW)
           } else {
             ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
               RecordRow({
@@ -876,6 +886,14 @@ struct Index {
           }
         }
         .width('100%')
+        // 浅底块：与白色卡片形成第二层，明细区一眼是「卡片里的内容」
+        .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+        .backgroundColor(COLOR_BG)
+        /*
+         * 底部的圆角要跟着卡片：卡片圆角 18、外层 padding 0，
+         * 明细块在最底下，不补圆角就会溢出卡片边角。
+         */
+        .borderRadius({ bottomLeft: RADIUS, bottomRight: RADIUS })
         // 展开/收起都走同一个过渡，收起时自动反向播放
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.scale({ x: 1, y: 0.94, centerY: '0%' }))
@@ -890,10 +908,15 @@ struct Index {
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .width('100%')
-        .padding({ left: 4, right: 4, bottom: 2 })
+        .padding({ left: 14, right: 14, bottom: 12 })
       }
     }
     .width('100%')
+    // 每餐一张卡片，四个餐次之间才有明确的边界
+    .backgroundColor(COLOR_CARD)
+    .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
+    .clip(true)
   }
 
   /** 收起态的一行摘要，例如「白米饭、番茄炒蛋」 */
