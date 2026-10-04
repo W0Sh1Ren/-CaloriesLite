@@ -1,24 +1,24 @@
 /**
  * 悬浮液态玻璃导航栏。
  *
+ * 材质用的是系统的「沉浸光感」（uiMaterial + systemMaterial），不是手写模糊：
+ * 系统会按设备算力决定模糊/亮度/描边/投影，并自带光感交互反馈
+ * ——按下时在材质上浮起一层光。手写 backgroundEffect 做不出这个效果。
+ * 不支持沉浸材质的设备上自动退回普通半透明底色（见 Material.ets）。
+ *
  * 交互（对齐参考图的观感）：
- *   - 按住任意位置：以手指为圆心浮起一团柔光，手指移到哪光就跟到哪
+ *   - 按住任意位置：以手指为圆心浮起柔光，手指移到哪光就跟到哪
  *   - 高亮胶囊实时跟到手指所在的项（弹簧曲线，不是硬切）
  *   - 手指抬起：选中抬起位置对应的项，并触发页面切换
- *   - 整条栏是毛玻璃胶囊，浮在内容之上
- *
- * 玻璃质感三层叠加：
- *   底 backgroundEffect 强模糊 + 提饱和提亮，让下方内容透出来并带一点厚度
- *   中 淡白底，保证文字在任何背景上都读得清
- *   上 自上而下由亮到透明的渐变，模拟玻璃边缘的高光
- * 再套一圈半透明白边，玻璃的「边」就出来了。
  *
  * 注意：底部安全区（手势条）会吃掉点击，整条栏必须由父组件抬到 bottomInset 之上。
  */
+import { uiMaterial } from '@kit.ArkUI';
 import {
   CARD_SHADOW, COLOR_PRESS_GLOW, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT_SUB,
   CURVE_SPRING, DUR_FAST, NAV_HEIGHT, PRESS_SCALE
 } from '../common/Theme';
+import { immersiveSupported, systemMaterial } from '../common/Material';
 
 /** 一个导航项 */
 export class NavItem {
@@ -69,17 +69,19 @@ export struct FloatingNav {
     return Math.max(0, Math.min(this.items.length - 1, i));
   }
 
-  /** 玻璃的两层底色，包在一个不参与命中测试的 Stack 里 */
+  /**
+   * 不支持沉浸材质时的兜底底色。
+   *
+   * 支持时整条栏交给 systemMaterial 渲染，这里什么都不画——
+   * 自绘底色会盖住系统材质的效果。
+   */
   @Builder
-  glassLayers() {
+  fallbackBackdrop() {
     Stack() {
-      // 中：淡白底，保证文字在任何背景上都读得清
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#8CFFFFFF')
-
-      // 上：自上而下的高光渐变，玻璃的「光泽」
+        .backgroundColor('#D9FFFFFF')
       Column()
         .width('100%')
         .height('100%')
@@ -90,6 +92,11 @@ export struct FloatingNav {
     }
     .width('100%')
     .height('100%')
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK, {
+      colorMode: ThemeColorMode.LIGHT,
+      adaptiveColor: AdaptiveColor.DEFAULT,
+      scale: 1.0
+    })
     .hitTestBehavior(HitTestMode.None)
   }
 
@@ -113,7 +120,10 @@ export struct FloatingNav {
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
-      this.glassLayers()
+      // 不支持沉浸材质时才画兜底底色
+      if (!immersiveSupported()) {
+        this.fallbackBackdrop()
+      }
 
       Stack({ alignContent: Alignment.Start }) {
         // 高亮胶囊：弹簧曲线跟随，滑动而不是跳变
@@ -169,16 +179,17 @@ export struct FloatingNav {
     }
     .width('100%')
     .height(NAV_HEIGHT)
-    .backgroundEffect({
-      radius: 36,
-      saturation: 1.8,
-      brightness: 1.08,
-      color: '#33FFFFFF'
-    })
+    // 系统沉浸光感材质：模糊、亮度、描边、投影都由系统按设备算力决定，
+    // 并带光感交互反馈——按下时材质上会浮起一层光。
+    // interactive 打开交互动效变形；lightEffect 指定反馈光的颜色。
+    .systemMaterial(systemMaterial(
+      uiMaterial.ImmersiveStyle.THICK,
+      '#2EFFFFFF',
+      true,
+      '#66FF7A45'
+    ))
     .clip(true)
     .borderRadius(NAV_HEIGHT / 2)
-    .border({ width: 1, color: '#59FFFFFF' })
-    .shadow(CARD_SHADOW)
     // 整条栏统一接管手势：按下即出光效，移动即跟手，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {

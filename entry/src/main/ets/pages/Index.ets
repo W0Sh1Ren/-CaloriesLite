@@ -49,7 +49,16 @@ struct Index {
   /** 当前视图下标。名字不能叫 tabIndex：ArkUI 的 CustomComponent 已有同名属性 */
   @State activeTab: number = 0;
   /** 每次从子页面返回自增，驱动子视图重新读数据 */
-  @State refreshTick: number = 0;
+  /**
+   * 数据刷新计数器。
+   *
+   * 加 @Watch 是有意为之：increment 时直接把数据重读一遍。
+   * 只靠 onPageShow 不够稳——从相机/结果页 router.back() 回来时，
+   * 生命周期回调的触发时机取决于页面栈实现，实测出现过
+   * 「识别完回到首页，热量和营养素还是旧值，退出重进才更新」。
+   * 走 @Watch 就是把「刷新」和「生命周期」解耦，只要计数器变了就一定重读。
+   */
+  @State @Watch('onRefreshTick') refreshTick: number = 0;
   /** 顶部柔光配色，按当前时段取 */
   @State glow: GlowPalette = glowForHour(hourOf(Date.now()));
   /** 悬浮导航栏实测宽度，用于算高亮胶囊位置 */
@@ -60,6 +69,10 @@ struct Index {
   @State bottomInset: number = 0;
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
+  /** 本次切换的方向：1 向右切、-1 向左切，决定入场从哪一侧滑入 */
+  @State navDir: number = 1;
+  /** 视图入场动画的重放键：每次切换自增，迫使动画重新播放 */
+  @State viewAnimKey: number = 0;
 
   aboutToAppear(): void {
     this.syncInsets();
@@ -82,10 +95,45 @@ struct Index {
     this.reload();
     this.refreshTick++;
   }
+  /**
+   * refreshTick 变化时重读当日数据。
+   *
+   * 注意 dayKey 也要在这里重新取一次：识别可能跨过零点，
+   * 或者页面在后台待了很久，回来时应显示当天而不是离开时那一天。
+   */
+  onRefreshTick(): void {
+    this.reload();
+  }
+
   /** 把 EntryAbility 量好的安全区尺寸取到本地状态，驱动布局重算 */
   private syncInsets(): void {
     this.topInset = AppState.topInset;
     this.bottomInset = AppState.bottomInset;
+  }
+
+  /** 按当前下标渲染视图，并播放从切换方向滑入的入场动画 */
+  @Builder
+  contentView() {
+    Column() {
+      if (this.activeTab === 0) {
+        this.todayView()
+      } else if (this.activeTab === 1) {
+        HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
+      } else {
+        ProfileTab({ refreshTick: this.refreshTick })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    // 新视图从切换方向那一侧滑入并淡入；旧视图立即移除，所以不存在
+    // 「透明层挡住点击」的问题
+    .transition(TransitionEffect.asymmetric(
+      TransitionEffect.OPACITY
+        .combine(TransitionEffect.translate({ x: this.navDir >= 0 ? 56 : -56 }))
+        .animation({ duration: DUR_VIEW_SWITCH, curve: Curve.FastOutSlowIn }),
+      TransitionEffect.OPACITY
+        .animation({ duration: 120, curve: Curve.EaseIn })
+    ))
   }
 
   private reload(): void {
@@ -94,12 +142,28 @@ struct Index {
 
   /** 切换视图：改下标并同时刷新数据 */
   private switchTo(index: number): void {
+    if (index === this.activeTab) {
+      // 已经在这一页：仍然重读一次，避免「点了没反应但数据其实变了」的情况
+      if (index === 0) {
+        this.dayKey = todayKey();
+        this.refreshTick++;
+      }
+      return;
+    }
     // 「我的」页可能刚改过档案，回到首页要按新预算重算
     if (AppState.profileDirty) {
       AppState.profileDirty = false;
       this.reload();
     }
+    this.navDir = index > this.activeTab ? 1 : -1;
     this.activeTab = index;
+    // 重放入场动画
+    this.viewAnimKey++;
+    // 回到首页时按当天重读，保证刚记录的餐次立刻出现
+    if (index === 0) {
+      this.dayKey = todayKey();
+      this.refreshTick++;
+    }
   }
 
   private mealKcal(records: FoodRecord[]): number {
@@ -153,42 +217,13 @@ struct Index {
         })
 
       // ---------------------------------------------------- 2. 内容层
-      // 三个视图都常驻在 Stack 里，靠属性动画做切换过渡。
-      // 不用 if/else 是因为那会销毁并重建视图，过渡动画会被打断。
-      // 未选中的视图缩到 0.94 并移出屏幕，同时屏蔽命中测试。
-      Stack() {
-        Column() {
-          this.todayView()
-        }
-        .width('100%')
-        .height('100%')
-        .opacity(this.activeTab === 0 ? 1 : 0)
-        .translate({ x: this.activeTab === 0 ? 0 : (this.activeTab > 0 ? -VIEW_SLIDE_X : VIEW_SLIDE_X) })
-        .scale({ x: this.activeTab === 0 ? 1 : VIEW_INACTIVE_SCALE, y: this.activeTab === 0 ? 1 : VIEW_INACTIVE_SCALE })
-        .hitTestBehavior(this.activeTab === 0 ? HitTestMode.Default : HitTestMode.None)
-        .animation({ duration: DUR_VIEW_SWITCH, curve: CURVE_BOUNCE })
-
-        Column() {
-          HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
-        }
-        .width('100%')
-        .height('100%')
-        .opacity(this.activeTab === 1 ? 1 : 0)
-        .translate({ x: this.activeTab === 1 ? 0 : (this.activeTab > 1 ? -VIEW_SLIDE_X : VIEW_SLIDE_X) })
-        .scale({ x: this.activeTab === 1 ? 1 : VIEW_INACTIVE_SCALE, y: this.activeTab === 1 ? 1 : VIEW_INACTIVE_SCALE })
-        .hitTestBehavior(this.activeTab === 1 ? HitTestMode.Default : HitTestMode.None)
-        .animation({ duration: DUR_VIEW_SWITCH, curve: CURVE_BOUNCE })
-
-        Column() {
-          ProfileTab({ refreshTick: this.refreshTick })
-        }
-        .width('100%')
-        .height('100%')
-        .opacity(this.activeTab === 2 ? 1 : 0)
-        .translate({ x: this.activeTab === 2 ? 0 : (this.activeTab > 2 ? -VIEW_SLIDE_X : VIEW_SLIDE_X) })
-        .scale({ x: this.activeTab === 2 ? 1 : VIEW_INACTIVE_SCALE, y: this.activeTab === 2 ? 1 : VIEW_INACTIVE_SCALE })
-        .hitTestBehavior(this.activeTab === 2 ? HitTestMode.Default : HitTestMode.None)
-        .animation({ duration: DUR_VIEW_SWITCH, curve: CURVE_BOUNCE })
+      // 只渲染当前视图，靠入场动画完成切换。
+      //
+      // 之前试过让三个视图常驻 Stack、用 opacity 切换，结果未激活视图
+      // 虽然透明但仍参与命中测试，把下面的按钮点击全吃掉了
+      // （实测拍照按钮和餐次折叠都点不动）。条件渲染没有这个问题。
+      Column() {
+        this.contentView()
       }
       .width('100%')
       .height('100%')

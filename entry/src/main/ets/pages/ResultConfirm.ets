@@ -81,7 +81,9 @@ function round1(v: number): number {
 @Component
 struct ResultConfirm {
   @State drafts: EditableDraft[] = [];
-  @State imageUri: string = '';
+  @State imageUris: string[] = [];
+  /** 用户手写的补充说明（已随请求发给模型），结果页回显供核对 */
+  @State userNotes: string = '';
   @State overallNote: string = '';
   @State model: string = '';
   @State meal: MealType = MealType.LUNCH;
@@ -99,7 +101,8 @@ struct ResultConfirm {
       rows.push(new EditableDraft(d));
     }
     this.drafts = rows;
-    this.imageUri = pending.imageUri;
+    this.imageUris = pending.imageUris;
+    this.userNotes = pending.userNotes;
     this.overallNote = pending.overallNote;
     this.model = pending.model;
     this.meal = AppState.targetMeal;
@@ -153,6 +156,8 @@ struct ResultConfirm {
     }
     const day: string = todayKey();
     const now: number = Date.now();
+    // 记录只挂第一张图，避免每条记录都带一串图片路径
+    const firstImage: string = this.imageUris.length > 0 ? this.imageUris[0] : '';
     const records: FoodRecord[] = [];
 
     for (const d of this.drafts) {
@@ -163,7 +168,7 @@ struct ResultConfirm {
       }
       records.push(new FoodRecord(
         makeId(), day, now, this.meal, d.name, grams, d.kcal,
-        d.protein, d.fat, d.carb, d.source, this.imageUri, d.note
+        d.protein, d.fat, d.carb, d.source, firstImage, d.note
       ));
     }
 
@@ -201,13 +206,42 @@ struct ResultConfirm {
 
       Scroll() {
         Column({ space: GAP }) {
-          // 原图 + 模型信息
-          if (this.imageUri.length > 0) {
-            Image(this.imageUri)
-              .width('100%')
-              .height(180)
-              .objectFit(ImageFit.Cover)
-              .borderRadius(RADIUS)
+          // 送出去识别的原图（可能多张）+ 模型信息
+          if (this.imageUris.length > 0) {
+            Scroll() {
+              Row({ space: 10 }) {
+                ForEach(this.imageUris, (uri: string, index: number) => {
+                  Image(uri)
+                    .width(this.imageUris.length > 1 ? 120 : '100%')
+                    .height(this.imageUris.length > 1 ? 120 : 180)
+                    .objectFit(ImageFit.Cover)
+                    .borderRadius(RADIUS)
+                }, (uri: string, index: number) => `${index}-${uri}`)
+              }
+            }
+            .scrollable(this.imageUris.length > 1 ? ScrollDirection.Horizontal : ScrollDirection.Vertical)
+            .scrollBar(BarState.Off)
+            .width('100%')
+          }
+
+          // 回显用户自己写的补充说明，方便核对模型有没有照做
+          if (this.userNotes.length > 0) {
+            Row({ space: 8 }) {
+              Text('你的说明')
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+              Text(this.userNotes)
+                .fontSize(12)
+                .fontColor(COLOR_TEXT)
+                .layoutWeight(1)
+                .maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .width('100%')
+            .padding(12)
+            .backgroundColor(COLOR_CARD)
+            .borderRadius(RADIUS)
+            .shadow(CARD_SHADOW)
           }
 
           Row() {

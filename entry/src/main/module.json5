@@ -11,6 +11,16 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // 开启沉浸光感（沉浸系统材质）。
+    // state: MaterialState.ENABLE(1) 表示允许组件使用沉浸材质；
+    // type:  MaterialType.IMMERSIVE(2) 对应 uiMaterial.ImmersiveMaterial。
+    // 不开这个开关时，systemMaterial() 设了也不生效。
+    "metadata": [
+      {
+        "name": "ohos.arkui.uiMaterial",
+        "value": "{\"state\": 1, \"type\": 2}"
+      }
+    ],
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET"

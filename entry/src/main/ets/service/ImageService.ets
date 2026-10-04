@@ -83,20 +83,21 @@ export class ImageService {
   }
 
   /**
-   * 从相册选一张图。
-   * @returns 选中图片的 uri，用户取消返回空字符串
+   * 从相册选图。
+   * @param maxCount 最多选几张
+   * @returns 选中图片的 uri 列表，用户取消返回空数组
    */
-  static async pickFromGallery(): Promise<string> {
+  static async pickFromGallery(maxCount: number = 1): Promise<string[]> {
     try {
       const helper: photoPicker.PhotoViewPicker = new photoPicker.PhotoViewPicker();
       const options: photoPicker.PhotoSelectOptions = new photoPicker.PhotoSelectOptions();
       options.MIMEType = photoPicker.PhotoViewMIMETypes.IMAGE_TYPE;
-      options.maxSelectNumber = 1;
+      options.maxSelectNumber = maxCount > 0 ? maxCount : 1;
       const result: photoPicker.PhotoSelectResult = await helper.select(options);
       if (result.photoUris.length === 0) {
-        return '';
+        return [];
       }
-      return result.photoUris[0];
+      return result.photoUris;
     } catch (err) {
       const e: Error = err as Error;
       hilog.error(DOMAIN, 'CalorieLite', 'pickFromGallery failed: %{public}s', e.message);

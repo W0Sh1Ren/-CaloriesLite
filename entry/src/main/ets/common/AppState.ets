@@ -11,20 +11,32 @@ import { FoodDraft, MealType } from '../model/Types';
 
 /** 拍照识别页 → 首页 的待确认结果 */
 export class PendingResult {
-  /** 原图 uri，用于结果页展示缩略图 */
-  imageUri: string = '';
+  /**
+   * 送出识别的图片 uri 列表（可能多张），结果页用它们展示缩略图。
+   * 记录只存第一张，避免每条记录都挂一串图。
+   */
+  imageUris: string[] = [];
   /** 识别出的食物草稿 */
   drafts: FoodDraft[] = [];
   /** 整图说明 */
   overallNote: string = '';
   /** 使用的模型 */
   model: string = '';
+  /** 用户手写的补充说明，已随请求发给模型 */
+  userNotes: string = '';
 
-  constructor(imageUri: string, drafts: FoodDraft[], overallNote: string, model: string) {
-    this.imageUri = imageUri;
+  constructor(imageUris: string[], drafts: FoodDraft[], overallNote: string, model: string,
+    userNotes: string) {
+    this.imageUris = imageUris;
     this.drafts = drafts;
     this.overallNote = overallNote;
     this.model = model;
+    this.userNotes = userNotes;
+  }
+
+  /** 首图，用于记录里的缩略图 */
+  firstImage(): string {
+    return this.imageUris.length > 0 ? this.imageUris[0] : '';
   }
 }
 

@@ -86,19 +86,29 @@ class ParsedFood {
 export class VisionService {
 
   /**
-   * 识别一张图片。
-   * @param base64 不含 data URL 前缀的纯 base64
-   * @param mimeType 形如 image/jpeg
+   * 识别一组图片。
+   *
+   * 支持多张：一次把同一餐的几张照片（比如主食、菜、饮料各拍一张）一起发过去，
+   * 模型能合并同类项并综合判断总份量，比逐张识别再相加更准。
+   *
+   * @param images   图片列表，每项是纯 base64（不含 data URL 前缀）
+   * @param notes    用户手写的补充说明，直接拼进提示词。
+   *                 比如「这碗面只吃了一半」，模型据此调整份量估算。
    */
-  static async recognize(config: AiConfig, base64: string, mimeType: string): Promise<VisionResult> {
+  static async recognize(config: AiConfig, images: string[], notes: string): Promise<VisionResult> {
     VisionService.validate(config);
-    if (base64.length === 0) {
+    if (images.length === 0) {
       throw new VisionError('图片内容为空，请重新拍摄');
+    }
+    for (const b of images) {
+      if (b.length === 0) {
+        throw new VisionError('有图片内容为空，请重新拍摄');
+      }
     }
 
     const content: string = config.provider === AiProvider.GEMINI
-      ? await VisionService.callGemini(config, base64, mimeType)
-      : await VisionService.callOpenAiCompatible(config, base64, mimeType);
+      ? await VisionService.callGemini(config, images, notes)
+      : await VisionService.callOpenAiCompatible(config, images, notes);
 
     const parsed: ParsedFood[] = VisionService.parseFoods(content);
     if (parsed.length === 0) {
@@ -128,13 +138,13 @@ export class VisionService {
   // ---------------------------------------------------------------- 请求构造
 
   /** OpenAI 兼容：POST {baseUrl}/chat/completions */
-  private static async callOpenAiCompatible(config: AiConfig, base64: string, mimeType: string): Promise<string> {
+  private static async callOpenAiCompatible(config: AiConfig, images: string[], notes: string): Promise<string> {
     const url: string = `${VisionService.trimSlash(config.baseUrl)}/chat/completions`;
-    const imageUrl: string = `data:${mimeType};base64,${base64}`;
 
     const body: Record<string, Object> = {};
     body['model'] = config.model;
-    body['max_tokens'] = 1500;
+    // 多图会显著增加输入 token，输出上限相应放宽一点
+    body['max_tokens'] = images.length > 1 ? 2500 : 1500;
 
     // 思考模式显式关掉或打开。
     // 不传时由服务端默认值决定——DeepSeek 的默认是「开启且 effort=high」，
@@ -154,15 +164,18 @@ export class VisionService {
     const userContent: Record<string, Object>[] = [];
     const textPart: Record<string, Object> = {};
     textPart['type'] = 'text';
-    textPart['text'] = '请识别这张照片里的食物，并按要求的 JSON 格式返回。';
+    textPart['text'] = VisionService.buildUserText(images.length, notes);
     userContent.push(textPart);
 
-    const imagePart: Record<string, Object> = {};
-    imagePart['type'] = 'image_url';
-    const inner: Record<string, Object> = {};
-    inner['url'] = imageUrl;
-    imagePart['image_url'] = inner;
-    userContent.push(imagePart);
+    // 多张图片按顺序附上，模型会当作同一餐的多角度照片
+    for (const b64 of images) {
+      const imagePart: Record<string, Object> = {};
+      imagePart['type'] = 'image_url';
+      const inner: Record<string, Object> = {};
+      inner['url'] = `data:image/jpeg;base64,${b64}`;
+      imagePart['image_url'] = inner;
+      userContent.push(imagePart);
+    }
 
     const messages: Record<string, Object>[] = [];
     const sysMsg: Record<string, Object> = {};
@@ -181,8 +194,29 @@ export class VisionService {
     return VisionService.extractOpenAiContent(raw);
   }
 
+  /**
+   * 拼用户那段文字。
+   *
+   * 多图时明确告诉模型这是同一餐的照片，让它合并同类项而不是当成两餐重复计数；
+   * 有用户手写说明时原样附上，并强调以此为准。
+   */
+  private static buildUserText(imageCount: number, notes: string): string {
+    const parts: string[] = [];
+    if (imageCount > 1) {
+      parts.push(`这是同一餐的 ${imageCount} 张照片，请合并同类项后统一给出结果，不要重复计数。`);
+    } else {
+      parts.push('请识别这张照片里的食物，并按要求的 JSON 格式返回。');
+    }
+    const trimmed: string = notes.trim();
+    if (trimmed.length > 0) {
+      parts.push(`用户补充说明（请以此为准调整份量与判断）：${trimmed}`);
+    }
+    parts.push('只输出 JSON。');
+    return parts.join('\n');
+  }
+
   /** Gemini：POST {baseUrl}/v1beta/models/{model}:generateContent?key=... */
-  private static async callGemini(config: AiConfig, base64: string, mimeType: string): Promise<string> {
+  private static async callGemini(config: AiConfig, images: string[], notes: string): Promise<string> {
     const base: string = VisionService.trimSlash(config.baseUrl);
     // 官方地址已含版本号时不再重复拼接
     const prefix: string = base.includes('/v1beta') || base.includes('/v1alpha') ? base : `${base}/v1beta`;
@@ -190,15 +224,18 @@ export class VisionService {
 
     const parts: Record<string, Object>[] = [];
     const textPart: Record<string, Object> = {};
-    textPart['text'] = SYSTEM_PROMPT;
+    textPart['text'] = `${SYSTEM_PROMPT}\n${VisionService.buildUserText(images.length, notes)}`;
     parts.push(textPart);
 
-    const inline: Record<string, Object> = {};
-    inline['mime_type'] = mimeType;
-    inline['data'] = base64;
-    const imagePart: Record<string, Object> = {};
-    imagePart['inline_data'] = inline;
-    parts.push(imagePart);
+    // 多张图片依次作为 inline_data 附上
+    for (const b64 of images) {
+      const inline: Record<string, Object> = {};
+      inline['mime_type'] = 'image/jpeg';
+      inline['data'] = b64;
+      const imagePart: Record<string, Object> = {};
+      imagePart['inline_data'] = inline;
+      parts.push(imagePart);
+    }
 
     const content: Record<string, Object> = {};
     content['parts'] = parts;
@@ -207,7 +244,7 @@ export class VisionService {
 
     const genConfig: Record<string, Object> = {};
     genConfig['temperature'] = 0.2;
-    genConfig['maxOutputTokens'] = 1500;
+    genConfig['maxOutputTokens'] = images.length > 1 ? 2500 : 1500;
     genConfig['responseMimeType'] = 'application/json';
 
     const body: Record<string, Object> = {};

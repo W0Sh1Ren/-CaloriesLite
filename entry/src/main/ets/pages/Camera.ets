@@ -16,14 +16,20 @@ import { ImageService, PreparedImage, ImageError } from '../service/ImageService
 import { VisionService, VisionResult, VisionError } from '../service/VisionService';
 import { PermissionUtil } from '../common/PermissionUtil';
 import { AppState, PendingResult } from '../common/AppState';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
+
+/** 一次最多几张照片 */
+const MAX_IMAGES: number = 4;
 
 @Entry
 @Component
 struct CameraPage {
-  @State imageUri: string = '';
+  /** 已选/已拍的图片 uri 列表，可多张 */
+  @State imageUris: string[] = [];
+  /** 用户手写的补充说明，会随请求发给模型 */
+  @State notes: string = '';
   @State busy: boolean = false;
   @State statusText: string = '';
   @State errorText: string = '';
@@ -32,9 +38,13 @@ struct CameraPage {
     return this.getUIContext().getHostContext() as common.UIAbilityContext;
   }
 
-  /** 拍一张 */
+  /** 拍一张并追加到列表（支持连拍多张） */
   private async onTakePhoto(): Promise<void> {
     if (this.busy) {
+      return;
+    }
+    if (this.imageUris.length >= MAX_IMAGES) {
+      this.errorText = `最多 ${MAX_IMAGES} 张照片`;
       return;
     }
     this.errorText = '';
@@ -44,14 +54,13 @@ struct CameraPage {
       if (uri.length === 0) {
         return; // 用户取消
       }
-      this.imageUri = uri;
-      await this.analyze(uri);
+      this.addImage(uri);
     } catch (err) {
       this.handleError(err);
     }
   }
 
-  /** 从相册选一张 */
+  /** 从相册选图，可一次选多张 */
   private async onPickGallery(): Promise<void> {
     if (this.busy) {
       return;
@@ -59,36 +68,79 @@ struct CameraPage {
     this.errorText = '';
     try {
       await PermissionUtil.ensurePhotoRead(this.uiContext());
-      const uri: string = await ImageService.pickFromGallery();
-      if (uri.length === 0) {
+      const remaining: number = MAX_IMAGES - this.imageUris.length;
+      if (remaining <= 0) {
+        this.errorText = `最多 ${MAX_IMAGES} 张照片`;
+        return;
+      }
+      const uris: string[] = await ImageService.pickFromGallery(remaining);
+      if (uris.length === 0) {
         return; // 用户取消
       }
-      this.imageUri = uri;
-      await this.analyze(uri);
+      for (const u of uris) {
+        this.addImage(u);
+      }
     } catch (err) {
       this.handleError(err);
     }
   }
 
-  /** 压缩 + 识别 */
-  private async analyze(uri: string): Promise<void> {
+  /** 追加一张图，去重 */
+  private addImage(uri: string): void {
+    if (this.imageUris.includes(uri)) {
+      return;
+    }
+    const next: string[] = this.imageUris.slice();
+    next.push(uri);
+    this.imageUris = next;
+    this.errorText = '';
+  }
+
+  /** 移除一张 */
+  private removeImage(index: number): void {
+    const next: string[] = [];
+    for (let i = 0; i < this.imageUris.length; i++) {
+      if (i !== index) {
+        next.push(this.imageUris[i]);
+      }
+    }
+    this.imageUris = next;
+  }
+
+  /** 压缩全部图片并发起识别 */
+  private async analyze(): Promise<void> {
+    if (this.imageUris.length === 0) {
+      this.errorText = '先拍一张或选一张照片';
+      return;
+    }
     this.busy = true;
-    this.statusText = '正在压缩图片…';
+    this.errorText = '';
     try {
       const config: AiConfig = SettingsRepo.loadAiConfig();
       VisionService.validate(config);
 
-      const prepared: PreparedImage = await ImageService.prepare(uri, this.uiContext());
+      const ctx: common.UIAbilityContext = this.uiContext();
+      const bases: string[] = [];
+      const localUris: string[] = [];
+      for (let i = 0; i < this.imageUris.length; i++) {
+        this.statusText = this.imageUris.length > 1
+          ? `正在压缩第 ${i + 1}/${this.imageUris.length} 张…`
+          : '正在压缩图片…';
+        const prepared: PreparedImage = await ImageService.prepare(this.imageUris[i], ctx);
+        bases.push(prepared.base64);
+        localUris.push(prepared.localUri.length > 0 ? prepared.localUri : this.imageUris[i]);
+      }
 
       this.statusText = `正在用 ${config.model} 识别…`;
-      // 热量与三大营养素由模型在同一次请求里给出，不再有第二次补问
-      const result: VisionResult = await VisionService.recognize(config, prepared.base64, prepared.mimeType);
+      // 多张图一次发过去，热量与三大营养素同一次返回
+      const result: VisionResult = await VisionService.recognize(config, bases, this.notes);
 
       AppState.pending = new PendingResult(
-        prepared.localUri.length > 0 ? prepared.localUri : uri,
+        localUris,
         result.drafts,
         result.overallNote,
-        result.model
+        result.model,
+        this.notes.trim()
       );
       AppState.needRefreshHome = true;
       AppState.targetMeal = guessMealType(hourOf(Date.now()));
@@ -147,31 +199,109 @@ struct CameraPage {
 
       Scroll() {
         Column({ space: GAP }) {
-          // 预览区
-          Column() {
-            if (this.imageUri.length > 0) {
-              Image(this.imageUri)
-                .width('100%')
-                .height(280)
-                .objectFit(ImageFit.Cover)
-                .borderRadius(RADIUS)
-            } else {
-              Column({ space: 8 }) {
-                Text('📷')
-                  .fontSize(44)
-                Text('拍一张食物照片，或从相册选一张')
-                  .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
-                  .textAlign(TextAlign.Center)
-              }
-              .width('100%')
-              .height(280)
-              .justifyContent(FlexAlign.Center)
-              .backgroundColor(COLOR_CARD)
-              .borderRadius(RADIUS)
+          // ------------------------------------------------ 图片区
+          if (this.imageUris.length === 0) {
+            Column({ space: 8 }) {
+              Text('📷')
+                .fontSize(44)
+              Text(`拍一张或从相册选几张，最多 ${MAX_IMAGES} 张`)
+                .fontSize(13)
+                .fontColor(COLOR_TEXT_SUB)
+                .textAlign(TextAlign.Center)
+              Text('同一餐的多张照片一起发送，模型会合并判断，比逐张识别更准')
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+                .textAlign(TextAlign.Center)
             }
+            .width('100%')
+            .height(200)
+            .justifyContent(FlexAlign.Center)
+            .backgroundColor(COLOR_CARD)
+            .borderRadius(RADIUS)
+            .shadow(CARD_SHADOW)
+          } else {
+            // 缩略图横向排列，每张右上角带删除
+            Scroll() {
+              Row({ space: 10 }) {
+                ForEach(this.imageUris, (uri: string, index: number) => {
+                  Stack({ alignContent: Alignment.TopEnd }) {
+                    Image(uri)
+                      .width(150)
+                      .height(150)
+                      .objectFit(ImageFit.Cover)
+                      .borderRadius(14)
+
+                    Button({ type: ButtonType.Circle }) {
+                      Text('✕').fontSize(12).fontColor(Color.White)
+                    }
+                    .width(24)
+                    .height(24)
+                    .backgroundColor('#99000000')
+                    .margin({ top: 6, right: 6 })
+                    .onClick(() => {
+                      this.removeImage(index);
+                    })
+                  }
+                  .width(150)
+                  .height(150)
+                }, (uri: string, index: number) => `${index}-${uri}`)
+
+                // 末尾的「再加一张」入口
+                if (this.imageUris.length < MAX_IMAGES) {
+                  Column({ space: 4 }) {
+                    Text('+').fontSize(28).fontColor(COLOR_TEXT_SUB)
+                    Text('再加一张').fontSize(11).fontColor(COLOR_TEXT_SUB)
+                  }
+                  .width(150)
+                  .height(150)
+                  .justifyContent(FlexAlign.Center)
+                  .backgroundColor(COLOR_CARD)
+                  .borderRadius(14)
+                  .border({ width: 1, color: COLOR_DIVIDER, style: BorderStyle.Dashed })
+                  .onClick(() => {
+                    this.onPickGallery();
+                  })
+                }
+              }
+              .padding({ right: 4 })
+            }
+            .scrollable(ScrollDirection.Horizontal)
+            .scrollBar(BarState.Off)
+            .width('100%')
+          }
+
+          // ------------------------------------------------ 补充说明
+          Column({ space: 6 }) {
+            Row() {
+              Text('补充说明')
+                .fontSize(13)
+                .fontColor(COLOR_TEXT_SUB)
+              Blank()
+              Text(`${this.notes.length}/100`)
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+            }
+            .width('100%')
+
+            TextArea({
+              text: this.notes,
+              placeholder: '可选。例如「这碗面只吃了一半」「米饭是小半碗」，模型会据此调整份量'
+            })
+              .fontSize(14)
+              .height(80)
+              .width('100%')
+              .backgroundColor(COLOR_BG)
+              .borderRadius(10)
+              .maxLength(100)
+              .onChange((v: string) => {
+                this.notes = v;
+              })
           }
           .width('100%')
+          .padding(14)
+          .backgroundColor(COLOR_CARD)
+          .borderRadius(RADIUS)
+          .shadow(CARD_SHADOW)
 
           // 错误提示
           if (this.errorText.length > 0) {
@@ -209,14 +339,14 @@ struct CameraPage {
             .borderRadius(RADIUS)
           }
 
-          // 操作按钮
+          // ------------------------------------------------ 操作
           Row({ space: 10 }) {
             Button({ type: ButtonType.Capsule }) {
-              Text('拍照').fontSize(16).fontColor(Color.White)
+              Text('拍照').fontSize(16).fontColor(COLOR_TEXT)
             }
             .layoutWeight(1)
             .height(48)
-            .backgroundColor(COLOR_PRIMARY)
+            .backgroundColor(COLOR_CARD)
             .enabled(!this.busy)
             .onClick(() => {
               this.onTakePhoto();
@@ -234,6 +364,22 @@ struct CameraPage {
             })
           }
           .width('100%')
+
+          // 主操作：开始识别
+          Button({ type: ButtonType.Capsule }) {
+            Text(this.busy ? '识别中…' : '开始识别')
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Color.White)
+          }
+          .width('100%')
+          .height(50)
+          .backgroundColor(COLOR_PRIMARY)
+          .enabled(!this.busy && this.imageUris.length > 0)
+          .opacity(!this.busy && this.imageUris.length > 0 ? 1 : 0.5)
+          .onClick(() => {
+            this.analyze();
+          })
 
           // 配置提示
           if (!SettingsRepo.isAiReady()) {
