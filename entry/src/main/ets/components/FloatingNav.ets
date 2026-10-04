@@ -1,14 +1,13 @@
 /**
  * 悬浮液态玻璃导航栏。
  *
- * 玻璃质感由三层叠出来（见 glassBackdrop）：
- *   极低透明度白底 + 拉满的背景模糊 + 细白色高光边框
- * 文字与图标自带一层淡阴影，保证在浅色/深色内容上都读得清。
+ * 玻璃完全由**外层属性**表达：
+ *   backgroundColor + backdropBlur + 0.5vp 描边 + 深色投影 + 白光晕
+ * 内部只放「跟手光效」画布与三个入口。
  *
- * 交互（对齐参考图的观感）：
+ * 交互：
  *   - 按住任意位置：以手指为圆心浮起柔光，手指移到哪光就跟到哪
- *   - 选中气泡实时跟到手指所在的项（弹簧曲线，不是硬切）
- *   - 手指抬起：选中抬起位置对应的项，并触发页面切换
+ *   - 手指抬起：选中抬起位置对应的项，光效就地淡出
  *
  * 注意：底部安全区（手势条）会吃掉点击，整条栏必须由父组件抬到 bottomInset 之上。
  */
@@ -17,6 +16,16 @@ import {
   DUR_FAST, GLASS_GLOW, GLASS_HAIRLINE, GLASS_LIFT_SHADOW,
   NAV_HEIGHT, NAV_RADIUS
 } from '../common/Theme';
+
+/**
+ * 跟手光效的颜色与半径。
+ *
+ * 用极淡的绿而不是纯白：白色在浅色内容上几乎看不见，
+ * 而品牌绿既能被识别为「这是可交互的」又不会盖住图标。
+ */
+const GLOW_RGBA: string = 'rgba(34, 197, 94, 0.30)';
+/** 光斑半径（vp）。略大于一个格子的半宽，扫过一格时光感是连续的 */
+const GLOW_RADIUS: number = 78;
 
 /** 一个导航项 */
 export class NavItem {
@@ -46,6 +55,28 @@ export struct FloatingNav {
   @State pressX: number = 0;
   /** 手指当前落在第几项；-1 表示没按 */
   @State hoverIndex: number = -1;
+  /**
+   * 跟手光效的位置，**按整条栏宽归一化**（0~1）。
+   *
+   * 用比例而不是像素：栏宽会变（92% 屏宽、旋转、折叠态），
+   * 存像素的话布局一变光斑就偏了；比例天然跟着布局走。
+   */
+  @State glowFrac: number = 0.5;
+  /** 光效强度 0~1：按下淡入、抬起淡出 */
+  @State glowOn: number = 0;
+
+  private glowSettings: RenderingContextSettings = new RenderingContextSettings(true);
+  private glowCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.glowSettings);
+  private glowTimer: number = -1;
+
+  /**
+   * 调试开关：把光斑钉在中间并常亮。
+   *
+   * 跟手光效依赖触摸，抬起即淡出，没法用截图验证（截图时手指已经松开了）。
+   * 临时改成 true → 构建安装 → 截图确认光效真的画出来了 → 改回 false。
+   * 生产代码里必须是 false。
+   */
+  private static readonly DEBUG_PIN_GLOW: boolean = false;
   /**
    * 实测宽度（vp），由 onAreaChange 更新。
    *
@@ -89,49 +120,116 @@ export struct FloatingNav {
     return -1;
   }
 
+  // ================================================================ 跟手光效
+
   /**
-   * 玻璃底色。
+   * 把手指的 x 换算成归一化位置（0~1）。
    *
-   * 三层叠出「液态玻璃」：
-   *   1. 极低透明度的白底（10%）——让底层内容透上来
-   *   2. 拉满的背景模糊——把透上来的内容磨成砂面
-   *   3. 细白色高光边框——玻璃边缘的折射感
-   *
-   * 关于模糊强度：backgroundBlurStyle 只能选 BlurStyle 档位，
-   * 没有 blurRadius 参数（那是前景 blur() 的入参，见 BackgroundBlurStyleOptions
-   * 的字段只有 colorMode / adaptiveColor / scale / blurOptions）。
-   * 「拉满」对应的档位是 BACKGROUND_ULTRA_THICK
-   * （枚举里没有 ULTRA_THICK，写它会编译不过）。
+   * 拿不到实测宽度就退回 0.5：宁可光斑停在中间，
+   * 也不要因为除以 0 得到 NaN 把整块画布搞黑。
    */
-  @Builder
-  glassBackdrop() {
-    Column()
-      .width('100%')
-      .height('100%')
-      .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK, {
-        colorMode: ThemeColorMode.LIGHT,
-        adaptiveColor: AdaptiveColor.DEFAULT,
-        scale: 1.0
-      })
-      // 10% 白：再高就会在浅色背景上糊成一块实心白，玻璃感全无
-      .backgroundColor('#1AFFFFFF')
-      .hitTestBehavior(HitTestMode.None)
+  private pressFrac(x: number): number {
+    if (this.measuredWidth <= 0) {
+      return 0.5;
+    }
+    const f: number = x / this.measuredWidth;
+    return Math.max(0, Math.min(1, f));
+  }
+
+  /**
+   * 画跟手光斑。
+   *
+   * Canvas 内容不是声明式的，每次位置/强度变化都要显式重画。
+   * 渐变用 createRadialGradient：中心亮、向外淡出，
+   * 比纯色圆更像「光」而不是「贴纸」。
+   */
+  private drawGlow(): void {
+    const ctx = this.glowCtx;
+    const w: number = ctx.width;
+    const h: number = ctx.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // 调试：钉住光斑，方便截图确认光效确实画出来了
+    const frac: number = FloatingNav.DEBUG_PIN_GLOW ? 0.5 : this.glowFrac;
+    const alpha: number = FloatingNav.DEBUG_PIN_GLOW ? 1 : this.glowOn;
+    if (w <= 0 || h <= 0 || alpha <= 0.01) {
+      // 强度归零就什么都不画，避免残留一个极淡的圆
+      return;
+    }
+
+    const cx: number = frac * w;
+    const cy: number = h / 2;
+    const r: number = GLOW_RADIUS;
+    const grad: CanvasGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    grad.addColorStop(0, GLOW_RGBA);
+    // 中段再补一档，让衰减更接近真实的光晕（单段线性会显得生硬）
+    grad.addColorStop(0.55, 'rgba(34, 197, 94, 0.10)');
+    grad.addColorStop(1, 'rgba(34, 197, 94, 0)');
+
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.fillStyle = grad;
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * 把光效强度平滑推向目标值。
+   *
+   * 不用 animateTo：它插值的是**属性**，而这里要逐帧重绘 Canvas，
+   * 必须自己按帧推进（与热量环动画同一套路）。
+   */
+  private animateGlow(to: number): void {
+    if (this.glowTimer !== -1) {
+      clearInterval(this.glowTimer);
+      this.glowTimer = -1;
+    }
+    this.glowTimer = setInterval(() => {
+      const diff: number = to - this.glowOn;
+      if (Math.abs(diff) <= 0.02) {
+        this.glowOn = to;
+        this.drawGlow();
+        clearInterval(this.glowTimer);
+        this.glowTimer = -1;
+        return;
+      }
+      this.glowOn = this.glowOn + diff * 0.28;
+      this.drawGlow();
+    }, 16);
   }
 
   build() {
     Stack({ alignContent: Alignment.Center }) {
-      // 玻璃底色：10% 白 + 拉满模糊
-      this.glassBackdrop()
+      /*
+       * ── 这里曾经有一个 glassBackdrop() 层，已删除 ──
+       *
+       * 原先 build() 的第一层是一个自绘的 backdrop builder，
+       * 用 backgroundBlurStyle(BACKGROUND_ULTRA_THICK) + 10% 白。
+       * 它一直叠在外层样式**上面**，是导航栏「发灰像塑料板」的直接原因：
+       * backgroundBlurStyle 会按档位一并调整亮度/饱和度，在浅色页面上
+       * 把整条压暗一档。外层的 backdropBlur 被它盖住，改了也看不出效果。
+       *
+       * 现在玻璃完全由外层属性表达（backgroundColor + backdropBlur +
+       * 描边 + 双投影），这里只叠「跟手光效」，层次才干净。
+       */
+      Canvas(this.glowCtx)
+        .width('100%')
+        .height('100%')
+        .onReady(() => {
+          // onReady 时才能拿到真实绘制尺寸
+          this.drawGlow();
+        })
+        // 光效只是装饰：绝不能吃掉触摸，否则整条栏点不动
+        .hitTestBehavior(HitTestMode.None)
 
       /*
        * 三个入口均匀排布，没有任何选中背景块。
        *
-       * 选中态完全靠颜色表达（图标与文字一起变绿），
-       * 不再画那个大圆角胶囊——它会占掉大半个格子，
-       * 视觉上像是「一个按钮被按住了」，而不是「当前在这一页」。
-       *
-       * 按下时的反馈也刻意做得很轻（整格轻微缩放 + 压暗），
-       * 不再用跟随手指的径向柔光：那同样会被看成一块背景。
+       * 选中态完全靠颜色表达（图标与文字一起变绿）。
+       * 按下时的反馈很轻：整格轻微缩放 + 跟手光斑（见 drawGlow），
+       * 不画任何固定的背景块——固定块会被看成「一个按钮被按住了」，
+       * 而不是「当前在这一页」。
        */
       Row() {
         ForEach(this.items, (item: NavItem, index: number) => {
@@ -189,9 +287,13 @@ export struct FloatingNav {
      * 一并施加亮度/饱和度调整，在浅色页面上会把整条压成灰板
      *（实测顶栏和底部导航都因此发灰）。backdropBlur 只做背景模糊，
      * 亮度完全由底色决定。
+     *
+     * 底色比上一版更透（25% → 20%），模糊更重（32 → 48）：
+     * 通透感与「磨砂」是此消彼长的——底色越淡越像玻璃，
+     * 但透上来的内容也更清楚，所以要靠更重的模糊把它磨掉。
      */
-    .backgroundColor('#40FFFFFF')
-    .backdropBlur(32)
+    .backgroundColor('#33FFFFFF')
+    .backdropBlur(48)
     /*
      * 玻璃的「质感三件套」，顺序有讲究：
      *   1. 0.5vp 中性白描边 —— 勾出玻璃厚度（粗了就变实体边框，通透感下降）
@@ -214,20 +316,38 @@ export struct FloatingNav {
         this.pressing = true;
         this.pressX = x;
         this.hoverIndex = this.indexAt(x);
+        // 光斑先落到按下的位置再淡入，避免从上一处「飞」过来
+        this.glowFrac = this.pressFrac(x);
+        this.animateGlow(1);
       } else if (event.type === TouchType.Move) {
         this.pressX = x;
         this.hoverIndex = this.indexAt(x);
+        // 位置直接跟手（不加缓动，否则会有拖拽的黏滞感）
+        this.glowFrac = this.pressFrac(x);
+        // 移动时立即重绘：改 @State 会触发重建，但 Canvas 需要显式重画
+        this.drawGlow();
       } else if (event.type === TouchType.Up) {
         const target: number = this.indexAt(x);
         this.pressing = false;
         this.hoverIndex = -1;
+        // 抬起后光效就地淡出，不移动位置——移开反而像「光跑了」
+        this.animateGlow(0);
         if (target >= 0 && target !== this.activeIndex) {
           this.onSelect(target);
         }
       } else if (event.type === TouchType.Cancel) {
         this.pressing = false;
         this.hoverIndex = -1;
+        this.animateGlow(0);
       }
     })
+  }
+
+  aboutToDisappear(): void {
+    // 定时器必须在销毁时停掉，否则回调会打到已销毁的实例上
+    if (this.glowTimer !== -1) {
+      clearInterval(this.glowTimer);
+      this.glowTimer = -1;
+    }
   }
 }
