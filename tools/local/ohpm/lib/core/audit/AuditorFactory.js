@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.AuditorFactory=void 0;const t=require("../../util/OsUtil"),e=require("./auditor/NextDevEcoAuditor"),i=require("./auditor/DevEcoAuditor");exports.AuditorFactory=class{static getAuditor(){return t.OsUtil.isWindows||t.OsUtil.isMac||t.OsUtil.isLinux?new i.DevEcoAuditor:new e.NextDevEcoAuditor}};

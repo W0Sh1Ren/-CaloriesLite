@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.StringUtils=void 0;exports.StringUtils={isBlank:function(t){if(function(t){return!t||0===t.trim().length}(t))return!0;const r=t.length;for(let e=0;e<r;e++)if(" "!==t.charAt(e)&&9!==t.charCodeAt(e))return!1;return!0}};

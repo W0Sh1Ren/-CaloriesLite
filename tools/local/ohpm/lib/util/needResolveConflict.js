@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.needResolveConflict=void 0;const e=require("../core/install-targets/TargetManager"),t=require("../config");exports.needResolveConflict=function(){return!!e.TargetManager.getInstance().isTargetMod()||(t.config.get(t.types.RESOLVE_CONFLICT_STRICT)||t.config.get(t.types.RESOLVE_CONFLICT))};

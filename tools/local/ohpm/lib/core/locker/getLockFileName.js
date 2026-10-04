@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getLockFileName=void 0;const e=require("../install-targets/TargetManager"),t=require("../../common/Constants");exports.getLockFileName=function(){return e.TargetManager.getInstance().needChangeLockFileName()?`oh-package-${e.TargetManager.getInstance().getTargetName()}-lock.json5`:t.Constants.LockJson};

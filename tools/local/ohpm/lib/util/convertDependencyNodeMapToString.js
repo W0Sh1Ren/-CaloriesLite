@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.convertDependencyNodeMapToString=void 0,exports.convertDependencyNodeMapToString=function(e){if(!e&&!Object.keys(e).length)return"";const n=[];return Array.from(e.values()).forEach((e=>{n.push({name:e.name,pinnedSpec:e.pinnedSpec})})),JSON.stringify(n,null,2)};

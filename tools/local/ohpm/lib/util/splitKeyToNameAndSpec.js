@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.splitKeyToNameAndSpec=void 0,exports.splitKeyToNameAndSpec=function(e){if(!e||""===e.trim())return{name:"",spec:void 0};const t=e.lastIndexOf("@");return t<=0||e.length<=t+1?(t>0&&(e=e.slice(0,e.length-1)),{name:e,spec:void 0}):{name:e.slice(0,t),spec:e.slice(t+1)}};

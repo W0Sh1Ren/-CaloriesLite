@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.output=void 0;const t=require("./PrintUtil");exports.output=function(e){t.PrintUtil.print(e)};

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.JSON5=void 0;const e=require("./parse"),r=require("./stringify");exports.JSON5={stringify:r.stringify,parse:e.parse};

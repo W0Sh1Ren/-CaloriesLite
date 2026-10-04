@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.ABI_FILTERS=void 0,exports.ABI_FILTERS=["arm64-v8a","armeabi-v7a","x86_64"];

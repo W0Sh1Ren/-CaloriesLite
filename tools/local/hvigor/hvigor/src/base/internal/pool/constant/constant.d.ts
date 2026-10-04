@@ -1,0 +1,35 @@
+/**
+ * 池化管理模块的常量
+ *
+ * @since 2022/8/15
+ */
+export declare class PoolConstant {
+    static readonly MAX_POOL_NUM: number;
+    static readonly MIN_POOL_NUM: number;
+    static readonly DEFAULT_MAX_IDLE_TIME: number;
+    static readonly DEFAULT_RECYCLE_INTERVAL: number;
+    static readonly WORKER_ACTION_PATH: string;
+    static readonly WORK_DONE: string;
+    static readonly WORK_ERROR: string;
+    static readonly CALLBACK_ERROR: string;
+    static readonly FILE_SUFFIX: string;
+    static readonly UNKNOWN_LOG_TIME: string;
+    static readonly ENCODING: string;
+    static readonly TIME_PREFIX_LENGTH: number;
+    static readonly CPU_LIMIT: number;
+    static readonly FAIL_DISPATCH_INTERVAL: number;
+    static readonly MAX_FAIL_ATTEMPTS: number;
+    static readonly TSC_COMMON_CACHE_KEY = "common";
+}
+/**
+ * Worker线程的event
+ * 所有新增event都需要在worker-action消息中添加处理逻辑，否则消息会走进worker-action默认handler导致报错
+ */
+export declare enum WorkerEvent {
+    CLEAN_HVIGOR_CONFIG_LOADER = "CLEAN_HVIGOR_CONFIG_LOADER",
+    CLEAN_HVIGOR_LOGGER = "CLEAN_HVIGOR_LOGGER",
+    UNMOUNT_TSC_COMMON_CACHE_EVENT = "UNMOUNT_TSC_COMMON_CACHE_EVENT",
+    UPDATE_LOG_LEVEL = "UPDATE_LOG_LEVEL",
+    ABORT_WORK = "ABORT_WORK",
+    CUSTOM_WORKER_REQUEST = "CUSTOM_WORKER_REQUEST"
+}

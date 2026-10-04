@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.calculateCostTime=void 0,exports.calculateCostTime=function(e){const t=(new Date).getTime()-e;return`${Math.floor(t/1e3)}s ${t%1e3}ms`};

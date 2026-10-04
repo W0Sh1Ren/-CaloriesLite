@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.removeSync=exports.remove=void 0;const e=require("./RemoveSync"),o=require("./Remove");exports.remove=new o.Remove,exports.removeSync=new e.RemoveSync;

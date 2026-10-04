@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.CommonTelemetryBuilder=void 0;const e=require("./TelemetryBuilderTemplate");class r extends e.TelemetryBuilderTemplate{constructor(e){super(e),this.commandName=e.commandName,this.ohpmVersion=e.ohpmVersion}}exports.CommonTelemetryBuilder=r;

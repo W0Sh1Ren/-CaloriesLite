@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.done=void 0,exports.done=function(e){return{validForPackages:!e||0===e.length,error:e}};

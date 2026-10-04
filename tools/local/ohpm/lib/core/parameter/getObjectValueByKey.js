@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getObjectValueByKey=void 0,exports.getObjectValueByKey=function(e,t){return"string"==typeof t?t:t[e]};

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isValidUrl=void 0,exports.isValidUrl=function(e){try{return new URL(e),!0}catch(e){return!1}};

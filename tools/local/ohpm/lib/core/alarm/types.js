@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.AlarmType=void 0,function(e){e.LOCAL_NAME_INCONSISTENCY="local_name_inconsistency",e.REGISTRY_NAME_CASE_INCONSISTENCY="registry_name_case_inconsistency"}(exports.AlarmType||(exports.AlarmType={}));

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.updateDependencies=void 0,exports.updateDependencies=function(e,p,s,d){d.saveDynamic?e.requirements[p]={spec:s,depType:"dynamic"}:d.saveDev?e.requirements[p]={spec:s,depType:"dev"}:d.save&&(e.requirements[p]={spec:s,depType:"prod"})};

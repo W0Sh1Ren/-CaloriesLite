@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.filelock=void 0;const e=require("./FileLock");exports.filelock=new e.FileLock;

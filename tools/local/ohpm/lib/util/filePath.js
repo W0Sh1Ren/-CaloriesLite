@@ -1,0 +1,1 @@
+"use strict";var e=this&&this.__importDefault||function(e){return e&&e.__esModule?e:{default:e}};Object.defineProperty(exports,"__esModule",{value:!0}),exports.resolveTildePath=void 0;const t=e(require("os"));exports.resolveTildePath=function(e){const r=t.default.homedir();return e.replace(/^~(?=$|\\|\/)/,r)};

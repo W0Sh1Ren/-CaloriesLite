@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.AbstractChainHandler=void 0;exports.AbstractChainHandler=class{constructor(t){t&&(this.nextHandler=t)}hasNext(){return void 0!==this.nextHandler}getNext(){return this.nextHandler}setNext(t){return t?(this.nextHandler=t,this):this}};

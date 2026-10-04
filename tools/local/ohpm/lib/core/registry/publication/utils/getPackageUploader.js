@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getPackageUploader=void 0;const e=require("../impl/uploader/StreamUploader"),r=require("../impl/uploader/AttachmentUploader"),t=require("../impl/uploader/RetryUploaderProxy");exports.getPackageUploader=function(o){const a=o?new e.StreamUploader:new r.AttachmentUploader;return new t.RetryUploaderProxy(a)};

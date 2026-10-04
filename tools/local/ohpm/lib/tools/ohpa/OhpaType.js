@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.OhpaType=void 0,function(e){e.Unknown="unknown",e.Tag="tag",e.Version="version",e.Range="range",e.File="file",e.SourceCode="sourceCode"}(exports.OhpaType||(exports.OhpaType={}));

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.PackageInfoReq=void 0;exports.PackageInfoReq=class{constructor(e,s,t,o,a){this.packageName=e,this.moduleName=s,this.dependencyConfig=t,this.installedVersion=o,this.depth=a}};

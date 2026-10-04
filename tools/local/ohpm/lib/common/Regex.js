@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.Regex=void 0,exports.Regex={REGEX_TAG_PREFIX:/^tag:/i,REGEX_TAG:/^[A-Za-z0-9][A-Za-z0-9._-]{0,59}$/,PRODUCT_NAME_REGEX:/^[\w-]+$/,MODULE_NAME_REGEX:/^(?=.{1,31}$)[a-zA-Z]\w*$/,OHPM_PACKAGE_NAME_REGEX:/(?=^(@(?![0-9\-_])[a-z0-9\-_]+(?<![\-_])\/)?(?![0-9\-_.])[a-z0-9\-_.]+(?<![\-_.])$).{1,128}$/};

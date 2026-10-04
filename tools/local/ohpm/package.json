@@ -1,0 +1,35 @@
+{
+  "name": "@ohos/ohpm",
+  "version": "26.0.0.630",
+  "bin": {
+    "ohpm": "./bin/pm-cli.js"
+  },
+  "description": "",
+  "main": "lib/src/index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ohos/tar_rs": "2.1.2",
+    "axios": "1.19.0",
+    "commander": "13.1.0",
+    "date-fns": "4.1.0",
+    "fs-extra": "11.3.3",
+    "glob": "10.5.0",
+    "http-proxy-agent": "9.0.0",
+    "https-proxy-agent": "9.0.0",
+    "ini": "6.0.0",
+    "js-beautify": "1.15.4",
+    "lodash": "4.18.1",
+    "log4js": "6.9.1",
+    "semver": "7.7.2",
+    "typescript": "4.9.5",
+    "tar": "7.5.22",
+    "uuid": "14.0.0"
+  },
+  "overrides": {
+    "log4js@6.7.1": {
+      "flatted": "3.2.7"
+    }
+  }
+}

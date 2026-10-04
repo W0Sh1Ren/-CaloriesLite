@@ -11,11 +11,8 @@
 **/.test
 /.appanalyzer
 
-# ---- 本地构建支撑（不进版本库）----
-# tools/local  是从 DevEco Studio 复制进来的工具链副本（约 410 MB）。
-# 复制它是因为受限环境下不允许创建指向工作区之外的链接。
-# 在新机器上执行 tools\prepare-toolchain.ps1 重新生成即可。
-/tools/local
+# ---- 本地构建支撑（不进版本库�?---
+# tools/local  是从 DevEco Studio 复制进来的工具链副本（约 410 MB）�?# 复制它是因为受限环境下不允许创建指向工作区之外的链接�?# 在新机器上执�?tools\prepare-toolchain.ps1 重新生成即可�?/tools/local
 /tools/proj
 /tools/.hvigorhome
 /tools/.npmcache
@@ -23,3 +20,6 @@
 
 # 构建产物副本
 /build-output
+
+# DevEco Studio �� AI ���ֲ���Զ������Ĳֿ�
+/.codegenie

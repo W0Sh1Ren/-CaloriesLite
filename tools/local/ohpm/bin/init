@@ -1,0 +1,15 @@
+#!/bin/sh
+
+NPM_CMD=${NODE_HOME}/npm
+if [ ! -f "${NPM_CMD}" ]; then
+    NPM_CMD=npm
+fi
+
+{
+  "${NPM_CMD}" -v
+} &> /dev/null
+
+if [ $? != 0 ]; then
+  echo -e "\033[31mERROR: 'node' command not found.\033[0m"
+  exit 1
+fi

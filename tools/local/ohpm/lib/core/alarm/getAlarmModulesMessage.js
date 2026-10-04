@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getAlarmModulesMessage=void 0;const e=require("../locker");exports.getAlarmModulesMessage=function(o){return e.PackageLockerManager.getInstance().shouldUseUnifiedLockfile()?" in the project.":` the affected modules are as follows:\n\t - "${Array.from(o).sort().join('"\n\t - "')}"\n`};

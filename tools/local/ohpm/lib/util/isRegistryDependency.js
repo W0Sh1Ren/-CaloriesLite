@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isRegistryDependency=void 0;const e=require("../tools/ohpa/OhpaType");exports.isRegistryDependency=function(p){return[e.OhpaType.Version,e.OhpaType.Range,e.OhpaType.Tag].includes(p)};

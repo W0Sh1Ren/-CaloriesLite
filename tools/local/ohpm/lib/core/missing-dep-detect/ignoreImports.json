@@ -1,0 +1,12 @@
+{
+    "ignoreImports": [
+        "BuildProfile"
+    ],
+    "arkTsApiPrefixList": [
+        "@ohos.",
+        "@hms.",
+        "@system.",
+        "@kit.",
+        "@arkui-x."
+    ]
+}

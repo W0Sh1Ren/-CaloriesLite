@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isNeedChildren=void 0;const e=require("../../../common/Constants"),p=require("../../../tools/ohpa/OhpaType");exports.isNeedChildren=function(o){return o.ohpaType===p.OhpaType.SourceCode||o.packageType!==e.Constants.HSPPackageType||"dev"!==o.depType&&o.hspType===e.HspType.BUNDLE_APP};

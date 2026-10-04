@@ -1,0 +1,85 @@
+### 仓库配置，支持配置多个地址，使用英文逗号分割
+registry=https://ohpm.openharmony.cn/ohpm/
+## 支持配置含有group的仓库，优先匹配
+#@group1:registry=
+#@group2:registry=
+
+### 加密组件路径
+#crypto_path=
+
+### 代理配置
+#no_proxy=
+#http_proxy=
+#https_proxy=
+
+### 证书校验配置
+## 是否校验https仓库的证书，取值：true|false, default: true, 为true时需要配置ca_files证书路径
+strict_ssl=true
+#ca_files=
+
+### 发布配置
+## 因为registry支持配置多仓，所以此处需明确指定发布仓
+publish_registry=https://ohpm.openharmony.cn/ohpm/
+## 用户发布三方库的发布id，从云端个人中心获取
+#publish_id=
+## 用户私钥文件路径，公钥需在云端进行配置
+#key_path=
+## 经过加密的私钥密码，使用前需要配置crypto_path加密组件路径
+#key_passphrase=
+
+### 缓存路径, 默认在用户目录下的.ohpm/cache
+#cache=
+
+### 日志级别, 取值：debug|info|warn|error, 默认: info
+log_level=info
+
+### 网络请求超时时间, 单位ms, 默认为60s
+fetch_timeout=60000
+
+### 并发参数配置
+## 最大并发量
+max_concurrent=50
+## 出错重试次数
+retry_times=1
+## 重试间隔时间, 单位：ms
+retry_interval=1000
+## 是否开启默认的冲突处理机制
+resolve_conflict=true
+## 是否开启严格的冲突处理机制
+resolve_conflict_strict=false
+## 是否默认安装工程下所有模块的依赖
+install_all=true
+
+## 其他功能开关
+### 启用跨进程锁
+enable_cross_process_lock=false
+### 启用依赖名称校验
+enforce_dependency_key=false
+### 启用依赖扫描功能
+ensure_dependency_include=false
+### 启用包内.har/.tgz依赖配置路径检测
+disallow_nested_package=false
+### 开启overrideDependencyMap中相对路径自动转换功能
+odm_r2_project_root=false
+### compatibleSdkVersion等兼容性字段检测日志等级
+compability_log_level=warn
+### 流式上传阈值（大于此阈值使用流式上传），单位：mb，默认：5，范围：[0, 500]
+use_stream_threshold_size=5
+### 保证oh-package-lock.json5文件内容所有属性值顺序稳定
+lockfile_stable_order=false
+### 启用lockfile合一功能
+enable_unified_lockfile=false
+### 启用文件解压提速功能
+enable_boost_extraction_speed=false
+### 启用内部依赖版本锁定
+enable_lock_inner_pkg_version=true
+### 路径大小写敏感检测
+case_sensitive_check=false
+### 启用跳过安装功能
+auto_skip_install=false
+### 控制元数据的缓存过期时间，单位：分钟，默认：10080， 范围：[1, 525600]
+metadata_cache_effective=10080
+### 开启使用元数据文件缓存
+metadata_cache=false
+### 开启支持本地har建立软链
+symlink_for_local_dep=false

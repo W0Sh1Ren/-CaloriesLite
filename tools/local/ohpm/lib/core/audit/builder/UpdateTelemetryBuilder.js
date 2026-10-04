@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.UpdateTelemetryBuilder=void 0;const e=require("./InstallTelemetryBuilder");class l extends e.InstallTelemetryBuilder{constructor(e){super(e),this.useAllModules=e.useAllModules,this.useTagFilter=e.useTagFilter}}exports.UpdateTelemetryBuilder=l;

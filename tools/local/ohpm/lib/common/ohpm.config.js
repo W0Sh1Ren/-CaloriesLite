@@ -1,0 +1,1 @@
+"use strict";var e=this&&this.__importDefault||function(e){return e&&e.__esModule?e:{default:e}};Object.defineProperty(exports,"__esModule",{value:!0}),exports.PmConfig=void 0;e(require("path")),require("../util");let t=[];t="".split(","),exports.PmConfig={registryWhiteList:t,auditTimeOut:200};

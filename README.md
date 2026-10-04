@@ -91,16 +91,14 @@ entry/src/main/ets/
 
 ### 用 DevEco Studio（推荐）
 
-1. 用 DevEco Studio 打开本目录
-2. 等待 Sync 完成
-3. `Build > Build Hap(s)/APP(s)` 即可
-
-首次运行到设备/模拟器前需要在 `File > Project Structure > Signing Configs`
-里勾选自动签名（或执行 `devecocli signature generate`），否则只能产出未签名 HAP。
+1. 用 DevEco Studio 打开本目录，等 Sync 完成
+2. `File > Project Structure > Signing Configs`，勾选 **`Automatically generate signature`**
+   （需要已登录华为开发者账号；本项目已在 `build-profile.json5` 里预留 `signingConfig: "default"` 引用）
+3. 顶部设备下拉框选你的设备，点 ▶ 运行
 
 ### 命令行构建
 
-脚本在 `tools/` 下。因为当前开发环境有若干 Windows 限制（见下），命令行构建需要几步准备：
+脚本在 `tools/` 下：
 
 ```powershell
 # 1) 把 DevEco 工具链复制进工作区（约 410 MB，只需一次）
@@ -114,6 +112,24 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
 产物在 `tools/proj/entry/build/default/outputs/default/`。
+
+> 若已在 DevEco 里配好自动签名，`sync-src.ps1` 会把签名配置一起带过去，
+> 构建直接产出 `entry-default-signed.hap`（脚本会打印 `signing config found` 提示）。
+> 否则产出 `entry-default-unsigned.hap`，装不到真机。
+
+### 安装到真机
+
+```powershell
+# 检查设备（需在手机上打开 USB 调试）
+& 'D:\DevEco26\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe' list targets
+
+# 安装（用签名后的 hap）
+& '...\hdc.exe' install -r tools\proj\entry\build\default\outputs\default\entry-default-signed.hap
+```
+
+也可以直接用 `tools\sign-and-install.ps1`，它用 SDK 自带的 `OpenHarmony.p12`
+离线签发调试证书和 Profile 并安装。注意：这种方式用的是 OpenHarmony 的根证书，
+**华为商用机不一定信任**；如果安装报签名校验失败，就走 DevEco 自动签名那条路。
 
 #### 这些脚本在绕开什么
 
@@ -138,7 +154,17 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
   详见 `docs/HealthKit-运动健康数据读取-技术报告.md`。
 - AI 识别准确率取决于所选模型，份量估算误差通常在 10–20%。结果页支持逐条修正。
 - 内置食物表的营养值为代表性均值，实际因品种和烹饪方式浮动，表中菜肴类为烹饪后估算值。
-- 卡片式热量环用的是 ArkUI `Progress` 的 Ring 样式，不是自绘弧线；若后续要做多段环（摄入/运动/预算）需要改用 Canvas。
+- 热量环用 **Canvas 自绘**，不是 ArkUI 的 `Progress`。实测 `Progress` 在 Ring 模式下
+  不会把尺寸撑开给父 `Stack`（210vp 的环被压成 75vp 高，只露出一小段弧），自绘才可靠。
+  体重曲线同样用 Canvas 手绘。
+
+### 构建产物与包名
+
+- DevEco Studio 生成自动签名时会把 `bundleName` 从 `com.calorielite.app` 改写成
+  `Calories.Lite.Test`（它的自动签名要求包名匹配它的命名规则）。如果换成正式包名，
+  记得同步更新 `tools/sign-and-install.ps1` 里的默认值——该脚本已改为从
+  `AppScope/app.json5` 自动读取，一般不用手改。
+- 已实测设备：HUAWEI Mate 80（VYG-AL00），HarmonyOS 7.0.0.109，API 26。
 
 ---
 

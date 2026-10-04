@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getAndValidPublishRegistry=void 0;const r=require("./getPublishOptions"),e=require("../../../error");exports.getAndValidPublishRegistry=function(t,i){const s=(0,r.getPublishOptions)(t,i);if(!s)throw e.OhpmError.create(e.errors.Validator.PublishRegistryError);return s};

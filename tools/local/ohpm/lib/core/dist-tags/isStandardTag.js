@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isStandardTag=void 0;const e=require("../../common/Regex"),t=require("../../common/Constants");exports.isStandardTag=function(o){return e.Regex.REGEX_TAG.test(o)&&o!==t.Constants.LATEST};

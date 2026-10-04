@@ -1,0 +1,201 @@
+[
+    {
+        "attrName": "name",
+        "configs": [
+            {
+                "ruleType": "NotNull",
+                "ruleContent": ""
+            },
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包的名字信息长度校验",
+                "ruleContent": {
+                    "minLength": 1,
+                    "maxLength": 128
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包名格式校验, 除@和/外，group和packagename只能包含小写字母、数字、下划线（_）和中划线(-)。总长度小于等于128个字符",
+                "ruleContent": "(?=^(@(?![0-9\\-_])[a-z0-9\\-_]+(?<![\\-_])\\/)?(?![0-9\\-_.])[a-z0-9\\-_.]+(?<![\\-_.])$).{1,128}$"
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "名称不能包含.har|.tgz|.tar|.tar.gz等后缀",
+                "ruleContent": ".*(?<!(\\.(har|tgz|tar|tar.gz)))$"
+            }
+        ]
+    },
+    {
+        "attrName": "version",
+        "configs": [
+            {
+                "ruleType": "NotNull",
+                "ruleContent": ""
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包的版本格式正则校验, 需要满足semver版本, 参考：https://semver.org/",
+                "ruleContent": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+            },
+            {
+                "ruleType": "CustomFunction",
+                "description": "semver版本校验",
+                "ruleContent": "validateVersion"
+            }
+        ]
+    },
+    {
+        "attrName": "description",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包的描述信息长度校验",
+                "ruleContent": {
+                    "minLength": 0,
+                    "maxLength": 512
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "author.name",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包作者名称长度校验",
+                "ruleContent": {
+                    "minLength": 0,
+                    "maxLength": 128
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包的作者名称正则校验: 支持中文、英文大小写、数字、'.'、'_'、'-'",
+                "ruleContent": "^[A-Za-z0-9\\s\\u4e00-\\u9fa5_\\-.]{0,128}$"
+            }
+        ]
+    },
+    {
+        "attrName": "author.email",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包作者邮箱长度校验",
+                "ruleContent": {
+                    "minLength": 0,
+                    "maxLength": 64
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包的作者邮箱正则校验",
+                "ruleContent": "(?=^[a-zA-Z0-9_\\-.]+@[a-zA-Z0-9_\\-.]+$).{0,64}$"
+            }
+        ]
+    },
+    {
+        "attrName": "author.url",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包作者主页长度校验",
+                "ruleContent": {
+                    "minLength": 0,
+                    "maxLength": 256
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包的作者主页正则校验",
+                "ruleContent": "(?=^((https|http|ftp|rtsp|mms):\\/\\/)?([a-zA-Z0-9\\u4e00-\\u9fa5\\-]+\\.)+([a-zA-Z0-9\\u4e00-\\u9fa5\\-]+)(:[0-9]{1,5})?([\\/?].*)?$).{0,1024}$"
+            }
+        ]
+    },
+    {
+        "attrName": "keywords",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "关键字列表长度校验",
+                "ruleContent": {
+                    "maxLength": 10
+                }
+            },
+            {
+                "ruleType": "ListItemLengthLimit",
+                "description": "单个关键字列表长度校验",
+                "ruleContent": {
+                    "maxLength": 20,
+                    "minLength": 1,
+                    "reg": "^[\\u4e00-\\u9fa50-9A-Za-z\\-\\s]{1,20}$"
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "homepage",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包主页地址长度校验",
+                "ruleContent": {
+                    "maxLength": 1024
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包主页地址正则校验",
+                "ruleContent": "(?=^((https|http|ftp|rtsp|mms):\\/\\/)?([a-zA-Z0-9\\u4e00-\\u9fa5\\-]+\\.)+([a-zA-Z0-9\\u4e00-\\u9fa5\\-]+)(:[0-9]{1,5})?([\\/?].*)?$).{0,1024}$"
+            }
+        ]
+    },
+    {
+        "attrName": "repository",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包代码托管地址长度校验",
+                "ruleContent": {
+                    "maxLength": 1024
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包代码托管仓库地址正则校验",
+                "ruleContent": "(?=^((https|http|ftp|rtsp|mms):\\/\\/)?([a-zA-Z0-9\\u4e00-\\u9fa5\\-]+\\.)+([a-zA-Z0-9\\u4e00-\\u9fa5\\-]+)(:[0-9]{1,5})?([\\/?].*)?$).{0,1024}$"
+            }
+        ]
+    },
+    {
+        "attrName": "license",
+        "configs": [
+            {
+                "ruleType": "NotNull",
+                "ruleContent": ""
+            },
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包开源协议名称长度校验",
+                "ruleContent": {
+                    "maxLength": 256
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "artifactType",
+        "defaultValue": "original",
+        "configs": [
+            {
+                "ruleType": "NotNull",
+                "ruleContent": ""
+            },
+            {
+                "ruleType": "WhiteList",
+                "description": "ohpm包制品类型白名单",
+                "ruleContent": "original;obfuscation;bytecode"
+            }
+        ]
+    }
+]

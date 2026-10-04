@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.OsUtil=void 0;const s="win32"===process.platform,e=void 0===process.env.MSYSTEM?"":process.env.MSYSTEM,o=s&&!/^MINGW(32|64)$/.test(e)&&"cygwin"!==process.env.TERM,i="darwin"===process.platform,r="linux"===process.platform;exports.OsUtil={isWindows:s,isWindowsShell:o,isMac:i,isLinux:r};

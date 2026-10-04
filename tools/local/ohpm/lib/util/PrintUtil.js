@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.PrintUtil=void 0;const e=require("./index"),t=require("../tools/posh");function o(e){console.log(e)}exports.PrintUtil={print:o,printSucceedMsg:function(e){o(t.posh.green(e))},printCostTime:function(i,n){const r=n?`${n} `:"";o(t.posh.green(`${r}completed in ${(0,e.calculateCostTime)(i)}`))}};

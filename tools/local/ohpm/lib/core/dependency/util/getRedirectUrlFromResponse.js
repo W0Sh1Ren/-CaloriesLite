@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getRedirectUrlFromResponse=void 0,exports.getRedirectUrlFromResponse=function(e){const t=e.headers.get("location");if([301,302].includes(e.status)&&t)return t};

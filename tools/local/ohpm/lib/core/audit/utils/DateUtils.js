@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.DateUtils=void 0;exports.DateUtils=class{static getCurDateToHour(){const t=new Date;return`${t.getFullYear().toString().padStart(4,"0")}${(t.getMonth()+1).toString().padStart(2,"0")}${t.getDate().toString().padStart(2,"0")}${t.getHours().toString().padStart(2,"0")}`}};

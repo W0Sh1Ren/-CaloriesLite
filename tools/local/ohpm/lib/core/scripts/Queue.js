@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.Queue=void 0;exports.Queue=class{constructor(t){this.push=t=>this.data.push(t),this.pop=()=>this.data.shift(),this.isEmpty=()=>this.data.length<=0,this.data=t?new Array(t):new Array}};

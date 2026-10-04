@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.clearUnUsedFieldInMetadata=void 0,exports.clearUnUsedFieldInMetadata=function(e){Object.values(e.versions).forEach((a=>{e.isTgz?(a.hspPkg=void 0,a.cache=void 0,a.harCache=void 0,a.hspCache=void 0):a.harCache=void 0})),delete e.isTgz,delete e.pkg};

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isSharedInProject=void 0;const o=require("../../../config");exports.isSharedInProject=function(e){return!(!o.config.getProjectRoot()||e!==o.config.getProjectRoot())||!(!o.config.getProjectRoot()||e===o.config.getProjectRoot())};

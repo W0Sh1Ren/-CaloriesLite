@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.validPkgPath=void 0;const r=require("../../../util"),e=require("../../../error");exports.validPkgPath=function(t){if(void 0===t||r.FsBlockingUtil.statSync(t).isDirectory())throw e.OhpmError.create(e.errors.Validator.PkgEmptyError)};

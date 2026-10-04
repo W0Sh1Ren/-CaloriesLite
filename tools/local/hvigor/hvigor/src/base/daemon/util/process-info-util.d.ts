@@ -1,0 +1,34 @@
+import { DaemonInfo } from '../registry/daemon-info.js';
+/**
+ * 检查目标进程是否为hvigor守护进程的方法
+ * 该方法使用时间约在300ms左右，因此暂时只在时间不敏感的stop-daemon中使用
+ *
+ * @param {number} pid
+ * @returns {boolean}
+ */
+export declare function isHvigorDaemonProcess(pid: number): boolean;
+/**
+ * 检查daemon进程是否真的存活
+ * @param daemonInfo 要检查的daemon信息
+ * @returns 如果进程存活返回true，否则返回false
+ */
+export declare function isDaemonProcessAlive(daemonInfo: DaemonInfo): boolean;
+/**
+ * 读取守护进程注册表文件，如果读取失败则删除并写入空对象
+ * @param registryPath 注册表文件路径
+ * @returns 注册表内容，如果文件不存在则返回空对象
+ */
+export declare function readDaemonRegistryOrReset(registryPath: string): {
+    [p: string]: DaemonInfo;
+};
+export declare function resetDaemonRegistryFile(registryPath: string): void;
+/**
+ * 通过--stop-daemon命令,关闭所有daemon注册表中的守护进程
+ * 在client侧被调用,打印日志使用daemon-client
+ */
+export declare function stopDaemons(closeAll: boolean): void;
+/**
+ * 通过--status-daemon命令,打印所有daemon注册表中的守护进程信息
+ * 在client侧被调用,打印日志使用daemon-client
+ */
+export declare function logDaemonInfo(): void;

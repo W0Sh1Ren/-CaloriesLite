@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.defaultOptions=void 0;const e=require("../../util/errOutAndExit");exports.defaultOptions={stale:5e4,update:15e3,retryInterval:500,onErrorCallBack:t=>{(0,e.errOutAndExit)("",t)}};

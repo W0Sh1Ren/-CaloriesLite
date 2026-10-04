@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.validSourceType=void 0;const r=require("../../../common/Constants"),e=require("../../../error");exports.validSourceType=function(o){if(o&&o!==r.SourceTypeEnum.OPEN&&o!==r.SourceTypeEnum.CLOSED)throw e.OhpmError.create(e.errors.Validator.InvalidSourceTypeError)};

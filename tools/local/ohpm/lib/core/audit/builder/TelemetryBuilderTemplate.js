@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.TelemetryBuilderTemplate=void 0;exports.TelemetryBuilderTemplate=class{constructor(e){this.costTime=e.costTime,this.isSuccess=e.isSuccess,e.errorMsg&&(this.errorMsg=e.errorMsg)}build(){const e=Object.assign({},this);return Object.fromEntries(Object.entries(e).filter((([e,s])=>void 0!==s)))}};

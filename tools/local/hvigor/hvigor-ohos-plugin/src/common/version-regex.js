@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.newDotSeparatedVersion=exports.oldDotSeparatedVersion=exports.oldVersionReg=void 0,exports.oldVersionReg=/\s*([1-9].[0-9].[0-9])\s*\(\s*(\d+)\s*\)\s*$/,exports.oldDotSeparatedVersion=/\s*([1-9]\.[0-9]\.[0-9])\s*$/,exports.newDotSeparatedVersion=/^([2-9][0-9])\.[1-9]?[0-9]\.[1-9]?[0-9]$/;

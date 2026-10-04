@@ -34,6 +34,17 @@ foreach ($item in $items) {
   Write-Host "[sync] copied: $item"
 }
 
+# Report whether DevEco-generated signing material is present. It lives in
+# build-profile.json5 and points at C:\Users\<user>\.ohos\config\*, so builds
+# driven from here pick it up automatically and produce a signed HAP.
+$profileFile = Join-Path $Target 'build-profile.json5'
+$profileText = Get-Content $profileFile -Raw
+if ($profileText -match '"certpath"') {
+  Write-Host '[sync] signing config found -> build will produce a SIGNED hap'
+} else {
+  Write-Host '[sync] no signing config -> build will produce an UNSIGNED hap'
+}
+
 # Point the build at the installed SDK.
 "sdk.dir=$SdkDir" | Set-Content (Join-Path $Target 'local.properties') -Encoding ASCII
 Write-Host "[sync] local.properties -> sdk.dir=$SdkDir"

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.ArkCompile=void 0;const abstract_ark_compile_js_1=require("./abstract-ark-compile.js");class ArkCompile extends abstract_ark_compile_js_1.AbstractArkCompile{validateModuleJsonAbstract(){this.validateModuleJson(this._log)}async doTaskAction(){return super.doTaskAction()}}exports.ArkCompile=ArkCompile;

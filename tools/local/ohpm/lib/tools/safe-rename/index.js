@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.safeRename=void 0;const e=new(require("./SafeRename").SafeRename);exports.safeRename={async:(a,s,n=0)=>e.rename(a,s,n)};

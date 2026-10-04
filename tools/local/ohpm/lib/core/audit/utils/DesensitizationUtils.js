@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.DesensitizationUtils=void 0;exports.DesensitizationUtils=class{static common(e,t="*"){if(!e)return"";if(e.length<3)return e;const s=Math.floor(e.length/2),i=Math.floor((e.length-s)/2),n=t.repeat(e.length-2*i);return`${e.slice(0,i)}${n}${e.slice(i+n.length)}`}};

@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.AuthType=exports.signError=void 0,exports.signError=Symbol("Error"),function(e){e.accessToken="accessToken",e.sshKey="sshKey"}(exports.AuthType||(exports.AuthType={}));

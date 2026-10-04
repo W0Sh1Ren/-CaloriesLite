@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "工程级oh-package.json5文件schema定义",
+  "definitions": {
+    "dependency": {
+      "description": "用于配置参与编译/运行阶段使用的依赖，声明需要在代码中import的三方库（不建议在工程级oh-package.json5中配置生产依赖",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "devDependencies": {
+      "description": "配置开发态依赖，配置只能参与项目的开发或测试阶段的依赖。如果被依赖的组件最终要与依赖的组件一起发布到目标机器（如手机）上使用，则不能在其中配置。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "dynamicDependencies": {
+      "description": "配置项目动态依赖的HSP模块。在开发者需要动态加载HSP的时候配置使用（不建议在工程级oh-package.json5中配置动态依赖）。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "overrides": {
+      "description": "支持将依赖树中的包替换为另一个指定版本，详情见https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-oh-package-json5#zh-cn_topic_0000001792256137_overrides",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "overrideDependencyMap": {
+      "description": "支持将依赖树中包的子依赖替换为配置文件中配置的依赖",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "stringOrObject": {
+      "description": "仅支持字符串或嵌套对象，不允许数组、数字、布尔值、空值类型",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/stringOrObject"
+          }
+        }
+      ]
+    }
+  },
+  "properties": {
+    "modelVersion": {
+      "description": "开发态版本",
+      "type": "string"
+    },
+    "description": {
+      "description": "用于描述三方库信息的字符串",
+      "type": "string",
+      "maxLength": 512,
+      "minLength": 0
+    },
+    "dependencies": {
+      "$ref": "#/definitions/dependency"
+    },
+    "devDependencies": {
+      "$ref": "#/definitions/devDependencies"
+    },
+    "dynamicDependencies": {
+      "$ref": "#/definitions/dynamicDependencies"
+    },
+    "overrides": {
+      "$ref": "#/definitions/overrides"
+    },
+    "overrideDependencyMap": {
+      "$ref": "#/definitions/overrideDependencyMap"
+    },
+    "parameterFile": {
+      "description": "指定包版本参数文件",
+      "type": "string"
+    },
+    "hooks": {
+      "description": "安装或卸载的钩子设置，包含 preInstall，postInstall，preUninstall，postUninstall，preVersion，postVersion，prePublish，postPublish 字段。仅支持执行当前工程中的 hooks，不支持执行依赖中的 hooks",
+      "type": "object",
+      "properties": {
+        "preInstall": {
+          "type": "string"
+        },
+        "postInstall": {
+          "type": "string"
+        },
+        "preUninstall": {
+          "type": "string"
+        },
+        "postUninstall": {
+          "type": "string"
+        },
+        "prePublish": {
+          "type": "string"
+        },
+        "postPublish": {
+          "type": "string"
+        },
+        "preVersion": {
+          "type": "string"
+        },
+        "postVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scripts": {
+      "description": "维护一个脚本别名到脚本内容的映射表，开发者可以通过ohpm run <脚本别名>来触发对应脚本内容的执行",
+      "type": "object"
+    },
+    "exclusions": {
+      "description": "支持排除第三方库的直接依赖项",
+      "type": "object"
+    },
+    "properties": {
+      "description": "多环境依赖属性配置.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/stringOrObject"
+      }
+    }
+  },
+  "required": [
+    "modelVersion"
+  ]
+}

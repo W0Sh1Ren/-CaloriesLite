@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "JSON schema for project-level oh-package.json5 files",
+  "definitions": {
+    "dependency": {
+      "description": "Dependencies are specified with a simple hash of package name to version range. The version range is a string which has one or more space-separated descriptors. Dependencies can also be identified with a tarball or a module directory in the same project.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "devDependencies": {
+      "description": "Configure development dependencies, which can only participate in the development or testing phases of the project. If the dependent components need to be released together with the dependent components to the target machine (such as a mobile phone) for use, they cannot be configured here.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "dynamicDependencies": {
+      "description": "Configure the HSP modules for dynamic dependencies of the project. This is used when developers need to dynamically load HSP (not recommended to configure dynamic dependencies in the project-level oh-package.json5).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "overrides": {
+      "description": "Overrides provide a way to replace a package in your dependency graph with another version.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "overrideDependencyMap": {
+      "description": "Replace all direct dependencies of selected packages using external configuration files.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "stringOrObject": {
+      "description": "Can only be string or nested object, array/number/boolean/null are not allowed",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/stringOrObject"
+          }
+        }
+      ]
+    }
+  },
+  "properties": {
+    "modelVersion": {
+      "description": "Identifies the development version.",
+      "type": "string"
+    },
+    "description": {
+      "description": "Describes the third-party database information, which is helpful for search and discovery. ",
+      "type": "string",
+      "maxLength": 512,
+      "minLength": 0
+    },
+    "dependencies": {
+      "$ref": "#/definitions/dependency"
+    },
+    "devDependencies": {
+      "$ref": "#/definitions/devDependencies"
+    },
+    "dynamicDependencies": {
+      "$ref": "#/definitions/dynamicDependencies"
+    },
+    "overrides": {
+      "$ref": "#/definitions/overrides"
+    },
+    "overrideDependencyMap": {
+      "$ref": "#/definitions/overrideDependencyMap"
+    },
+    "parameterFile": {
+      "description": "Specify the package version parameter file.",
+      "type": "string"
+    },
+    "hooks": {
+      "description": "The 'hooks' member is an object hash of script commands that are run at various times in the lifecycle of your package. The key is the lifecycle event, and the value is the command to run at that point.",
+      "type": "object",
+      "properties": {
+        "preInstall": {
+          "type": "string"
+        },
+        "postInstall": {
+          "type": "string"
+        },
+        "preUninstall": {
+          "type": "string"
+        },
+        "postUninstall": {
+          "type": "string"
+        },
+        "prePublish": {
+          "type": "string"
+        },
+        "postPublish": {
+          "type": "string"
+        },
+        "preVersion": {
+          "type": "string"
+        },
+        "postVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scripts": {
+      "description": "The 'scripts' member is an json5 object of script commands, it`s command format is 'key': 'value'. The key is the alias of script, and this value is the command to run.",
+      "type": "object"
+    },
+    "exclusions": {
+      "description": "Exclude direct dependencies of third-party libraries.",
+      "type": "object"
+    },
+    "properties": {
+      "description": "Multi-environment dependent property configuration.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/stringOrObject"
+      }
+    }
+  },
+  "required": [
+    "modelVersion"
+  ]
+}

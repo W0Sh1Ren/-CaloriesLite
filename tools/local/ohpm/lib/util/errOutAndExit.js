@@ -1,0 +1,1 @@
+"use strict";var e=this&&this.__importDefault||function(e){return e&&e.__esModule?e:{default:e}};Object.defineProperty(exports,"__esModule",{value:!0}),exports.errOutAndExit=void 0;const t=e(require("../log"));exports.errOutAndExit=function(e,r,...o){t.default.error(e,r,...o),t.default.shutdown((()=>process.exit(1)))};

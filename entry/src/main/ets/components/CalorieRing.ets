@@ -1,8 +1,11 @@
 /**
  * 首页核心：热量收支环。
  *
- * 展示「预算 / 已摄入 / 缺口」三个数字，
- * 环本身表示已摄入占预算的比例，超标时变红。
+ * 用 Canvas 手绘两个同心圆弧（底环 + 进度弧），而不是 ArkUI 的 Progress 组件：
+ * Progress 在 Ring 模式下不会把自身尺寸撑开给父 Stack，实测会被压扁成几十像素高，
+ * 环只露出一小段。自绘既确定又可控。
+ *
+ * 环内显示当天的热量缺口，环下方列预算 / 摄入 / 运动三项。
  */
 import { DailySummary } from '../model/Types';
 import { COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, RADIUS } from '../common/Theme';
@@ -10,55 +13,83 @@ import { COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, CO
 @Component
 export struct CalorieRing {
   @Prop summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
-  /** 环直径 */
+  /** 环外径（vp） */
   @Prop diameter: number = 210;
 
-  /** 已摄入占「预算 + 运动」的比例，封顶 100 */
-  private ringPercent(): number {
+  private settings: RenderingContextSettings = new RenderingContextSettings(true);
+  private ctx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+
+  /** 已摄入占「预算 + 运动」的比例（0-1），超出按 1 画满 */
+  private ratio(): number {
     const capacity: number = this.summary.budget + this.summary.exerciseKcal;
     if (capacity <= 0) {
       return 0;
     }
-    const pct: number = this.summary.intake / capacity * 100;
-    return Math.min(100, Math.max(0, pct));
+    const r: number = this.summary.intake / capacity;
+    return Math.min(1, Math.max(0, r));
   }
 
-  /** 超标时环变红 */
-  private ringColor(): string {
+  /** 超标时进度弧变红 */
+  private arcColor(): string {
     return this.summary.deficit < 0 ? COLOR_WARN : COLOR_PRIMARY;
   }
 
-  /** 缺口文案：正数是缺口，负数是超出 */
-  private deficitLabel(): string {
-    return this.summary.deficit < 0 ? '超出' : '热量缺口';
-  }
+  /** 按当前数据重绘 */
+  private draw(): void {
+    const ctx = this.ctx;
+    const w: number = ctx.width;
+    const h: number = ctx.height;
+    ctx.clearRect(0, 0, w, h);
+    if (w <= 0 || h <= 0) {
+      return;
+    }
 
-  private deficitValue(): string {
-    return `${Math.abs(this.summary.deficit)}`;
+    const stroke: number = 14;
+    const radius: number = Math.min(w, h) / 2 - stroke / 2;
+    const cx: number = w / 2;
+    const cy: number = h / 2;
+
+    // 底环：整圈浅色
+    ctx.beginPath();
+    ctx.strokeStyle = COLOR_PRIMARY_SOFT;
+    ctx.lineWidth = stroke;
+    ctx.lineCap = 'round';
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 进度弧：从 12 点方向顺时针
+    const r: number = this.ratio();
+    if (r > 0) {
+      const start: number = -Math.PI / 2;
+      const end: number = start + Math.PI * 2 * r;
+      ctx.beginPath();
+      ctx.strokeStyle = this.arcColor();
+      ctx.lineWidth = stroke;
+      ctx.lineCap = 'round';
+      ctx.arc(cx, cy, radius, start, end);
+      ctx.stroke();
+    }
   }
 
   build() {
     Column({ space: GAP }) {
       Stack() {
-        // 底层环
-        Progress({
-          value: this.ringPercent(),
-          total: 100,
-          type: ProgressType.Ring
-        })
+        // 自绘圆环
+        Canvas(this.ctx)
           .width(this.diameter)
           .height(this.diameter)
-          .color(this.ringColor())
-          .backgroundColor(COLOR_PRIMARY_SOFT)
-          .style({ strokeWidth: 14 })
+          .onReady(() => {
+            // onReady 时才能拿到真实绘制尺寸
+            this.draw();
+          })
 
-        // 环心内容
+        // 环心数字
         Column({ space: 2 }) {
-          Text(this.deficitLabel())
+          Text(this.summary.deficit < 0 ? '超出' : '热量缺口')
             .fontSize(13)
             .fontColor(COLOR_TEXT_SUB)
 
-          Text(this.deficitValue())
+          Text(`${Math.abs(this.summary.deficit)}`)
             .fontSize(48)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.summary.deficit < 0 ? COLOR_WARN : COLOR_TEXT)

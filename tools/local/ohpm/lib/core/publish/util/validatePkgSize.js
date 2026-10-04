@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.validatePkgSize=void 0;const e=require("../../../common/Constants"),r=require("../../../error");exports.validatePkgSize=function(t){if(t.size>e.Constants.MaxPackSizeB)throw r.OhpmError.create(r.errors.DepInstall.PackageSizeExceed)};

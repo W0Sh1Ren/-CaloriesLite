@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.validateTag=void 0;const r=require("../../dist-tags/isStandardTag"),e=require("../../../error");exports.validateTag=function(a){if(null!=a&&!(0,r.isStandardTag)(a))throw e.OhpmError.create(e.errors.DistTags.TagInvalidError,{tag:a})};

@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "模块级oh-package.json5文件schema定义",
+  "definitions": {
+    "person": {
+      "description": "参与创建或是维护人员",
+      "type": [
+        "object",
+        "string"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 0,
+          "pattern": "^.*$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 0,
+          "format": "email"
+        }
+      }
+    },
+    "dependency": {
+      "description": "用于配置参与编译/运行阶段使用的依赖，声明需要在代码中import的三方库（参与编译/运行阶段使用的依赖）",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "devDependencies": {
+      "description": "用于配置开发态依赖，只能参与项目的开发或测试阶段。如果被依赖的组件最终要与依赖的组件一起发布到目标机器（手机）上使用，则不能在其中配置。通过devDependencies引入的依赖，不校验循环依赖。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "dynamicDependencies": {
+      "description": "用于配置项目动态依赖的HSP模块。在开发者需要动态加载HSP的时候配置使用。",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "properties": {
+    "name": {
+      "description": "该模块作为依赖时的依赖名，用于唯一标识该依赖",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^(@(?![0-9\\-_])[a-z0-9\\-_]+(?<![\\-_])/)?(?![0-9\\-_.])[a-z0-9\\-_.]+(?<![\\-_.])$"
+    },
+    "version": {
+      "description": "该模块构建产物（HAR/HSP）的版本号。规范：采用X.Y.Z（主版本.次版本.修订号）三段式结构，遵循 semver 语义化规范，从1.0.0开始。",
+      "type": "string",
+      "maxLength": 128,
+      "minLength": 1
+    },
+    "compatibleSdkVersion": {
+      "description": "兼容的SDK版本。",
+      "type": [
+        "string",
+        "integer"
+      ],
+      "maxLength": 64,
+      "minLength": 1
+    },
+    "compatibleSdkType": {
+      "description": "兼容的SDK类型。",
+      "type": "string",
+      "maxLength": 64,
+      "minLength": 1
+    },
+    "obfuscated": {
+      "description": "三方库是否开启混淆标识，构建时由Hvigor自动填充，提供给SDK做兼容性检测。在prepublish、publish时，ohpm会对该字段进行检测(非空校验)，并根据.ohpmrc中开关 compability_log_level配置的值进行提示或报错处理。",
+      "type": "boolean"
+    },
+    "nativeComponents": {
+      "description": "方库使用的so包配置，构建时由Hvigor自动填充，提供给SDK做兼容性检测。对于用户自行引入的so依赖(存放于libs目录)，需要用户手动维护该数组，数组单个元素类型为对象，对象内可配置的字段有：name、compatibleSdkVersion、compatibleSdkType。在prepublish、publish时，如果包内存在so包，则ohpm会对该字段进行检测，并根据.ohpmrc中开关 compability_log_level 配置的值进行提示或报错处理；反之则不检测该字段。",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "指定原生组件的名称.",
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^(@(?![0-9\\-_])[a-z0-9\\-_]+(?<![\\-_])/)?(?![0-9\\-_.])[a-z0-9\\-_.]+(?<![\\-_.])$"
+          },
+          "version": {
+            "description": "原生组件版本遵循语义化版本（semver）规范,详情可见 (https://semver.org/).",
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "compatibleSdkVersion": {
+            "description": "兼容的SDK版本.",
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          },
+          "compatibleSdkType": {
+            "description": "兼容的SDK类型.",
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "description": {
+      "description": "用于描述该模块构建产物（HAR/HSP）的信息，有助于被搜索发现。长度范围为0-512字符",
+      "type": "string",
+      "maxLength": 512,
+      "minLength": 0
+    },
+    "keywords": {
+      "description": "关键字信息数组，便于搜索使用。例如：['tools', 'project']",
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 20
+      }
+    },
+    "author": {
+      "$ref": "#/definitions/person",
+      "default": ""
+    },
+    "homepage": {
+      "description": "通常是项目gitee链接",
+      "type": "string",
+      "maxLength": 1024
+    },
+    "repository": {
+      "description": "开源代码仓库地址。在私仓管理界面的系统设置处可定义是否为必填",
+      "type": "string",
+      "maxLength": 1024
+    },
+    "license": {
+      "description": "当前项目的开源许可证。遵循 spdx license 规范。许可证若为 GPL，repository 建议不为空。",
+      "type": "string"
+    },
+    "dependencies": {
+      "$ref": "#/definitions/dependency"
+    },
+    "devDependencies": {
+      "$ref": "#/definitions/devDependencies"
+    },
+    "dynamicDependencies": {
+      "$ref": "#/definitions/dynamicDependencies"
+    },
+    "packageType": {
+      "description": "标识模块是否为HSP包，在新建Shared Library时会自动生成该字段，并默认赋值为InterfaceHar；Static Library中没有该字段，表示为普通HAR包",
+      "type": "string"
+    },
+    "category": {
+      "description": "标识该软件包的分类",
+      "type": "string"
+    },
+    "main": {
+      "description": "main 字段是一个用于定义程序主入口模块的标识符。当其他代码引入此包时，系统将自动加载该字段指定的模块文件作为包的对外接口",
+      "type": "string"
+    },
+    "types": {
+      "description": "指定类型定义的文件名。当用 typescript 定义新的类型，需要提供给其他开发者使用，则需要指定其声明文件，一般为 .d.ts，.d.ets 文件",
+      "type": "string"
+    },
+    "artifactType": {
+      "description": "OpenHarmony 包制品类型。可选值为 original（源码）、obfuscation（混淆代码）或 bytecode（字节码），默认值为 original。其中 original 表示发布原始的 .ts/.ets 源码文件；obfuscation 表示发布经过混淆处理的代码；bytecode 表示将混淆后的代码编译为 Ark 字节码（.abc 文件）后发布。",
+      "type": "string",
+      "enum": [
+        "original",
+        "obfuscation",
+        "bytecode"
+      ],
+      "default": "original"
+    },
+    "hooks": {
+      "description": "安装或卸载的钩子设置，包含 preInstall, postInstall, preUninstall, postUninstall,preVersion, postVersion, prePublish, postPublish字段。仅支持执行当前工程中的 hooks，不支持执行依赖中的 hooks",
+      "type": "object",
+      "properties": {
+        "preInstall": {
+          "type": "string"
+        },
+        "postInstall": {
+          "type": "string"
+        },
+        "preUninstall": {
+          "type": "string"
+        },
+        "postUninstall": {
+          "type": "string"
+        },
+        "prePublish": {
+          "type": "string"
+        },
+        "postPublish": {
+          "type": "string"
+        },
+        "preVersion": {
+          "type": "string"
+        },
+        "postVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scripts": {
+      "description": "维护一个脚本别名到脚本内容的映射表，开发者可以通过ohpm run <脚本别名>来触发对应脚本内容的执行",
+      "type": "object"
+    },
+    "oh-exports": {
+      "description": "这是一份仅支持相对文件路径的导出配置",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dependencyMode": {
+      "description": "dependencyMode字段，标记bundledhar",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "version"
+  ]
+}

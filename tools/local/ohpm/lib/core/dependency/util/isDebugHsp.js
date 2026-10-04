@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isDebugHsp=void 0;const e=require("../../../common/Constants");exports.isDebugHsp=function(s,t){var o;return t===e.HspType.BUNDLE_APP&&(null===(o=s.metadata)||void 0===o?void 0:o.debug)||!1};

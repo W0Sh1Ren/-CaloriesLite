@@ -4,7 +4,21 @@
     // 勾选 Automatically generate signature）或执行 `devecocli signature generate`。
     // 生成后 DevEco 会自己往这里填入证书路径；下面 product 里的 "signingConfig": "default"
     // 就是与之对应的引用，未配置签名时构建仍会成功，只是产出 unsigned HAP。
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\HUASHUO\\.ohos\\config\\default_CaloriesApp_4C5fnSAWUBXnDUqhU18bCYc8hK60E7jpA0heqmBz49c=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B0F05B202299F6276EAF2AAA3AF4F919C25E28956BEE295070D0756394C40E3FB3D9CB50572CD9A",
+          "profile": "C:\\Users\\HUASHUO\\.ohos\\config\\default_CaloriesApp_4C5fnSAWUBXnDUqhU18bCYc8hK60E7jpA0heqmBz49c=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\HUASHUO\\.ohos\\config\\default_CaloriesApp_4C5fnSAWUBXnDUqhU18bCYc8hK60E7jpA0heqmBz49c=.p12",
+          "storePassword": "0000001B53B537CE0928884B201815890B3BD990DBDE6716F69AFBFA595214C359BAC90970A2D2592FBCDA"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",

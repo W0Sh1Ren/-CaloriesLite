@@ -1,0 +1,150 @@
+[
+    {
+        "attrName": "name",
+        "configs": [
+            {
+                "ruleType": "NotNull",
+                "ruleContent": ""
+            },
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包的名字信息长度校验",
+                "ruleContent": {
+                    "minLength": 1,
+                    "maxLength": 128
+                }
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "ohpm包名格式校验, 除@和/外，group和packagename只能包含小写字母、数字、下划线（_）和中划线(-)。总长度小于等于128个字符",
+                "ruleContent": "(?=^(@(?![0-9\\-_])[a-z0-9\\-_]+(?<![\\-_])\\/)?(?![0-9\\-_.])[a-z0-9\\-_.]+(?<![\\-_.])$).{1,128}$"
+            },
+            {
+                "ruleType": "RegExp",
+                "description": "名称不能包含.har|.tgz|.tar|.tar.gz等后缀",
+                "ruleContent": ".*(?<!(\\.(har|tgz|tar|tar.gz)))$"
+            }
+        ]
+    },
+    {
+        "attrName": "version",
+        "configs": [
+            {
+                "ruleType": "NotNull",
+                "ruleContent": ""
+            },
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包的版本长度校验",
+                "ruleContent": {
+                    "minLength": 1,
+                    "maxLength": 128
+                }
+            },
+            {
+                "ruleType": "CustomFunction",
+                "description": "semver版本校验",
+                "ruleContent": "validateVersion"
+            }
+        ]
+    },
+    {
+        "attrName": "description",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包的描述信息长度校验",
+                "ruleContent": {
+                    "minLength": 0,
+                    "maxLength": 512
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "author",
+        "configs": [
+            {
+                "ruleType": "CustomFunction",
+                "description": "ohpm包作者校验",
+                "ruleContent": "validateAuthor"
+            }
+        ]
+    },
+    {
+        "attrName": "keywords",
+        "configs": [
+            {
+                "ruleType": "CustomFunction",
+                "description": "关键词校验",
+                "ruleContent": "validateKeywords"
+            }
+        ]
+    },
+    {
+        "attrName": "homepage",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包主页地址长度校验",
+                "ruleContent": {
+                    "maxLength": 1024
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "repository",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包代码托管地址长度校验",
+                "ruleContent": {
+                    "maxLength": 1024
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "license",
+        "configs": [
+            {
+                "ruleType": "LengthLimit",
+                "description": "ohpm包开源协议名称长度校验",
+                "ruleContent": {
+                    "maxLength": 256
+                }
+            }
+        ]
+    },
+    {
+        "attrName": "dependencies",
+        "configs": [
+            {
+                "ruleType": "CustomFunction",
+                "description": "dependencies依赖校验, 不能包含本地依赖及tag合法性校验",
+                "ruleContent": "validPkgDependencies"
+            }
+        ]
+    },
+    {
+        "attrName": "dynamicDependencies",
+        "configs": [
+            {
+                "ruleType": "CustomFunction",
+                "description": "dynamicDependencies依赖校验, 不能包含本地依赖及tag合法性校验",
+                "ruleContent": "validPkgDependencies"
+            }
+        ]
+    },
+    {
+        "attrName": "oh-exports",
+        "configs": [
+            {
+                "ruleType": "FilePathArrayString",
+                "description": "文件路径字符串数组格式校验",
+                "ruleContent": ""
+            }
+        ]
+    }
+]

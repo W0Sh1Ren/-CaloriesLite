@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isTagDependency=void 0;const e=require("../../../common/Regex");exports.isTagDependency=function(t){return e.Regex.REGEX_TAG_PREFIX.test(t)};

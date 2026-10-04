@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# Run the node command configured in the environment variable.
+NODE_CMD=node
+
+# Test execution
+NODE_ERROR_OUTPUT=$("${NODE_CMD}" -v 2>&1)
+if [ $? != 0 ]; then
+  # Run the node command under NODE_HOME
+  NODE_CMD=${NODE_HOME}/node
+  NODE_HOME_ERROR_OUTPUT=$("${NODE_CMD}" -v 2>&1)
+fi
+
+if [ $? != 0 ]; then
+  NODE_HOME_PATH=${NODE_HOME}
+  # Check whether the value of NODE_HOME contains bin.
+  # If yes, use the upper-level directory of bin to combine node execution.
+  # If no, use the bin directory to combine node execution.
+  if [[ $NODE_HOME_PATH == *"bin" ]]; then
+    NODE_CMD="${NODE_HOME_PATH:0:-4}/node"
+  else
+    NODE_CMD=${NODE_HOME_PATH}/bin/node
+  fi
+
+  NODE_HOME_SECOND_ERROR_OUTPUT=$("${NODE_CMD}" -v 2>&1)
+fi
+
+if [ $? != 0 ]; then
+  echo -e "\033[31mERROR: node: $NODE_ERROR_OUTPUT\033[0m"
+  echo -e "\033[31mERROR: NODE_HOME: $NODE_HOME_ERROR_OUTPUT\033[0m"
+  echo -e "\033[31mERROR: NODE_HOME: $NODE_HOME_SECOND_ERROR_OUTPUT\033[0m"
+  echo
+  echo -e "\033[31mERROR: Failed to find the executable 'node' command, please check the following possible causes:\033[0m"
+  echo
+  echo -e "\033[31m       1. NodeJs is not installed.\033[0m"
+  echo
+  echo -e "\033[31m       2. 'node' command not added to PATH;\033[0m"
+  echo
+  echo -e "\033[31m       and the 'NODE_HOME' variable is not set in the environment variables to match your NodeJs installation location.\033[0m"
+  echo
+  exit 1
+fi
+
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+case $(uname) in
+    *CYGWIN*|*MINGW*|*MSYS*) basedir=$(cygpath -w "$basedir");;
+esac
+
+PM_CLI_JS=${basedir}/pm-cli.js
+
+exec "${NODE_CMD}" "--no-deprecation" "${PM_CLI_JS}" "$@"

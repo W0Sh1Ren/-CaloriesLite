@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isOverStreamThresholdSize=void 0;const e=require("../../../../config");exports.isOverStreamThresholdSize=function(r){return r>1024*e.config.get(e.types.USE_STREAM_THRESHOLD_SIZE)*1024};

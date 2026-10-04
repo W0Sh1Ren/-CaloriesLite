@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.getCmcResErrMsg=void 0,exports.getCmcResErrMsg=function(r){const e=null==r?void 0:r.errors;if(Array.isArray(e)){return e.map((r=>(null==r?void 0:r.message)||"")).join(",")}return""};

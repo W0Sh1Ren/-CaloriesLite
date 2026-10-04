@@ -1,0 +1,1 @@
+"use strict";Object.defineProperty(exports,"__esModule",{value:!0}),exports.isStandardProject=void 0;const o=require("../config");exports.isStandardProject=function(){return!(!o.config.getProjectRoot()||!o.config.checkProjectRootDir(o.config.getProjectRoot()))};
