@@ -71,21 +71,32 @@ export struct MacroBar {
           }
           .width('100%')
 
-          // 条形：外层浅灰底，内层按完成度着色
-          Stack({ alignContent: Alignment.Start }) {
-            Row()
-              .width('100%')
-              .height(8)
-              .backgroundColor(COLOR_DIVIDER)
-              .borderRadius(4)
+          /*
+           * 条形：外层浅灰底，内层按完成度着色。
+           *
+           * 宽度交给外层 Row 撑满，Stack 只负责把两层条子叠在一起。
+           * 注意这里绝不能在 Stack 上写 layoutWeight：
+           * Stack 的父级是 Column（纵向），layoutWeight 会被解释成
+           * **纵向**扩张，把每一项都拉到整张卡片那么高
+           * （实测过：卡片被撑满屏、条形漂到屏幕中间）。
+           */
+          Row() {
+            Stack({ alignContent: Alignment.Start }) {
+              Row()
+                .width('100%')
+                .height(8)
+                .backgroundColor(COLOR_DIVIDER)
+                .borderRadius(4)
 
-            Row()
-              .width(`${item.percent()}%`)
-              .height(8)
-              .backgroundColor(item.color)
-              .borderRadius(4)
+              Row()
+                .width(`${item.percent()}%`)
+                .height(8)
+                .backgroundColor(item.color)
+                .borderRadius(4)
+            }
+            .width('100%')
+            .height(8)
           }
-          .layoutWeight(1)
           .width('100%')
           .height(8)
         }

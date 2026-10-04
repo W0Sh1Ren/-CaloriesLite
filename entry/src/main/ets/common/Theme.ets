@@ -10,6 +10,13 @@ import { curves } from '@kit.ArkUI';
 export const COLOR_PRIMARY: string = '#22C55E';
 /** 主色的浅色版本，用于进度环底色与标签背景 */
 export const COLOR_PRIMARY_SOFT: string = '#DCFCE7';
+/**
+ * 选中气泡的玻璃绿。
+ *
+ * 半透明的品牌绿 + 白色柔光叠成，既看得出是选中态，
+ * 又保留玻璃的通透感（纯不透明绿会变成一块实心色，纯白又看不出选中）。
+ */
+export const COLOR_PRIMARY_GLASS: string = '#4D22C55E';
 /** 缺口为负（超标）时的警示色 */
 export const COLOR_WARN: string = '#E5533D';
 /** 达标色 */
@@ -53,9 +60,11 @@ export const CARD_SHADOW: ShadowOptions = {
 /** 换算：1 公斤脂肪约等于多少千卡 */
 export const KCAL_PER_KG_FAT: number = 7700;
 
-/** 悬浮导航栏高度 */
-export const NAV_HEIGHT: number = 62;
-/** 悬浮导航栏离屏幕左右与底部的距离 */
+/** 悬浮导航栏高度。取 70 是为了让 borderRadius 正好是高度的一半（35），capsule 才对称 */
+export const NAV_HEIGHT: number = 70;
+/** 悬浮导航栏圆角：固定为高度的一半，形成完整胶囊 */
+export const NAV_RADIUS: number = NAV_HEIGHT / 2;
+/** 悬浮导航栏离屏幕左右的距离 */
 export const NAV_MARGIN: number = 18;
 /**
  * 内容区底部要为悬浮导航栏留出的空间。

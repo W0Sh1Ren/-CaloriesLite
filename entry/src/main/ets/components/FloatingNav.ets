@@ -1,24 +1,21 @@
 /**
  * 悬浮液态玻璃导航栏。
  *
- * 材质用的是系统的「沉浸光感」（uiMaterial + systemMaterial），不是手写模糊：
- * 系统会按设备算力决定模糊/亮度/描边/投影，并自带光感交互反馈
- * ——按下时在材质上浮起一层光。手写 backgroundEffect 做不出这个效果。
- * 不支持沉浸材质的设备上自动退回普通半透明底色（见 Material.ets）。
+ * 玻璃质感由三层叠出来（见 glassBackdrop）：
+ *   极低透明度白底 + 拉满的背景模糊 + 细白色高光边框
+ * 文字与图标自带一层淡阴影，保证在浅色/深色内容上都读得清。
  *
  * 交互（对齐参考图的观感）：
  *   - 按住任意位置：以手指为圆心浮起柔光，手指移到哪光就跟到哪
- *   - 高亮胶囊实时跟到手指所在的项（弹簧曲线，不是硬切）
+ *   - 选中气泡实时跟到手指所在的项（弹簧曲线，不是硬切）
  *   - 手指抬起：选中抬起位置对应的项，并触发页面切换
  *
  * 注意：底部安全区（手势条）会吃掉点击，整条栏必须由父组件抬到 bottomInset 之上。
  */
-import { uiMaterial } from '@kit.ArkUI';
 import {
-  CARD_SHADOW, COLOR_PRESS_GLOW, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT_SUB,
-  CURVE_SPRING, DUR_FAST, DUR_NORMAL, NAV_HEIGHT, PRESS_SCALE
+  COLOR_PRESS_GLOW, COLOR_PRIMARY, COLOR_PRIMARY_GLASS, COLOR_TEXT_SUB,
+  CURVE_SPRING, DUR_FAST, DUR_NORMAL, NAV_HEIGHT, NAV_RADIUS, PRESS_SCALE
 } from '../common/Theme';
-import { immersiveSupported, systemMaterial } from '../common/Material';
 
 /** 一个导航项 */
 export class NavItem {
@@ -70,27 +67,32 @@ export struct FloatingNav {
   }
 
   /**
-   * 不支持沉浸材质时的兜底底色。
+   * 玻璃底色。
    *
-   * 支持材质时整条栏交给 systemMaterial 渲染，这里什么都不画——
-   * 自绘底色或另加模糊都会盖住系统材质的效果。
+   * 三层要求叠在一起才是「液态玻璃」：
+   *   1. 极低透明度的白底（15%）——让底层内容透上来
+   *   2. 拉满的背景模糊——把透上来的内容磨成砂面
+   *   3. 细白色高光边框——玻璃边缘的反光
+   *
+   * 关于模糊档位：BlurStyle 枚举里没有 ULTRA_THICK，
+   * 「最厚一档」是 BACKGROUND_ULTRA_THICK（写 ULTRA_THICK 会编译不过）。
+   *
+   * 另外不用背景材质（systemMaterial）而用这里的模糊，是因为
+   * 本机 uiMaterial.getMaterialInfo().state 恒为 0（应用级开关未生效），
+   * 系统材质不渲染；backgroundBlurStyle 则一直可用。
    */
   @Builder
-  fallbackBackdrop() {
+  glassBackdrop() {
     Column()
       .width('100%')
       .height('100%')
-      // BACKGROUND_ULTRA_THICK 是系统提供的最厚一档背景模糊，玻璃感最强
-      // （枚举里没有 ULTRA_THICK，只有 Thick 和 BACKGROUND_ULTRA_THICK）
       .backgroundBlurStyle(BlurStyle.BACKGROUND_ULTRA_THICK, {
         colorMode: ThemeColorMode.LIGHT,
         adaptiveColor: AdaptiveColor.DEFAULT,
         scale: 1.0
       })
-      // 底色只给极淡的一层，透明度靠模糊本身撑。
-      // 之前 #26FFFFFF（15%）在浅色背景上几乎等于纯白，玻璃感全无；
-      // 降到 8% 让模糊透出底下的内容，「液态」的观感才出来。
-      .backgroundColor('#14FFFFFF')
+      // 15% 白：再高就会在浅色背景上糊成一块实心白，玻璃感全无
+      .backgroundColor('#26FFFFFF')
       .hitTestBehavior(HitTestMode.None)
   }
 
@@ -114,30 +116,37 @@ export struct FloatingNav {
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
-      // 不支持沉浸材质时才画兜底底色
-      if (!immersiveSupported()) {
-        this.fallbackBackdrop()
-      }
+      // 玻璃底色：15% 白 + 拉满模糊
+      this.glassBackdrop()
 
       Stack({ alignContent: Alignment.Start }) {
         /*
-         * 高亮胶囊。
+         * 选中态小气泡。
          *
-         * 用「占满整宽的容器 + translate 位移」定位，而不是
-         * 「固定宽度 + 左外边距」：后者要手算左偏移，浮点取整会带来
-         * 一两像素的偏心，视觉上就是选中气泡不在格子正中间。
-         * 这里每个子项都套一层等宽的 Column，胶囊占满同一格再整体平移，
-         * 与文字用的是同一套等分布局，几何上必然对齐。
+         * 本身也是毛玻璃：40% 白 + THIN 模糊 + 1.5px 白色高光边框。
+         * 用「占满整宽的容器 + 等宽格子」定位，而不是「固定宽度 + 手算左偏移」，
+         * 后者浮点取整会带来偏心；这里与文字共用同一套等分布局，几何上必然对齐。
          */
         Row() {
           ForEach(this.items, (item: NavItem, index: number) => {
             Column() {
               Row()
                 .width('100%')
-                .height(NAV_HEIGHT - 14)
-                .backgroundColor(COLOR_PRIMARY_SOFT)
-                .borderRadius((NAV_HEIGHT - 14) / 2)
-                .padding({ left: 8, right: 8 })
+                .height(NAV_HEIGHT - 18)
+                .backgroundBlurStyle(BlurStyle.Thin, {
+                  colorMode: ThemeColorMode.LIGHT,
+                  adaptiveColor: AdaptiveColor.DEFAULT,
+                  scale: 1.0
+                })
+                /*
+                 * 绿色胶囊，但保持玻璃质感：用半透明的品牌绿做着色层，
+                 * 底下叠一层 40% 的白当柔光，两层一起压过 Thin 模糊。
+                 * 直接写不透明绿会丢掉玻璃的通透感，写纯白又看不出是选中态。
+                 */
+                .backgroundColor(COLOR_PRIMARY_GLASS)
+                .borderRadius((NAV_HEIGHT - 18) / 2)
+                .border({ width: 1.5, color: '#CCFFFFFF' })
+                .padding({ left: 6, right: 6 })
             }
             .layoutWeight(1)
             .height(NAV_HEIGHT)
@@ -194,22 +203,10 @@ export struct FloatingNav {
     .width('100%')
     .height(NAV_HEIGHT)
     .clip(true)
-    .borderRadius(NAV_HEIGHT / 2)
-    // 1px 白色高光描边，玻璃的「边」
+    // 大圆角：正好是高度的一半，形成完整胶囊
+    .borderRadius(NAV_RADIUS)
+    // 玻璃高光边框：极细的半透明白，模拟玻璃边缘的反光
     .border({ width: 1, color: '#99FFFFFF' })
-    // 系统沉浸光感材质：模糊、亮度、描边、投影都由系统按设备算力决定，
-    // 并带光感交互反馈——按下时材质上会浮起一层光。
-    // interactive 打开交互动效变形；lightEffect 指定反馈光的颜色。
-    // 注意不要在这里再叠 backgroundBlurStyle：两者会互相盖住，
-    // 不支持材质的设备由内部条件渲染的 fallbackBackdrop() 顶上。
-    .systemMaterial(systemMaterial(
-      uiMaterial.ImmersiveStyle.THICK,
-      // 着色层要足够淡，否则会把材质自身的模糊与透光盖住。
-      // 从 18% 降到 8%，配合兜底底色一起降低整体不透明度。
-      '#14FFFFFF',
-      true,
-      '#6622C55E'
-    ))
     // 整条栏统一接管手势：按下即出光效，移动即跟手，抬起即选中。
     // 用整栏一个手势而不是每项各一个，手指在项之间滑动才不会被切断。
     .onTouch((event: TouchEvent) => {

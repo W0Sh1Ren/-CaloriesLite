@@ -17,11 +17,12 @@ import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { MealType, FoodRecord, DailySummary } from '../model/Types';
-import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
+import { MEAL_ORDER, mealTypeLabel, macroTargetFor } from '../model/Enums';
 import { friendlyDate, todayKey, timeLabel } from '../common/DateUtil';
 import { DailyService } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
 import { ImageService } from '../service/ImageService';
+import { MacroBar } from '../components/MacroBar';
 import { MealGallery } from '../components/MealGallery';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
@@ -270,9 +271,18 @@ struct DayDetail {
         .fontSize(11)
         .fontColor(COLOR_TEXT_SUB)
         .width('100%')
-      // 这里刻意不放三大营养素：详情页的主角是「这天吃了什么」，
-      // 营养素属于首页的当日总览。放在这里会把汇总卡撑得很高，
-      // 一进页面先看到一堆进度条、看不到记录列表。
+
+      Divider().color(COLOR_DIVIDER)
+
+      // 推荐的营养素克数按当日预算推算（碳水 50% / 蛋白 30% / 脂肪 20%）
+      MacroBar({
+        protein: this.summary.protein,
+        fat: this.summary.fat,
+        carb: this.summary.carb,
+        carbTarget: macroTargetFor(this.summary.budget).carb,
+        proteinTarget: macroTargetFor(this.summary.budget).protein,
+        fatTarget: macroTargetFor(this.summary.budget).fat
+      })
     }
     .width('100%')
     .padding(16)
