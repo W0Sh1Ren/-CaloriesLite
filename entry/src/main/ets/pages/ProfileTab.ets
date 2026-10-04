@@ -160,45 +160,69 @@ export struct ProfileTab {
   }
 
   build() {
-    Scroll() {
-      Column({ space: GAP }) {
-        // ------------------------------------------------ 基础热量卡片
-        this.budgetCard()
+    /*
+     * 用 Stack 叠一层自绘的底部面板，而不是系统的 bindSheet。
+     *
+     * 原因：bindSheet 自带一个圆形关闭按钮，压在右上角、正好盖住「确定」。
+     * 试过 showClose: false，那个按钮依然在（说明它不是 showClose 控制的），
+     * 所以干脆自绘——外观完全可控，也不会多出第二个关闭入口。
+     */
+    Stack({ alignContent: Alignment.Bottom }) {
+      Scroll() {
+        Column({ space: GAP }) {
+          // ------------------------------------------------ 基础热量卡片
+          this.budgetCard()
 
-        // ------------------------------------------------ 个人情况
-        this.profileCard()
+          // ------------------------------------------------ 个人情况
+          this.profileCard()
 
-        // ------------------------------------------------ AI 识别
-        this.aiCard()
+          // ------------------------------------------------ AI 识别
+          this.aiCard()
 
-        // ------------------------------------------------ 关于与数据
-        this.miscCard()
+          // ------------------------------------------------ 关于与数据
+          this.miscCard()
 
-        Row().height(NAV_RESERVE)
+          Row().height(NAV_RESERVE)
+        }
+        .width('100%')
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8 })
+      .height('100%')
+      .backgroundColor(COLOR_BG)
+      .scrollBar(BarState.Off)
+      .align(Alignment.Top)
+
+      if (this.sheetShown) {
+        // 半透明遮罩：点它也能关掉面板
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor('#66000000')
+          .onClick(() => {
+            this.sheetShown = false;
+          })
+
+        this.valueSheet()
+      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(COLOR_BG)
-    .scrollBar(BarState.Off)
-    .align(Alignment.Top)
-    // 底部半模态面板：改年龄/身高用滚轮，改体重用带小数点的键盘
-    .bindSheet($$this.sheetShown, this.valueSheet(), {
-      height: SheetSize.FIT_CONTENT,
-      dragBar: true,
-      backgroundColor: COLOR_CARD,
-      onDisappear: () => {
-        this.sheetShown = false;
-      }
-    })
   }
 
-  /** 数值选择面板 */
+  /** 数值选择面板（自绘底部弹层） */
   @Builder
   valueSheet() {
     Column({ space: 12 }) {
+      // 顶部拖拽条：提示这是一个可以下拉关闭的面板
+      Row()
+        .width(36)
+        .height(4)
+        .backgroundColor(COLOR_DIVIDER)
+        .borderRadius(2)
+        .margin({ top: 8, bottom: 2 })
+
       Row() {
         Button({ type: ButtonType.Capsule }) {
           Text('取消').fontSize(14).fontColor(COLOR_TEXT_SUB)
@@ -216,6 +240,7 @@ export struct ProfileTab {
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
 
+        // 右端只有「确定」，不再有系统那个圆形关闭按钮压在上面
         Button({ type: ButtonType.Capsule }) {
           Text('确定').fontSize(14).fontColor(Color.White)
         }
@@ -255,10 +280,18 @@ export struct ProfileTab {
           })
       }
 
-      Row().height(8)
+      Row().height(16)
     }
     .width('100%')
-    .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 4 })
+    .padding({ left: PAGE_PAD, right: PAGE_PAD })
+    // 底部弹层外观：上方圆角 + 卡片底色 + 让开手势条
+    .backgroundColor(COLOR_CARD)
+    .borderRadius({ topLeft: 20, topRight: 20 })
+    .padding({ bottom: AppState.bottomInset + 12 })
+    // 从下方滑入，配合遮罩淡入
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 240 }))
+      .animation({ duration: 260, curve: Curve.FastOutSlowIn }))
   }
 
   @Builder

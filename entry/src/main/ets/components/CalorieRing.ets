@@ -12,7 +12,7 @@
  * 而同一份数据用基本类型传的 MacroBar 却是正常的。
  * 另外数字也不要经 @Builder 参数传（@Builder 的参数只求值一次），直接内联。
  */
-import { AnimatedValue, CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, RADIUS } from '../common/Theme';
 import { RollingNumber } from './RollingNumber';
 
 @Component
@@ -34,36 +34,67 @@ export struct CalorieRing {
 
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private ctx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
-  /** Canvas 是否已完成布局。未就绪时 ctx.width/height 是 0，画不出东西 */
+  /** Canvas 是否已完成布局。未就绪时 ctx.width/height 是 0，画不出别的 */
   private canvasReady: boolean = false;
 
   /**
-   * 弧线的动画比例。
-   *
-   * 不直接用 ratio() 画：那样数据一变弧线会瞬移。
-   * 这里由 AnimatedValue 逐帧把显示比例推向目标比例，
-   * 每帧写回 animRatio 触发重建，Canvas 在重建里按新比例重绘。
+   * 弧线的显示比例（0-1）。这个 @State 是动画的驱动源：
+   * 每帧写入它会让组件重建，同时下面手动调 draw() 重绘 Canvas。
    */
   @State animRatio: number = 0;
-  private arcValue: AnimatedValue = new AnimatedValue();
+  /** 逐帧动画的定时器句柄，-1 表示没在跑 */
+  private animTimer: number = -1;
+
+  aboutToAppear(): void {
+    this.animRatio = this.ratio();
+  }
+
+  aboutToDisappear(): void {
+    // 定时器必须在销毁时停掉，否则回调会打到已销毁的实例上
+    this.stopAnim();
+  }
+
+  private stopAnim(): void {
+    if (this.animTimer !== -1) {
+      clearInterval(this.animTimer);
+      this.animTimer = -1;
+    }
+  }
 
   /**
-   * 数据变化时：推动弧线动画，并在动画过程中持续重绘。
+   * 数据变化时把弧线平滑推到新比例。
    *
-   * Canvas 的内容不是声明式的，onReady 只在首次布局时触发一次，
-   * 之后数据变了没人再调 draw()，弧线就会停在旧位置。
+   * 为什么自己跑定时器而不用 animateTo：
+   * Canvas 里的圆弧是一次性画上去的路径，不在属性动画的插值通道里；
+   * 而在 build 里调 draw() 又不允许（build 不能有副作用）。
+   * 所以只能每帧同时做两件事：写 @State（触发重建）+ 调 draw()（重绘画布）。
    */
   onDataChange(): void {
+    const target: number = this.ratio();
     if (!this.canvasReady) {
+      this.animRatio = target;
       return;
     }
-    this.arcValue.animate(this, () => this.ratio(), (v: number) => {
-      this.animRatio = v;
-      // 每帧重绘：@State 写入会触发重建，但 Canvas 需要显式重画
+    if (Math.abs(target - this.animRatio) < 0.0001) {
+      // 比例没变也要重绘一次，保证颜色（超标变红）能更新
       this.draw();
-    });
-    // 比例没变时也要重绘一次，保证颜色（超标变红）能跟着更新
-    this.draw();
+      return;
+    }
+    this.stopAnim();
+    const from: number = this.animRatio;
+    const startedAt: number = Date.now();
+    const duration: number = DUR_SLOW;
+    this.animTimer = setInterval(() => {
+      const t: number = Math.min(1, (Date.now() - startedAt) / duration);
+      // easeOutCubic：起步快、收尾缓，与应用其它动效节奏一致
+      const eased: number = 1 - Math.pow(1 - t, 3);
+      this.animRatio = from + (target - from) * eased;
+      // 写 @State 会触发重建，但 Canvas 需要显式重画
+      this.draw();
+      if (t >= 1) {
+        this.stopAnim();
+      }
+    }, 16);
   }
 
   /** 已摄入占「预算 + 运动」的比例（0-1），超出按 1 画满 */
@@ -129,13 +160,9 @@ export struct CalorieRing {
             // onReady 时才能拿到真实绘制尺寸
             this.canvasReady = true;
             // 首个值直接落位，避免页面一打开弧线从 0 长出来
-            this.arcValue.animate(this, () => this.ratio(), (v: number) => {
-              this.animRatio = v;
-              this.draw();
-            });
+            this.animRatio = this.ratio();
             this.draw();
           })
-
         // 环心数字
         Column({ space: 2 }) {
           Text(this.deficit < 0 ? '超出' : '热量缺口')

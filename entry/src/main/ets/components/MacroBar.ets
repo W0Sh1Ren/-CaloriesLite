@@ -11,7 +11,7 @@
  * 条形宽度带连续动画：数据变化时不是瞬间跳到新比例，而是从当前位置推过去。
  */
 import {
-  AnimatedValue, CARD_SHADOW, COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT,
+  CARD_SHADOW, COLOR_CARB, COLOR_CARD, COLOR_DIVIDER, COLOR_FAT,
   COLOR_PROTEIN, COLOR_TEXT, COLOR_TEXT_SUB, DUR_SLOW, RADIUS
 } from '../common/Theme';
 
@@ -53,12 +53,12 @@ export struct MacroBar {
   @Prop fatTarget: number = 0;
 
   /**
-   * 三项的显示百分比，由 AnimatedValue 逐帧推向目标值。
+   * 三项的显示百分比。
    *
-   * 用数组而不是三个独立字段，是为了能用下标统一处理。
+   * 用 @State 数组 + animateTo：animateTo 每帧重建组件，
+   * 而 width 是属性、可被插值，于是三根条连续滑动。
    */
   @State animPct: number[] = [0, 0, 0];
-  private values: AnimatedValue[] = [new AnimatedValue(), new AnimatedValue(), new AnimatedValue()];
 
   aboutToAppear(): void {
     // 首帧直接落位，避免一进页面三根条从 0 长出来
@@ -68,14 +68,16 @@ export struct MacroBar {
   /** 数据变化：把三根条平滑推到新比例 */
   onDataChange(): void {
     const list: MacroItem[] = this.items();
+    const from: number[] = this.animPct.slice();
+    const target: number[] = [];
     for (let i = 0; i < list.length; i++) {
-      const target: number = list[i].percent();
-      this.values[i].animate(this, () => target, (v: number) => {
-        const next: number[] = this.animPct.slice();
-        next[i] = v;
-        this.animPct = next;
-      });
+      target.push(list[i].percent());
     }
+    // 先把起点写回，再从起点推到目标，连续切换时不会跳
+    this.animPct = from;
+    this.getUIContext().animateTo({ duration: DUR_SLOW, curve: Curve.EaseOut }, () => {
+      this.animPct = target;
+    });
   }
 
   /** 不做动画，直接把显示值设为目标 */

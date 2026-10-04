@@ -98,48 +98,76 @@ export const PRESS_SCALE: number = 0.9;
 export const COLOR_PRESS_GLOW: string = '#2622C55E';
 
 /**
- * 把「当前显示值」平滑推动到「目标值」，用于进度条 / 圆环这类需要连续变化的图形。
+ * 手动逐帧数值动画器。
  *
- * 用法（放在组件的 @Prop 的 @Watch 回调里）：
+ * 给 Canvas 自绘图形用。
  *
- *   onTargetChange(): void {
- *     animated.animate(this, () => this.ratio, (v) => { this.animRatio = v; });
- *   }
+ * 为什么不能像营养素条那样用 animateTo：
+ * animateTo 只能插值「属性」，而 Canvas 里的圆弧是一次性画上去的路径，
+ * 不在属性动画通道里。实测在 animateTo 回调里改状态 + 手动 draw()，
+ * 拿到的是目标值，弧线直接瞬移——所以必须自己按帧推进。
  *
- * 为什么不直接用 `.animation()` 修饰符：那个只对「属性修饰符」生效，
- * 而这里的宽度是算出来的百分比字符串、圆环是 Canvas 绘制的，
- * 都不走属性动画通道，只能自己逐帧插值。
+ * 用法：
+ *   ticker.to(target, (v) => { this.animRatio = v; this.draw(v); });
  */
-export class AnimatedValue {
-  /** 当前显示的值 */
+export class ValueTicker {
+  /** 当前显示值 */
   current: number = 0;
-  /** 是否已初始化过（首个值不播动画，直接落位） */
-  private started: boolean = false;
+  /** 定时器句柄，-1 表示没有在跑 */
+  private timer: number = -1;
+  /** 本次动画的起止与起始时刻 */
+  private from: number = 0;
+  private to_: number = 0;
+  private startedAt: number = 0;
+  private duration: number = 420;
+
+  /** 是否正在动画中 */
+  isRunning(): boolean {
+    return this.timer !== -1;
+  }
+
+  /** 停掉当前动画（组件销毁时必须调用，否则回调会打到已销毁的实例上） */
+  stop(): void {
+    if (this.timer !== -1) {
+      clearInterval(this.timer);
+      this.timer = -1;
+    }
+  }
 
   /**
-   * 从当前显示值平滑推到 target。
+   * 平滑推进到 target。
    *
-   * @param host    调用它的组件（用来取 UIContext 起 animateTo）
-   * @param ratio   取目标值的函数
-   * @param apply   把插值写回 @State 的回调，写回会触发重建从而重绘
+   * @param target   目标值
+   * @param apply    每帧回调，拿到当前插值
+   * @param duration 时长（毫秒）
+   * @param duration 不传则用默认
    */
-  animate(host: CustomComponent, ratio: () => number, apply: (v: number) => void,
-    duration: number = DUR_SLOW, curve: ICurve = CURVE_COUNT): void {
-    const target: number = ratio();
-    if (!this.started) {
-      // 首次进入直接落位，否则页面一打开就会从 0 长出来
-      this.started = true;
-      this.current = target;
-      apply(target);
-      return;
-    }
+  to(target: number, apply: (v: number) => void, duration: number = 420): void {
+    // 起止相同就没必要起动画
     if (Math.abs(target - this.current) < 0.0001) {
-      return;
-    }
-    host.getUIContext().animateTo({ duration: duration, curve: curve }, () => {
       this.current = target;
       apply(target);
-    });
+      return;
+    }
+    this.stop();
+    this.from = this.current;
+    this.to_ = target;
+    this.startedAt = Date.now();
+    this.duration = duration;
+
+    this.timer = setInterval(() => {
+      const elapsed: number = Date.now() - this.startedAt;
+      const t: number = this.duration <= 0 ? 1 : Math.min(1, elapsed / this.duration);
+      // easeOutCubic：起步快、收尾缓，和应用的其它动效节奏一致
+      const eased: number = 1 - Math.pow(1 - t, 3);
+      this.current = this.from + (this.to_ - this.from) * eased;
+      apply(this.current);
+      if (t >= 1) {
+        this.current = this.to_;
+        apply(this.current);
+        this.stop();
+      }
+    }, 16);
   }
 }
 

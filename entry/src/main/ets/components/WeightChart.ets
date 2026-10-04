@@ -3,38 +3,51 @@
  *
  * 用 Canvas 手绘：只有一条折线 + 数据点 + 首尾标注，
  * 相比引入图表库更轻，也更容易保持一致视觉。
+ *
+ * 坐标轴说明：
+ *   纵轴 = 体重（kg），刻度值标在左侧
+ *   横轴 = 日期，只标首尾两天（点多了会糊成一片）
+ * 轴名称用固定文字标在左上 / 右下角，省掉刻度的空间又保证看得懂。
  */
 import { WeightRecord } from '../model/Types';
 import { CARD_SHADOW, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
 
-/** 图表内的内边距，给坐标文字留位置 */
-const PAD_LEFT = 34;
-const PAD_RIGHT = 12;
-const PAD_TOP = 14;
-const PAD_BOTTOM = 20;
+/** 图表内边距。左边留给体重刻度，下边留给日期 */
+const PAD_LEFT = 46;
+const PAD_RIGHT = 16;
+const PAD_TOP = 26;
+const PAD_BOTTOM = 32;
 
 @Component
 export struct WeightChart {
   @Prop records: WeightRecord[] = [];
-  @Prop chartHeight: number = 160;
+  @Prop chartHeight: number = 170;
 
   private settings: RenderingContextSettings = new RenderingContextSettings(true);
   private ctx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
-  /** Canvas 是否已经完成布局。未就绪时 draw 拿不到真实宽高 */
+  /** Canvas 是否已完成布局。未就绪时拿不到真实宽高 */
   private canvasReady: boolean = false;
 
   /**
    * 数据变化时重绘。
    *
-   * 这里必须显式重绘：Canvas 的内容不是声明式的，onReady 只在
-   * 组件首次布局完成时触发一次。少了这一步就会出现
-   * 「记录了体重、『1 次记录』也变了，但图里还写着还没有体重记录」，
-   * 因为 records 更新后根本没人再调用 draw。
+   * 必须显式重绘：Canvas 内容不是声明式的，onReady 只在首次布局时触发一次。
+   * 少这一步就会出现「记录了体重、『N 次记录』也变了，
+   * 但图里还写着还没有体重记录」（实测踩过）。
    */
   onDidUpdate(): void {
     if (this.canvasReady) {
       this.draw(this.ctx.width, this.ctx.height);
     }
+  }
+
+  /** 把 YYYY-MM-DD 压成 M/D，横轴用 */
+  private shortDate(dayKey: string): string {
+    const parts: string[] = dayKey.split('-');
+    if (parts.length < 3) {
+      return dayKey;
+    }
+    return `${Number.parseInt(parts[1])}/${Number.parseInt(parts[2])}`;
   }
 
   /** 按当前数据重绘 */
@@ -44,14 +57,14 @@ export struct WeightChart {
 
     const list: WeightRecord[] = this.records;
     if (list.length === 0) {
-      ctx.font = '13px sans-serif';
+      ctx.font = '15px sans-serif';
       ctx.fillStyle = COLOR_TEXT_SUB;
       ctx.textAlign = 'center';
       ctx.fillText('还没有体重记录', width / 2, height / 2);
       return;
     }
 
-    // Y 轴范围：留 0.5kg 余量，避免折线贴边
+    // Y 轴范围：留余量，避免折线贴边
     let min: number = list[0].weightKg;
     let max: number = list[0].weightKg;
     for (const r of list) {
@@ -71,7 +84,6 @@ export struct WeightChart {
     const plotH: number = height - PAD_TOP - PAD_BOTTOM;
     const range: number = max - min;
 
-    // 横坐标
     const xAt = (i: number): number => {
       if (list.length === 1) {
         return PAD_LEFT + plotW / 2;
@@ -92,17 +104,33 @@ export struct WeightChart {
       ctx.stroke();
     }
 
-    // Y 轴刻度文字
-    ctx.font = '10px sans-serif';
+    // Y 轴刻度文字（体重）
+    ctx.font = '14px sans-serif';
     ctx.fillStyle = COLOR_TEXT_SUB;
     ctx.textAlign = 'right';
-    ctx.fillText(max.toFixed(1), PAD_LEFT - 5, PAD_TOP + 4);
-    ctx.fillText(((max + min) / 2).toFixed(1), PAD_LEFT - 5, PAD_TOP + plotH / 2 + 4);
-    ctx.fillText(min.toFixed(1), PAD_LEFT - 5, PAD_TOP + plotH + 4);
+    ctx.fillText(max.toFixed(1), PAD_LEFT - 7, PAD_TOP + 5);
+    ctx.fillText(((max + min) / 2).toFixed(1), PAD_LEFT - 7, PAD_TOP + plotH / 2 + 5);
+    ctx.fillText(min.toFixed(1), PAD_LEFT - 7, PAD_TOP + plotH + 5);
+
+    // 轴名称：左上标「体重(kg)」，右下标「日期」
+    ctx.textAlign = 'left';
+    ctx.fillStyle = COLOR_TEXT_SUB;
+    ctx.font = '13px sans-serif';
+    ctx.fillText('体重(kg)', 2, 15);
+
+    // X 轴日期：首尾各标一个
+    ctx.textAlign = 'center';
+    ctx.fillText(this.shortDate(list[0].dayKey), PAD_LEFT, height - 14);
+    if (list.length > 1) {
+      ctx.fillText(this.shortDate(list[list.length - 1].dayKey), width - PAD_RIGHT, height - 14);
+    }
+    // 横轴名称放在最底一行，与日期错开避免重叠
+    ctx.textAlign = 'right';
+    ctx.fillText('日期', width - PAD_RIGHT, height - 2);
 
     // 折线
     ctx.strokeStyle = COLOR_PRIMARY;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -117,8 +145,8 @@ export struct WeightChart {
     }
     ctx.stroke();
 
-    // 数据点：点太多时只标首尾，避免糊成一片
-    const dotRadius: number = list.length > 30 ? 1.5 : 3;
+    // 数据点：点太多时缩小，避免糊成一片
+    const dotRadius: number = list.length > 30 ? 2 : 3.5;
     for (let i = 0; i < list.length; i++) {
       ctx.beginPath();
       ctx.fillStyle = COLOR_PRIMARY;
@@ -129,9 +157,10 @@ export struct WeightChart {
     // 最新值标注在最后一个点上方
     const lastIndex: number = list.length - 1;
     ctx.fillStyle = COLOR_TEXT;
-    ctx.font = '11px sans-serif';
+    ctx.font = '15px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(`${list[lastIndex].weightKg} kg`, width - PAD_RIGHT, Math.max(12, yAt(list[lastIndex].weightKg) - 8));
+    ctx.fillText(`${list[lastIndex].weightKg} kg`, width - PAD_RIGHT,
+      Math.max(18, yAt(list[lastIndex].weightKg) - 12));
   }
 
   build() {
