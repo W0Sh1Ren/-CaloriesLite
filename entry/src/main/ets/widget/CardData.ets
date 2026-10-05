@@ -98,9 +98,11 @@ export class CardData {
    */
   static nowText(): string {
     const d: Date = new Date();
-    const hh: string = d.getHours() < 10 ? `0${d.getHours()}` : `${d.getHours()}`;
-    const mm: string = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
-    return `${hh}:${mm} 更新`;
+    return `${CardData.pad2(d.getHours())}:${CardData.pad2(d.getMinutes())} 更新`;
+  }
+
+  private static pad2(n: number): string {
+    return n < 10 ? `0${n}` : `${n}`;
   }
 
   /** 进度百分比：0~100，目标非法时给 0，并夹住上溢，形如 "62%" */

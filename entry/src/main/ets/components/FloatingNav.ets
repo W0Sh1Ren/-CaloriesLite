@@ -321,8 +321,8 @@ export struct FloatingNav {
      * 真正的「浮起来」靠的是投影与描边，不是靠透出后面的文字，
      * 所以模糊要足够重到把内容化成色块。
      */
-    .backgroundColor('#38FFFFFF')
-    .backdropBlur(44)
+    .backgroundColor('#4DB2DFDB')
+    .backdropBlur(9)
     /*
      * 玻璃的「折射四件套」：
      *   1. 0.5vp 亮白描边   —— 玻璃厚度；边缘的折射最直观

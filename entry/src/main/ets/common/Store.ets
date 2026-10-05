@@ -30,6 +30,42 @@ export class Store {
   }
 
   /**
+   * 强制重新打开偏好存储，丢掉本进程的旧快照。
+   *
+   * ── 为什么需要它（桌面卡片踩过的坑）
+   *
+   * preferences 在**框架层**还维护了一份进程内缓存，而且这份缓存
+   * 不会因为别的进程写了新值就失效。卡片进程是长驻的，于是出现：
+   *   应用里记完一笔 → 卡片点「刷新」→ 卡片进程读到的还是几十分钟前的旧值
+   *   → 只有等系统把卡片进程回收、重启后重新读文件，卡片才更新。
+   * 用户看到的就是「刷新没用，过一阵自己好了」。
+   *
+   * 实测证据（一次记录后的连续 7 次刷新 + 一次进程重启）：
+   *   pid=49312 连续 7 次刷新 → records=7  intake=1880  （全是旧值）
+   *   pid=49969（进程重启后） → records=9  intake=2280  （新值）
+   * 说明旧值不是我们这层缓存的 —— 把 Store.prefs 置空再 getPreferencesSync
+   * 拿回来的**仍然是旧的**，所以必须连框架的缓存一起清掉。
+   *
+   * 关键就是 removePreferencesFromCacheSync：它把 Preferences 实例从
+   * 框架缓存中移除，之后 getPreferencesSync 才会**重新读文件**。
+   * 只把自己的引用置空是不够的。
+   *
+   * 只有卡片进程需要调 —— 主应用自己是写入方，它那份缓存就是最新值。
+   */
+  static reload(context: common.Context): void {
+    const hadCache: boolean = Store.prefs !== null;
+    Store.prefs = null;
+    try {
+      preferences.removePreferencesFromCacheSync(context, STORE_NAME);
+    } catch (err) {
+      hilog.warn(DOMAIN, 'CalorieLite', 'removePreferencesFromCache failed, will reopen');
+    }
+    Store.init(context);
+    hilog.info(DOMAIN, 'CalorieLite', 'Store reload: hadCache=%{public}s ready=%{public}s',
+      `${hadCache}`, `${Store.isReady()}`);
+  }
+
+  /**
    * 存储是否可用。
    *
    * 曾经踩过的坑：EntryAbility 漏调 init()，prefs 一直是 null，

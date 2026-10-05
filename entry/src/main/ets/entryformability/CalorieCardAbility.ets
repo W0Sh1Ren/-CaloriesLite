@@ -72,9 +72,14 @@ export default class CalorieCardAbility extends FormExtensionAbility {
       const home: HomeData = DailyService.homeData(todayKey());
       const target: MacroTarget = macroTargetFor(home.summary.budget);
       const data: CardData = CardData.from(home.summary, target);
+      /*
+       * 诊断日志：把「读到了什么」和「要推什么」都打出来。
+       * 点刷新没反应时，靠这两行区分是【读到的数据就是旧的】
+       * 还是【推出去了但卡片没重绘】。
+       */
       hilog.info(DOMAIN, 'CalorieLite',
-        'card data: storeReady=%{public}s budget=%{public}d intake=%{public}d',
-        `${Store.isReady()}`, data.budget, data.intake);
+        'card build: storeReady=%{public}s records=%{public}d intake=%{public}d -> push intake=%{public}d',
+        `${Store.isReady()}`, home.records.length, Math.round(home.summary.intake), data.intake);
       return data.toPayload();
     } catch (err) {
       hilog.error(DOMAIN, 'CalorieLite', 'card data build failed: %{public}s', JSON.stringify(err));
@@ -98,7 +103,12 @@ export default class CalorieCardAbility extends FormExtensionAbility {
    * 所以这里**不能**走带缓存的 dataForToday()（那会一直推旧值）。
    */
   onUpdateForm(formId: string): void {
-    Store.init(this.context);
+    /*
+     * 用 reload 而不是 init：卡片进程是长驻的，而 preferences 实例在进程内
+     * 有缓存，主应用写入的新数据它看不到（详见 Store.reload 的说明）。
+     * 这里必须主动丢掉旧快照，否则「刷新」推的还是旧值。
+     */
+    Store.reload(this.context);
     try {
       const fresh: Record<string, Object> = CalorieCardAbility.buildData();
       // 顺手刷新缓存，避免下一次 onAddForm 推到旧内容
@@ -138,13 +148,17 @@ export default class CalorieCardAbility extends FormExtensionAbility {
     if (action !== ACTION_REFRESH) {
       return;
     }
-    Store.init(this.context);
+    // 同 onUpdateForm：卡片进程必须重开偏好存储，否则读到的还是旧值
+    Store.reload(this.context);
     try {
       // 与 onUpdateForm 一致：重算而不是读缓存，否则「刷新」刷不出新数据
       const fresh: Record<string, Object> = CalorieCardAbility.buildData();
       CalorieCardAbility.cachedDay = todayKey();
       CalorieCardAbility.cachedData = fresh;
       formProvider.updateForm(formId, formBindingData.createFormBindingData(fresh))
+        .then(() => {
+          hilog.info(DOMAIN, 'CalorieLite', 'refresh pushed to %{public}s', formId);
+        })
         .catch((e: Error) => {
           hilog.error(DOMAIN, 'CalorieLite', 'refresh updateForm failed: %{public}s', e.message);
         });

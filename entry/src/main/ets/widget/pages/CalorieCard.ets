@@ -137,7 +137,7 @@ struct CalorieCard {
   @LocalStorageProp('emptyDay') emptyDay: boolean = true;
   @LocalStorageProp('emptyTitle') emptyTitle: string = '今天还没记录';
   @LocalStorageProp('emptyHint') emptyHint: string = '点下面拍一张';
-  /* 顶部标题行：左上角应用名、右上角数据刷新时间（时间由后端格式化好） */
+  /* 顶部标题行：左上角应用名、右上角数据刷新时间（时间由后端格式化好，精确到秒） */
   @LocalStorageProp('appName') appName: string = '轻卡记';
   @LocalStorageProp('updatedText') updatedText: string = '';
 
@@ -228,11 +228,16 @@ struct CalorieCard {
           .alignItems(HorizontalAlign.Start)
         } else {
           Column({ space: 7 }) {
-            // 三个参数依次是：标签、已吃/目标文案、进度百分比、配色
-            // 全部由后端算好（CardData），这里只透传
+            /*
+             * 三条的顺序**由用户指定**：从上到下依次是
+             * 碳水 → 蛋白质 → 脂肪（不是按重要性或摄入量排的）。
+             *
+             * 想换顺序就调整这三行的先后；每条内部的参数顺序不用动，
+             * 四个参数依次是：标签、已吃/目标文案、进度百分比、配色。
+             */
+            this.macroBar('碳水', this.carbText, this.carbPct, this.carbColor)
             this.macroBar('蛋白', this.proteinText, this.proteinPct, this.proteinColor)
             this.macroBar('脂肪', this.fatText, this.fatPct, this.fatColor)
-            this.macroBar('碳水', this.carbText, this.carbPct, this.carbColor)
           }
           .layoutWeight(1)
           .height('100%')
