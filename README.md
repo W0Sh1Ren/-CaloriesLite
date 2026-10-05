@@ -170,6 +170,9 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 
 ## 文档
 
+- `Teach/` —— **面向新手的教程**：从「App 是什么」讲到每个功能的实现，
+  外加一份踩坑笔记。**完全没做过 App 开发也能看懂**，建议从这里开始：
+  [`Teach/00-索引.md`](Teach/00-索引.md)
 - `docs/harmonyos-api26-photo-ai-vision.md` —— 拍照/选图 → 压缩 → base64 → 调 AI 视觉接口的 API 取证报告（含官方文档链接与 ArkTS 严格模式踩坑清单）
 - `docs/HealthKit-运动健康数据读取-技术报告.md` —— 华为运动健康接入调研（申请流程、权限、代码、传感器替代方案对比）
 
