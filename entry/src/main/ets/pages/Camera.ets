@@ -43,6 +43,15 @@ struct CameraPage {
    */
   @State meal: MealType = MealType.LUNCH;
 
+  /**
+   * 是否正在输入「吃了什么」。
+   *
+   * 为 true 时把上面那块 180vp 的空状态图片区收掉：
+   * 键盘弹起后可视高度只剩约 450vp，留着它会把输入框与「估算热量」
+   * 一起挤出视野。收起后两者都留在键盘上方，相对位置也不变。
+   */
+  @State typing: boolean = false;
+
   aboutToAppear(): void {
     // 进来就把目标日期固定下来：供识别结果页与返回首页使用
     this.meal = AppState.targetMeal;
@@ -296,24 +305,35 @@ struct CameraPage {
         Column({ space: GAP }) {
           // ------------------------------------------------ 图片区
           if (this.imageUris.length === 0) {
-            Column({ space: 8 }) {
-              Text('📷')
-                .fontSize(44)
-              Text('拍照识别，或直接写吃了什么')
-                .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
-                .textAlign(TextAlign.Center)
-              Text(`照片可选，最多 ${MAX_IMAGES} 张；同一餐多拍几张，模型会合并判断`)
-                .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
-                .textAlign(TextAlign.Center)
+            /*
+             * 正在输入时把这块空状态提示收掉。
+             *
+             * 它高 180vp，只是「还没拍照」的引导，不是内容。
+             * 键盘弹起后可视高度只剩约 450vp，留着它会把下面的
+             * 输入框和「估算热量」一起挤出视野（实测按钮正好滑出）。
+             * 收起后输入框与按钮自然浮到键盘上方，且两者的相对位置不变
+             * —— 符合「按钮跟着输入框一起动」的要求。
+             */
+            if (!this.typing) {
+              Column({ space: 8 }) {
+                Text('📷')
+                  .fontSize(44)
+                Text('拍照识别，或直接写吃了什么')
+                  .fontSize(13)
+                  .fontColor(COLOR_TEXT_SUB)
+                  .textAlign(TextAlign.Center)
+                Text(`照片可选，最多 ${MAX_IMAGES} 张；同一餐多拍几张，模型会合并判断`)
+                  .fontSize(11)
+                  .fontColor(COLOR_TEXT_SUB)
+                  .textAlign(TextAlign.Center)
+              }
+              .width('100%')
+              .height(180)
+              .justifyContent(FlexAlign.Center)
+              .backgroundColor(COLOR_CARD)
+              .borderRadius(RADIUS)
+              .shadow(CARD_SHADOW)
             }
-            .width('100%')
-            .height(180)
-            .justifyContent(FlexAlign.Center)
-            .backgroundColor(COLOR_CARD)
-            .borderRadius(RADIUS)
-            .shadow(CARD_SHADOW)
           } else {
             // 缩略图横向排列，每张右上角带删除
             Scroll() {
@@ -398,12 +418,71 @@ struct CameraPage {
               .onChange((v: string) => {
                 this.notes = v;
               })
+              // 输入中获得/失去焦点：用来收起上方那块空状态提示，
+              // 腾出高度让输入框和「估算热量」都留在键盘上方
+              .onFocus(() => {
+                this.typing = true;
+              })
+              .onBlur(() => {
+                this.typing = false;
+              })
           }
           .width('100%')
           .padding(14)
           .backgroundColor(COLOR_CARD)
           .borderRadius(RADIUS)
           .shadow(CARD_SHADOW)
+
+          /*
+           * ── 操作按钮：紧跟输入卡片，中间不隔任何东西
+           *
+           * 曾经把这一组放在滚动区之外的固定底栏，结果键盘弹起时
+           * 底栏**压住了输入框**（用户截图反馈）。
+           * 现在放回滚动流、紧贴输入卡片：按钮和输入框是一体的，
+           * 键盘弹起时整页一起动（配合 RESIZE 避让模式重新排版），
+           * 两者始终相邻、互不遮挡。
+           * 错误提示与加载状态挪到按钮**之后**，避免把输入框和按钮隔开。
+           */
+          Row({ space: 10 }) {
+            Button({ type: ButtonType.Capsule }) {
+              Text('拍照').fontSize(16).fontColor(COLOR_TEXT)
+            }
+            .layoutWeight(1)
+            .height(48)
+            .backgroundColor(COLOR_CARD)
+            .enabled(!this.busy)
+            .onClick(() => {
+              this.onTakePhoto();
+            })
+
+            Button({ type: ButtonType.Capsule }) {
+              Text('相册').fontSize(16).fontColor(COLOR_TEXT)
+            }
+            .layoutWeight(1)
+            .height(48)
+            .backgroundColor(COLOR_CARD)
+            .enabled(!this.busy)
+            .onClick(() => {
+              this.onPickGallery();
+            })
+          }
+          .width('100%')
+
+          Button({ type: ButtonType.Capsule }) {
+            Text(this.primaryLabel())
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Color.White)
+          }
+          .width('100%')
+          .height(50)
+          .backgroundColor(COLOR_PRIMARY)
+          // 有照片**或**有描述即可（纯文字也要能记录）
+          .enabled(!this.busy && this.canSubmit())
+          .opacity(!this.busy && this.canSubmit() ? 1 : 0.5)
+          .onClick(() => {
+            this.analyze();
+          })
 
           // 错误提示
           if (this.errorText.length > 0) {
@@ -486,61 +565,6 @@ struct CameraPage {
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
-
-      /*
-       * ── 固定底栏：拍照 / 相册 + 主按钮
-       *
-       * 原来是放在滚动区最底部的，结果键盘弹起时被挡住
-       *（用户截图反馈）。放进固定底栏后：
-       *   Column 根节点会因键盘避让而收缩高度，
-       *   Scroll 的 layoutWeight(1) 跟着变矮，
-       *   底栏自然落在键盘上方 —— 不依赖任何额外补偿。
-       */
-      Column({ space: 10 }) {
-        Row({ space: 10 }) {
-          Button({ type: ButtonType.Capsule }) {
-            Text('拍照').fontSize(16).fontColor(COLOR_TEXT)
-          }
-          .layoutWeight(1)
-          .height(48)
-          .backgroundColor(COLOR_CARD)
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.onTakePhoto();
-          })
-
-          Button({ type: ButtonType.Capsule }) {
-            Text('相册').fontSize(16).fontColor(COLOR_TEXT)
-          }
-          .layoutWeight(1)
-          .height(48)
-          .backgroundColor(COLOR_CARD)
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.onPickGallery();
-          })
-        }
-        .width('100%')
-
-        Button({ type: ButtonType.Capsule }) {
-          Text(this.primaryLabel())
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Color.White)
-        }
-        .width('100%')
-        .height(50)
-        .backgroundColor(COLOR_PRIMARY)
-        // 有照片**或**有描述即可（纯文字也要能记录）
-        .enabled(!this.busy && this.canSubmit())
-        .opacity(!this.busy && this.canSubmit() ? 1 : 0.5)
-        .onClick(() => {
-          this.analyze();
-        })
-      }
-      .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 10, bottom: 12 })
-      .backgroundColor(COLOR_BG)
     }
     .width('100%')
     .height('100%')
