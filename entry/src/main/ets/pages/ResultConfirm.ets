@@ -155,7 +155,14 @@ struct ResultConfirm {
       promptAction.showToast({ message: '没有可保存的条目' });
       return;
     }
-    const day: string = todayKey();
+    /*
+     * 记到「本次的目标日期」而不是今天。
+     *
+     * 从记录页给某一天补记时，AppState.targetDay 已被设为那一天；
+     * 平时（首页直接拍照）它是空串，等价于今天。
+     * 原来这里写死 todayKey()，导致不管从哪天进去补记都记到当天（用户反馈的 bug）。
+     */
+    const day: string = AppState.effectiveTargetDay();
     const now: number = Date.now();
     // 整组图片写进每条记录：详情页要支持一餐多图滑动浏览，
     // 只留第一张的话其余照片就白拍了。

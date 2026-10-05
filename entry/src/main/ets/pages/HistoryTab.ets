@@ -10,7 +10,7 @@ import { RollingNumber } from '../components/RollingNumber';
 import { topReserve } from '../components/GlassTopBar';
 import { MealType, FoodRecord, WeightRecord, ExerciseRecord, DailySummary } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
-import { buildMonthGrid, friendlyDate, fromDayKey, todayKey, timeLabel } from '../common/DateUtil';
+import { buildMonthGrid, friendlyDate, fromDayKey, shiftDay, todayKey, timeLabel } from '../common/DateUtil';
 import { makeId } from '../common/JsonUtil';
 import { AppState } from '../common/AppState';
 import { DailyService } from '../service/DailyService';
@@ -24,6 +24,15 @@ import {
 } from '../common/Theme';
 
 const DOMAIN = 0x0000;
+
+/**
+ * 在当日详情卡片上左右滑切换日期的命中阈值（vp）。
+ *
+ * 与 CalendarHeatmap 的换月阈值保持一致（那里是 40），
+ * 两个卡片相邻，手感不统一会很别扭。
+ * 不设阈值的话，点餐次折叠、点补记按钮时的轻微横向抖动都会被判成翻日期。
+ */
+const DAY_SWIPE_MIN_VP: number = 40;
 
 @Component
 export struct HistoryTab {
@@ -71,6 +80,16 @@ export struct HistoryTab {
   @State monthSeq: number = 0;
   @State detail: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
   @State detailRecords: FoodRecord[] = [];
+
+  /**
+   * 在当日详情卡片上左右滑切换日期时的位移方向与透明度。
+   *
+   * 与日历换月同一套做法：位移即时变化、动效由透明度承担
+   *（见 docs/展开动画1.0.md 里关于「高度/位移动画不可插值」的说明）。
+   * 命中的阈值与日历一致，避免两个卡片的滑动手感不同。
+   */
+  @State dayShift: number = 0;
+  @State dayAlpha: number = 1;
   @State weights: WeightRecord[] = [];
   /** 体重数据的版本号：每次写入自增，驱动折线图重绘（onDidUpdate 不总触发） */
   @State weightsVersion: number = 0;
@@ -434,18 +453,76 @@ export struct HistoryTab {
       }
     }
     .width('100%')
+    /*
+     * 左右滑切换日期（用户要求：日历卡片滑月份，这个卡片滑日期）。
+     *
+     * 与日历换月同一套写法：只认水平方向，避免和页面纵向滚动打架；
+     * 位移即时变化、动效由透明度承担。
+     * 阈值与日历一致（40vp），两个卡片手感统一。
+     */
+    .translate({ x: this.dayShift })
+    .opacity(this.dayAlpha)
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal })
+        .onActionEnd((e: GestureEvent) => {
+          this.onDaySwipe(e.offsetX);
+        })
+    )
     .padding(16)
     .backgroundColor(COLOR_CARD)
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
 
-  /** 跳转手动补记页 */
+  /**
+   * 在详情卡片上左右滑：切换选中的日期。
+   *
+   * 左滑（offsetX < 0）看后一天、右滑看前一天，与日历翻月的方向一致。
+   * 未来日期拦截：不允许滑到今天之后 ——
+   * 未来的饮食记录没有意义，与顶栏步进按钮的规则保持一致。
+   */
+  private onDaySwipe(dx: number): void {
+    if (Math.abs(dx) < DAY_SWIPE_MIN_VP) {
+      return;
+    }
+    const delta: number = dx < 0 ? 1 : -1;
+    const next: string = shiftDay(this.selectedDay, delta);
+    if (next > todayKey()) {
+      promptAction.showToast({ message: '已经是最新一天了' });
+      return;
+    }
+    this.selectedDay = next;
+    // 滑到别的月份时把日历也带过去，否则高亮的日期不在当前显示的月里
+    const d = new Date(fromDayKey(next));
+    this.viewYear = d.getFullYear();
+    this.viewMonth0 = d.getMonth();
+    this.cells = this.buildCells();
+    this.rebuild();
+  }
+
+  /**
+   * 补记：进拍照识别页，并**带上当前选中的日期**。
+   *
+   * 两个要点（都是用户反馈后改的）：
+   *   1. 用 AppState.targetDay 记住「要记到哪一天」。
+   *      原来跳到手动添加页，而确认页把日期写死成今天，
+   *      于是不管从哪天进去补记都记到当天（bug）。
+   *   2. 走拍照识别而不是手动输入（用户要求：
+   *      「补记页面不要手动添加，也是改成拍照添加，和拍照记录一样」）。
+   *      拍照 → 识别 → 确认识别结果这条链路本身支持选餐次，
+   *      所以「有记录的日期也能补记，并按餐次插到对应位置」自然满足。
+   */
   private goManualAdd(): void {
+    this.startAddFor(this.selectedDay);
+  }
+
+  /** 给指定日期补记（入口统一走这里，保证 targetDay 一定被设置） */
+  private startAddFor(day: string): void {
+    AppState.targetDay = day;
     try {
-      router.pushUrl({ url: 'pages/ManualAdd' });
+      router.pushUrl({ url: 'pages/Camera' });
     } catch (err) {
-      hilog.error(DOMAIN, 'CalorieLite', 'goManualAdd failed');
+      hilog.error(DOMAIN, 'CalorieLite', 'startAddFor failed');
     }
   }
 

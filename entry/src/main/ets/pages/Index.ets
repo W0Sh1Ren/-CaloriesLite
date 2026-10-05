@@ -199,7 +199,15 @@ struct Index {
     this.syncInsets();
     if (AppState.needRefreshHome) {
       AppState.needRefreshHome = false;
-      this.dayKey = todayKey();
+      /*
+       * 切到「本次记录的目标日期」而不是今天。
+       *
+       * 从记录页给某一天补记时，AppState.targetDay 已被设成那一天；
+       * 平时它是空串，等价于今天。
+       * 原来这里写死 todayKey()，于是补记完回来看到的是今天，
+       * 用户会以为记错了地方（实际数据是记对了的）。
+       */
+      this.dayKey = AppState.effectiveTargetDay();
       this.switchTo(0);
     }
     // 这里只自增信号、不直接调 reload()：onRefreshTick 会重读数据。
@@ -482,7 +490,7 @@ struct Index {
     if (index === this.activeTab) {
       // 已经在这一页：仍然刷新一次，避免「点了没反应但数据其实变了」的情况
       if (index === 0) {
-        this.dayKey = todayKey();
+        this.dayKey = this.homeDayForReturn();
         this.refreshTick++;
       }
       return;
@@ -500,11 +508,26 @@ struct Index {
      */
     this.activeTab = index;
     this.swiperController.changeIndex(index, true);
-    // 回到首页时按当天重读，保证刚记录的餐次立刻出现
+    // 回到首页时重读，保证刚记录的餐次立刻出现
     if (index === 0) {
-      this.dayKey = todayKey();
+      this.dayKey = this.homeDayForReturn();
       this.refreshTick++;
     }
+  }
+
+  /**
+   * 回到首页时该显示哪一天。
+   *
+   * 用 AppState 记下的「本次记录的目标日期」：
+   *   · 从记录页给某一天补记 → 停在补记的那一天（用户要求）；
+   *   · 平时没有目标日期 → 就是今天。
+   *
+   * 注意读完后**不清空** targetDay：onPageShow 与 switchTo 可能先后触发，
+   * 先清掉的话第二次就会退回今天。真正清空在用户离开这条流程时
+   *（见 Index.shiftDate 与 Camera 的说明）。
+   */
+  private homeDayForReturn(): string {
+    return AppState.effectiveTargetDay();
   }
 
   private mealKcal(records: FoodRecord[]): number {
@@ -724,8 +747,17 @@ struct Index {
       .width('100%')
       .height('100%')
 
-      // 悬浮主操作：拍照识别
-      this.cameraBar()
+      /*
+       * 悬浮主操作：拍照识别。
+       *
+       * **只在「今天」显示**（用户要求）：
+       * 翻到历史某天时，这个按钮的语义是「现在拍一张」——那必然记到今天，
+       * 与当前正在看的日期不一致，容易误操作。
+       * 历史日期要补记，走「记录」页的补记入口（那里会把日期带上）。
+       */
+      if (this.dayKey === todayKey()) {
+        this.cameraBar()
+      }
     }
     .width('100%')
     .height('100%')

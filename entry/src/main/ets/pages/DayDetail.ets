@@ -400,7 +400,7 @@ struct DayDetail {
         .fontSize(15)
         .fontWeight(FontWeight.Medium)
         .fontColor(COLOR_TEXT)
-      Text('回到首页拍照识别，或在「记录」页用「补记」手动添加')
+      Text('拍一张照片，识别后按餐次记到这一天')
         .fontSize(12)
         .fontColor(COLOR_TEXT_SUB)
         .textAlign(TextAlign.Center)
@@ -413,7 +413,13 @@ struct DayDetail {
       .backgroundColor(COLOR_PRIMARY)
       .margin({ top: 4 })
       .onClick(() => {
-        router.pushUrl({ url: 'pages/ManualAdd' });
+        /*
+         * 带上本页正在看的日期，再进拍照识别页。
+         * 与记录页的补记入口同一条链路：AppState.targetDay 决定
+         * 「记到哪一天」，确认页按它落库，首页按它切日期。
+         */
+        AppState.targetDay = this.dayKey;
+        router.pushUrl({ url: 'pages/Camera' });
       })
     }
     .width('100%')

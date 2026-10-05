@@ -8,7 +8,7 @@ import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
-import { AiConfig } from '../model/Types';
+import { AiConfig, MealType } from '../model/Types';
 import { guessMealType } from '../model/Enums';
 import { hourOf } from '../common/DateUtil';
 import { SettingsRepo } from '../service/SettingsRepo';
@@ -34,8 +34,36 @@ struct CameraPage {
   @State statusText: string = '';
   @State errorText: string = '';
 
+  /**
+   * 上一次进入本页时选中的餐次。
+   *
+   * 从记录页给某一天补记时，AppState.targetMeal 会先被设成那一天的餐次；
+   * 这里用它做初值，让「补记」也能落在正确的餐次上，
+   * 而不是靠当前时间猜（猜出来的默认值对补记场景没有意义）。
+   * 识别成功后会按识别时刻的真实餐次覆盖它。
+   */
+  @State meal: MealType = MealType.LUNCH;
+
+  aboutToAppear(): void {
+    // 进来就把目标日期固定下来：供识别结果页与返回首页使用
+    this.meal = AppState.targetMeal;
+    hilog.info(DOMAIN, 'CalorieLite', 'camera for day=%{public}s meal=%{public}d',
+      AppState.effectiveTargetDay(), this.meal);
+  }
+
   private uiContext(): common.UIAbilityContext {
     return this.getUIContext().getHostContext() as common.UIAbilityContext;
+  }
+
+  /**
+   * 离开本页：如果用户没走完识别流程（直接返回），
+   * 就把「要记到哪一天」清掉，避免影响下一次正常拍照记录。
+   * 走完流程时确认页已经消费过它，这里清掉也无害。
+   */
+  aboutToDisappear(): void {
+    if (AppState.pending === null) {
+      AppState.clearTargetDay();
+    }
   }
 
   /** 拍一张并追加到列表（支持连拍多张） */

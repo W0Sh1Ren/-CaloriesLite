@@ -8,6 +8,7 @@
  * 状态栏和底部手势区会盖在内容上，各页面需要据此自行避让。
  */
 import { DailySummary, FoodDraft, MealType } from '../model/Types';
+import { todayKey } from './DateUtil';
 
 /** 拍照识别页 → 首页 的待确认结果 */
 export class PendingResult {
@@ -129,6 +130,27 @@ export class AppState {
    * 页面之间没有直接引用关系，用这个标记让首页在下次显示时重算。
    */
   static profileDirty: boolean = false;
+
+  /**
+   * 这次拍照识别要记到哪一天（YYYY-MM-DD）。
+   *
+   * 空串表示「今天」。从记录页给某一天补记时，先把日期写进这里，
+   * 拍照页与确认页都读它 —— 确认保存时按它落库，并按它把首页切到那一天。
+   *
+   * 为什么必须显式传：确认页原来写死 `todayKey()`，
+   * 于是不管从哪天进去补记，都会记到当天（用户反馈的 bug）。
+   */
+  static targetDay: string = '';
+
+  /** 取本次要记录的目标日期；未设置时就是今天 */
+  static effectiveTargetDay(): string {
+    return AppState.targetDay.length > 0 ? AppState.targetDay : todayKey();
+  }
+
+  /** 清掉目标日期（保存完成或用户放弃时调用，避免影响下一次） */
+  static clearTargetDay(): void {
+    AppState.targetDay = '';
+  }
 
   /**
    * 桌面卡片带来的目标页。
