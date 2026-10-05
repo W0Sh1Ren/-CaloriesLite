@@ -5,7 +5,7 @@
  */
 import { MealType, ExerciseRecord, FoodRecord, DailySummary, UserProfile, WeightRecord } from '../model/Types';
 import { mealTypeLabel } from '../model/Enums';
-import { todayKey, shiftDay, fromDayKey } from '../common/DateUtil';
+import { todayKey, shiftDay, fromDayKey, toDayKey } from '../common/DateUtil';
 import { calcDailyBudget, calcTdee, calcBmr } from './CalorieCalc';
 import { ExerciseRepo } from './ExerciseRepo';
 import { FoodRepo } from './FoodRepo';
@@ -153,6 +153,36 @@ export class DailyService {
   /** 某天的缺口（供日历使用） */
   static deficitOf(dayKey: string): number {
     return DailyService.summaryOf(dayKey).deficit;
+  }
+
+  /**
+   * 某个月的热量缺口合计（供记录页的「本月缺口」使用）。
+   *
+   * **只统计有记录的天数**（用户要求）：没记录的那天不算 0 缺口，
+   * 而是直接跳过 —— 否则会把「没吃也没记」误算成「刚好达标」，
+   * 一个月的合计会被大量空白天数摊薄。
+   *
+   * 参数 year / month0 是「视图正在看的月份」（取自日历的 viewYear / viewMonth0），
+   * 所以翻月份时这个数字会跟着变。
+   * 统计到「今天」为止：未来不可能有记录。
+   */
+  static monthDeficit(year: number, month0: number): number {
+    const today: string = todayKey();
+    const daysInMonth: number = new Date(year, month0 + 1, 0).getDate();
+    let sum: number = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      // 用本地时区构造当天 0 点，再交给 toDayKey 统一格式化，
+      // 避免自己拼字符串时漏掉前导零
+      const key: string = toDayKey(new Date(year, month0, day).getTime());
+      if (key > today) {
+        break;
+      }
+      if (FoodRepo.loadDay(key).length === 0) {
+        continue;
+      }
+      sum += DailyService.summaryOf(key).deficit;
+    }
+    return Math.round(sum);
   }
 
   /** 按餐次分组某天的记录 */

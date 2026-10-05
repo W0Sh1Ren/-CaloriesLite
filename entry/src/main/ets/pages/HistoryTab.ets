@@ -141,6 +141,16 @@ export struct HistoryTab {
     this.viewMonth0 = d.getMonth();
   }
 
+  /**
+   * 本月缺口合计（只统计有记录的天数）。
+   *
+   * **缓存成 state，不在 build() 里现算**：
+   * DailyService.monthDeficit 要逐天读记录（最多 31 天），
+   * 放在 build 里会在每次重建时重跑一遍，翻页/输入时会明显卡。
+   * 重算时机就是 rebuild()（换月、换日期、增删记录都会走到）。
+   */
+  @State monthDeficitKcal: number = 0;
+
   /** 重算月历格子与当日明细 */
   private rebuild(): void {
     this.cells = this.buildCells();
@@ -148,6 +158,8 @@ export struct HistoryTab {
     this.detailRecords = FoodRepo.loadDay(this.selectedDay);
     this.weights = BodyRepo.recent(60);
     this.exercises = ExerciseRepo.loadDay(this.selectedDay);
+    // 当月有记录的天数变了，缺口合计也要跟着更新
+    this.monthDeficitKcal = DailyService.monthDeficit(this.viewYear, this.viewMonth0);
   }
 
   private buildCells(): DayCell[] {
@@ -180,7 +192,11 @@ export struct HistoryTab {
     }
     this.viewYear = y;
     this.viewMonth0 = m;
-    this.cells = this.buildCells();
+    /*
+     * 走 rebuild() 而不是只重算 cells：换月后「本月缺口」要跟着换，
+     * 而那个数字只在 rebuild() 里更新（它也顺带重算了 cells）。
+     */
+    this.rebuild();
     /*
      * 换月动画：方向编码进触发键（n = 下个月 / p = 上个月），
      * 一个 Prop 同时携带「要播动画」和「往哪边」两条信息。
@@ -259,7 +275,24 @@ export struct HistoryTab {
             .fontSize(17)
             .fontWeight(FontWeight.Medium)
             .fontColor(COLOR_TEXT)
+
+          /*
+           * 本月缺口：放在月份右边、翻月按钮左边的空档里。
+           *
+           * 只统计**有记录的天数**（见 DailyService.monthDeficit）：
+           * 没记录的日子跳过，否则会被大量空白天数摊薄。
+           * 数字走 state 缓存（monthDeficitKcal），不在这里现算 ——
+           * 那个方法要逐天读记录，放 build 里每次重建都会重跑。
+           *
+           * 用 layoutWeight(1) 吃掉剩余空间并右对齐，紧贴翻月按钮，
+           * 不会随月份文字长短（10月 vs 11月）左右晃动。
+           */
+          Text(`本月缺口 ${this.monthDeficitKcal} 千卡`)
+            .fontSize(12)
+            .fontColor(COLOR_TEXT_SUB)
             .layoutWeight(1)
+            .textAlign(TextAlign.End)
+            .margin({ right: 4 })
 
           Button({ type: ButtonType.Circle }) {
             Text('‹').fontSize(18).fontColor(COLOR_TEXT)
