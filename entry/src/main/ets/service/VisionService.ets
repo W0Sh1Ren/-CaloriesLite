@@ -57,6 +57,55 @@ JSON 格式严格如下：
 7. 如果画面里有餐具或手，请借助它们推算份量大小。
 8. 最多识别 8 种食物，合并同类项。`;
 
+/**
+ * 纯文字记录的提示词（不带照片）。
+ *
+ * 与带照片那版共用同一套 JSON 结构，只是判断依据从「看到什么」
+ * 换成「用户描述了什么」——所以要点里强调按常见做法估算，
+ * 并在信息不足时按最典型的份量给一个合理值，而不是拒绝回答。
+ */
+const TEXT_SYSTEM_PROMPT: string = `你是一位专业的中餐营养师，擅长根据文字描述估算食物份量与营养。
+用户会用自然语言描述吃了什么，可能很简略（例如「一碗牛肉面」），也可能很详细（带克重与做法）。
+请只输出一个 JSON 对象，不要输出任何解释文字、不要用 markdown 代码块包裹。
+JSON 格式严格如下：
+{"foods":[{"name":"食物中文名","amount":"份量描述","grams":估算克重,"kcal":该份量的总热量,"protein":蛋白质克数,"fat":脂肪克数,"carb":碳水克数,"confidence":0到100的整数,"note":"判断依据，20字以内"}],"summary":"这次记录的一句话总结"}
+要求：
+1. name 用最常见的中文食物名，不要带品牌名、不要带形容词。
+2. amount 用中文写份量，例如「一碗」「两块」「约150克」。
+3. grams 是这份食物克重的整数估算。
+4. kcal / protein / fat / carb 都是**这份实际份量**的总量，不是每100克；热量与三大营养素要能对得上。
+5. 把烹饪方式算进去：同样一块肉，油炸/红烧的脂肪明显高于清蒸/水煮。
+6. 用户给出的信息不足时，**按最常见的做法与份量给出一个合理估算**，
+   并在 note 里说明依据；不要因为信息少就返回空数组。
+7. 用户说的量词要当真：「半碗」就是半碗，「两块」就是两块，不要按一整份算。
+8. 最多 8 种食物，同一餐里的同类项合并。`;
+
+/**
+ * 对话调整用的提示词。
+ *
+ * 用户在确认页可以继续用自然语言修正结果
+ *（「米饭其实是两碗」「还喝了一碗汤」「这个不要了」）。
+ * 这里把**当前明细**一起发过去，让模型在既有结果上**增量修改**，
+ * 而不是重新识别一遍 —— 重新识别会把用户已经手动改过的字段冲掉。
+ */
+const REVISE_SYSTEM_PROMPT: string = `你是一位专业的中餐营养师，正在帮用户修正一份饮食记录。
+用户会针对当前记录提出修改要求（例如「米饭其实是两碗」「还喝了一碗汤」「这个不要了」「少算油了」）。
+请只输出一个 JSON 对象，不要输出任何解释文字、不要用 markdown 代码块包裹。
+JSON 格式严格如下：
+{"foods":[{"name":"食物中文名","amount":"份量描述","grams":估算克重,"kcal":该份量的总热量,"protein":蛋白质克数,"fat":脂肪克数,"carb":碳水克数,"confidence":0到100的整数,"note":"判断依据，20字以内"}],"summary":"这次修改的一句话说明"}
+要求：
+1. **只改用户提到的地方**，其余条目原样保留（名称、克重、营养值都不要动）。
+2. 用户说「不要了」「去掉」就删除对应条目；说「还有」「另外」「再加」就新增条目。
+   即使当前记录为空，也要能按用户说的新增。
+3. 用户改了份量（例如「两碗」「一半」）时，按比例重算该条的 grams 与热量、
+   以及三大营养素 —— 热量与营养素必须与新的份量对得上。
+4. foods 里是所有仍然有效的条目（不是只有变化的那些）。
+5. 用户只是提问（例如「这个热量对吗」）而没有要求修改时，
+   foods 返回与输入完全相同的列表，summary 里回答他的问题。
+6. 份量要按常识判断上限：一个人一餐不可能吃 100 碗面。
+   遇到明显不合理的数量，按最接近的合理值处理，并在 summary 里说明你的理解。
+7. 最多 8 种食物，同类项合并。`;
+
 /** 供最终解析使用的中间结构 */
 class ParsedFood {
   name: string = '';
@@ -120,6 +169,178 @@ export class VisionService {
     result.overallNote = VisionService.extractSummary(content);
     result.drafts = VisionService.toDrafts(parsed);
     return result;
+  }
+
+  /**
+   * 只凭文字描述识别（不带照片）。
+   *
+   * 用户可能只写「一碗牛肉面」而不拍照 —— 这条路径让纯文字也能记录。
+   * 与带图版本的差别只有两点：系统提示词换成文字版、
+   * 用户消息是纯字符串（不发多模态 content 数组）。
+   *
+   * @param description 用户的自然语言描述，必须非空
+   */
+  static async recognizeText(config: AiConfig, description: string): Promise<VisionResult> {
+    VisionService.validate(config);
+    const text: string = description.trim();
+    if (text.length === 0) {
+      throw new VisionError('请先写一句吃了什么');
+    }
+
+    const content: string = await VisionService.callTextOnly(config, text);
+    const parsed: ParsedFood[] = VisionService.parseFoods(content);
+    if (parsed.length === 0) {
+      throw new VisionError('没能从这段描述里认出食物，写得更具体一点再试（比如「一碗牛肉面」）');
+    }
+
+    const result: VisionResult = new VisionResult();
+    result.model = config.model;
+    result.overallNote = VisionService.extractSummary(content);
+    result.drafts = VisionService.toDrafts(parsed);
+    return result;
+  }
+
+  /**
+   * 纯文字请求（OpenAI 兼容格式）。
+   *
+   * 这里不用「content 数组 + 文字分片」那种多模态写法：
+   * 纯文字时 content 直接给字符串更通用，也少一层服务端差异。
+   */
+  private static async callTextOnly(config: AiConfig, text: string): Promise<string> {
+    const url: string = `${VisionService.trimSlash(config.baseUrl)}/chat/completions`;
+
+    const body: Record<string, Object> = {};
+    body['model'] = config.model;
+    body['max_tokens'] = 1500;
+
+    // 思考模式与图片路径保持一致：显式下发，不依赖服务端默认
+    const thinking: Record<string, Object> = {};
+    thinking['type'] = config.thinking ? 'enabled' : 'disabled';
+    body['thinking'] = thinking;
+    if (config.thinking) {
+      body['reasoning_effort'] = 'low';
+    } else {
+      body['temperature'] = 0.2;
+    }
+
+    const messages: Record<string, Object>[] = [];
+    const sysMsg: Record<string, Object> = {};
+    sysMsg['role'] = 'system';
+    sysMsg['content'] = TEXT_SYSTEM_PROMPT;
+    messages.push(sysMsg);
+
+    const userMsg: Record<string, Object> = {};
+    userMsg['role'] = 'user';
+    userMsg['content'] = `我吃了：${text}`;
+    messages.push(userMsg);
+
+    body['messages'] = messages;
+
+    const raw: string = await VisionService.postJson(url, JSON.stringify(body), config.apiKey, true);
+    return VisionService.extractOpenAiContent(raw);
+  }
+
+  /**
+   * 按用户的自然语言要求，在当前结果上做增量修改。
+   *
+   * 确认页的「和模型聊聊」用它：用户说「米饭其实是两碗」，
+   * 模型只改这一条，其余原样返回，页面据此实时刷新热量合计。
+   *
+   * 与重复调用 recognize 的区别：这条路径把**当前明细**作为上下文发过去，
+   * 所以用户已经手动改过的字段不会被重新识别的结果冲掉。
+   *
+   * **允许 drafts 为空**：用户可能先把条目全删了，再靠聊天重新加回来
+   *（「再加一碗米饭」）。所以这里不把空列表当错误。
+   * 两者都空（没明细也没说话）才会被上面的 ask.length 检查拦住。
+   *
+   * @param drafts 当前明细（页面上正在显示的内容，可为空）
+   * @param request 用户的修改要求
+   */
+  static async revise(config: AiConfig, drafts: FoodDraft[], request: string): Promise<VisionResult> {
+    VisionService.validate(config);
+    const ask: string = request.trim();
+    if (ask.length === 0) {
+      throw new VisionError('请先写下要改什么');
+    }
+
+    const content: string = await VisionService.callRevise(config, drafts, ask);
+    const parsed: ParsedFood[] = VisionService.parseFoods(content);
+    if (parsed.length === 0) {
+      /*
+       * 允许「全部删掉」是合法结果：用户可能说「都不要了」。
+       * 所以这里不报错，返回空明细让页面表现为清空。
+       */
+      const empty: VisionResult = new VisionResult();
+      empty.model = config.model;
+      empty.overallNote = VisionService.extractSummary(content);
+      empty.drafts = [];
+      return empty;
+    }
+
+    const result: VisionResult = new VisionResult();
+    result.model = config.model;
+    result.overallNote = VisionService.extractSummary(content);
+    result.drafts = VisionService.toDrafts(parsed);
+    return result;
+  }
+
+  /**
+   * 把当前明细序列化成「模型能读的清单」。
+   *
+   * 用紧凑的 JSON 而不是自然语言：字段名与返回格式一一对应，
+   * 模型更容易理解「要改的是哪一条」，也不会把数值读错位。
+   */
+  private static draftsToContext(drafts: FoodDraft[]): string {
+    if (drafts.length === 0) {
+      // 空列表也要给出明确信号，否则模型会以为上下文丢了
+      return '（当前没有任何条目）';
+    }
+    const items: Record<string, Object>[] = [];
+    for (const d of drafts) {
+      const it: Record<string, Object> = {};
+      it['name'] = d.name;
+      it['grams'] = d.grams;
+      it['kcal'] = d.kcal;
+      it['protein'] = d.protein;
+      it['fat'] = d.fat;
+      it['carb'] = d.carb;
+      items.push(it);
+    }
+    return JSON.stringify(items);
+  }
+
+  /** 对话调整请求（OpenAI 兼容） */
+  private static async callRevise(config: AiConfig, drafts: FoodDraft[], request: string): Promise<string> {
+    const url: string = `${VisionService.trimSlash(config.baseUrl)}/chat/completions`;
+
+    const body: Record<string, Object> = {};
+    body['model'] = config.model;
+    body['max_tokens'] = 1500;
+
+    const thinking: Record<string, Object> = {};
+    thinking['type'] = config.thinking ? 'enabled' : 'disabled';
+    body['thinking'] = thinking;
+    if (config.thinking) {
+      body['reasoning_effort'] = 'low';
+    } else {
+      body['temperature'] = 0.2;
+    }
+
+    const messages: Record<string, Object>[] = [];
+    const sysMsg: Record<string, Object> = {};
+    sysMsg['role'] = 'system';
+    sysMsg['content'] = REVISE_SYSTEM_PROMPT;
+    messages.push(sysMsg);
+
+    const userMsg: Record<string, Object> = {};
+    userMsg['role'] = 'user';
+    userMsg['content'] = `当前记录（JSON）：${VisionService.draftsToContext(drafts)}\n\n我的修改要求：${request}`;
+    messages.push(userMsg);
+
+    body['messages'] = messages;
+
+    const raw: string = await VisionService.postJson(url, JSON.stringify(body), config.apiKey, true);
+    return VisionService.extractOpenAiContent(raw);
   }
 
   /** 配置合法性检查，提前给出明确提示 */

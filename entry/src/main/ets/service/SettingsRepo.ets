@@ -69,15 +69,29 @@ export class SettingsRepo {
       return defaultProfile();
     }
     const def: UserProfile = defaultProfile();
+    const activity: ActivityLevel = toEnum<ActivityLevel>(
+      getStr(map, 'activityLevel', def.activityLevel), ACTIVITY_ORDER, def.activityLevel);
     return new UserProfile(
       getStr(map, 'nickname', def.nickname),
       toEnum<Gender>(getStr(map, 'gender', def.gender), ALL_GENDERS, def.gender),
       getNum(map, 'age', def.age),
       getNum(map, 'heightCm', def.heightCm),
       getNum(map, 'weightKg', def.weightKg),
-      toEnum<ActivityLevel>(getStr(map, 'activityLevel', def.activityLevel), ACTIVITY_ORDER, def.activityLevel),
+      SettingsRepo.normalizeActivity(activity),
       toEnum<Goal>(getStr(map, 'goal', def.goal), GOAL_ORDER, def.goal)
     );
+  }
+
+  /**
+   * 把「界面已不再提供的活动水平」收敛到最接近的一档。
+   *
+   * VERY_ACTIVE 从选项里去掉后（见 ACTIVITY_UI_ORDER），
+   * 老档案里存着它的用户会看到「四项都没选中」——像是坏掉了。
+   * 这里把它并到 ACTIVE（每周 6-7 天），语义最接近，
+   * 用户下次点选就会写入新值。
+   */
+  private static normalizeActivity(level: ActivityLevel): ActivityLevel {
+    return level === ActivityLevel.VERY_ACTIVE ? ActivityLevel.ACTIVE : level;
   }
 
   static saveProfile(profile: UserProfile): void {

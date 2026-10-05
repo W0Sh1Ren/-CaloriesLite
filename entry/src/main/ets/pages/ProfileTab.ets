@@ -6,28 +6,47 @@ import { promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { ActivityLevel, Gender, Goal, UserProfile } from '../model/Types';
-import { ACTIVITY_ORDER, GOAL_ORDER, activityDesc, activityLabel, genderLabel, goalAdjust, goalDesc, goalLabel } from '../model/Enums';
+import { ACTIVITY_UI_ORDER, GOAL_ORDER, activityDesc, activityLabel, genderLabel, goalAdjust, goalDesc, goalLabel } from '../model/Enums';
 import { calcBmi, calcBmr, calcDailyBudget, calcTdee, bmiLabel, estimateDaysToGoal } from '../service/CalorieCalc';
 import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { AppState } from '../common/AppState';
 import { topReserve } from '../components/GlassTopBar';
 import {
-  CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
+  CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT,
   COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
 } from '../common/Theme';
 import { RollingNumber } from '../components/RollingNumber';
+import { ProfileOption, OPTION_ROW_H } from '../components/ProfileOption';
 
 const DOMAIN = 0x0000;
 
 /**
- * 明细区高度的占位初值（vp）。
+ * 两列里选项之间的间距（须与 Column space 一致）
  *
- * 必须足够大以容纳全部明细（性别 + 三个数值行 + 活动量 4 项 + 目标 4 项）。
- * 用占位而不是 0，是为了让内层能被布局、从而被 onAreaChange 量到；
- * 量到真实高度后这个值就被替换掉了。
+ * 单个选项的高度来自 ProfileOption 导出的 OPTION_ROW_H —— 定义在那边，
+ * 因为它才是真正决定高度的组件，这里只用来算展开总高。
  */
-const DETAILS_PLACEHOLDER_H: number = 420;
+const OPTION_GAP: number = 6;
+
+/*
+ * 明细区展开后的高度（vp）—— **按布局算出来的确定值**。
+ *
+ * 为什么不靠 onAreaChange 测量：这个组件的外层就是靠 detailsH 定高的，
+ * 所以内层是在「高度已知的容器」里被布局的，量到的往往是容器值而不是
+ * 内容高度 —— 上一版 420 那个占位值被反复量回来就是这么来的。
+ * 餐饮卡片那边也踩过同一个坑（见 docs/展开动画3.0.md）。
+ * 明细内容是固定的（不是变长的列表），所以直接算最稳。
+ *
+ * 各项按真机实测的行高：
+ *   性别行        36
+ *   年龄/身高/体重 各 45      = 135
+ *   4 个间距 × 14            =  56
+ *   分隔线                    1
+ *   两列区：标题 16 + 间距 6 + 4×44 + 3×6 = 216
+ *   ⇒ 444，取 452 留一点底部余量
+ */
+const DETAILS_H: number = 452;
 
 @Component
 export struct ProfileTab {
@@ -51,13 +70,13 @@ export struct ProfileTab {
   /**
    * 明细区高度（vp）。
    *
-   * 初值必须是**足够大的占位数**，不能是 0：
-   * 高度为 0 时内层不被布局，onAreaChange 永远量不到真实高度，
-   * 就永远是 0、展开后什么也看不到（循环依赖）。
-   * 先给占位 → 内层被布局（容器裁切到 0，用户看不见）→
-   * 量到真实高度后一直用它，此后两端都是数字，动画才成立。
+   * 用**按布局算出来的常量**（DETAILS_H），不靠测量：
+   * 这个容器自身就是靠它定高的，内层因此是在「高度已知的容器」里布局的，
+   * onAreaChange 往往把容器值报回来 —— 之前占位 420 被反复量回 420，
+   * 导致第四项（增重增肌）落在容器之外被裁掉。
+   * 明细内容是固定的，直接算最稳。
    */
-  @State detailsH: number = DETAILS_PLACEHOLDER_H;
+  @State detailsH: number = DETAILS_H;
   /** 明细区透明度：配合展开/收起做淡入淡出 */
   @State detailsAlpha: number = 0;
   @State aiReady: boolean = false;
@@ -595,75 +614,69 @@ export struct ProfileTab {
 
             Divider().color(COLOR_DIVIDER)
 
-            // 活动水平
-            Text('日常活动量')
-              .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
-              .width('100%')
+            /*
+             * 日常活动量 | 减脂目标 —— **左右两列并排**。
+             *
+             * 原来这两组各占满整行、上下堆叠，8 个选项叠起来很高，
+             * 「目标」被顶到屏幕外，用户反馈「个人情况显示不全，缺少减脂目标」。
+             * 摊成两列后总高度减半，一屏就能看全。
+             *
+             * 用 Row + 两个 layoutWeight(1) 的 Column，宽度各占一半；
+             * Row 的 alignItems(Top) 保证两列顶部对齐。
+             */
+            Row({ space: 12 }) {
+              Column({ space: 6 }) {
+                Text('日常活动量')
+                  .fontSize(13)
+                  .fontColor(COLOR_TEXT_SUB)
+                  .width('100%')
 
-            ForEach(ACTIVITY_ORDER, (level: ActivityLevel) => {
-              Row() {
-                Column({ space: 2 }) {
-                  Text(activityLabel(level))
-                    .fontSize(14)
-                    .fontColor(this.profile.activityLevel === level ? COLOR_PRIMARY : COLOR_TEXT)
-                  Text(activityDesc(level))
-                    .fontSize(11)
-                    .fontColor(COLOR_TEXT_SUB)
-                }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-
-                if (this.profile.activityLevel === level) {
-                  Text('✓')
-                    .fontSize(16)
-                    .fontColor(COLOR_PRIMARY)
-                }
+                ForEach(ACTIVITY_UI_ORDER, (level: ActivityLevel) => {
+                  /*
+                   * 用 @Component 而不是 @Builder：
+                   * @Builder 的参数只在构建时求值一次，选中态与点击回调
+                   * 都会被冻结，表现就是「点不动」。详见 ProfileOption 的说明。
+                   */
+                  ProfileOption({
+                    label: activityLabel(level),
+                    desc: activityDesc(level),
+                    selected: this.profile.activityLevel === level,
+                    onPick: () => {
+                      this.apply((p: UserProfile) => {
+                        p.activityLevel = level;
+                      });
+                    }
+                  })
+                }, (level: ActivityLevel) => `a-${level}`)
               }
-              .width('100%')
-              .padding({ top: 8, bottom: 8 })
-              .onClick(() => {
-                this.apply((p: UserProfile) => {
-                  p.activityLevel = level;
-                });
-              })
-            }, (level: ActivityLevel) => level)
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
 
-            Divider().color(COLOR_DIVIDER)
+              Column({ space: 6 }) {
+                Text('减脂目标')
+                  .fontSize(13)
+                  .fontColor(COLOR_TEXT_SUB)
+                  .width('100%')
 
-            // 目标
-            Text('目标')
-              .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
-              .width('100%')
-
-            ForEach(GOAL_ORDER, (goal: Goal) => {
-              Row() {
-                Column({ space: 2 }) {
-                  Text(goalLabel(goal))
-                    .fontSize(14)
-                    .fontColor(this.profile.goal === goal ? COLOR_PRIMARY : COLOR_TEXT)
-                  Text(goalDesc(goal))
-                    .fontSize(11)
-                    .fontColor(COLOR_TEXT_SUB)
-                }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-
-                if (this.profile.goal === goal) {
-                  Text('✓')
-                    .fontSize(16)
-                    .fontColor(COLOR_PRIMARY)
-                }
+                ForEach(GOAL_ORDER, (goal: Goal) => {
+                  // 同上：@Component 才能让选中态与回调随状态更新
+                  ProfileOption({
+                    label: goalLabel(goal),
+                    desc: goalDesc(goal),
+                    selected: this.profile.goal === goal,
+                    onPick: () => {
+                      this.apply((p: UserProfile) => {
+                        p.goal = goal;
+                      });
+                    }
+                  })
+                }, (goal: Goal) => `g-${goal}`)
               }
-              .width('100%')
-              .padding({ top: 8, bottom: 8 })
-              .onClick(() => {
-                this.apply((p: UserProfile) => {
-                  p.goal = goal;
-                });
-              })
-            }, (goal: Goal) => goal)
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Top)
 
             if (this.goalDays() > 0) {
               Text(`按当前目标，约 ${this.goalDays()} 天后可减到目标体重`)
@@ -673,17 +686,12 @@ export struct ProfileTab {
             }
           }
           .width('100%')
-          // 展开时量一次自然高度，供动画用
-          .onAreaChange((oldValue: Area, newValue: Area) => {
-            this.onDetailsArea(newValue);
-          })
         }
       }
       .width('100%')
       /*
-       * 高度始终是数字：展开 = 实测高度，收起 = 0。两端可插值，动画才成立。
-       * 不用 .animation()，动画由 toggle 里的 animateTo 显式驱动
-       *（与首页餐次折叠同一套做法）。
+       * 高度始终是数字：展开 = DETAILS_H，收起 = 0。两端可插值，动画才成立。
+       * 不用 .animation()，动画由 toggle 里的 animateTo 显式驱动。
        */
       .height(this.profileExpanded ? this.detailsH : 0)
       .clip(true)
@@ -719,31 +727,14 @@ export struct ProfileTab {
    */
   private toggleProfile(): void {
     const next: boolean = !this.profileExpanded;
-    if (next) {
-      // 展开前恢复占位高度，逼它重新量一次（内容可能已变）
-      this.detailsH = DETAILS_PLACEHOLDER_H;
-    }
+    // 高度是常量，展开/收起都直接用它，不需要重置或重量
+    this.detailsH = DETAILS_H;
     this.getUIContext().animateTo({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut }, () => {
       this.profileExpanded = next;
       this.detailsAlpha = next ? 1 : 0;
     });
   }
 
-  /**
-   * 记下明细区自然高度。
-   *
-   * 只在展开态量（收起态内层根本没渲染），量到就替换掉占位初值。
-   */
-  private onDetailsArea(area: Area): void {
-    const h: number = Number.parseFloat(`${area.height}`);
-    if (Number.isNaN(h) || h <= 0.5) {
-      return;
-    }
-    if (Math.abs(h - this.detailsH) < 0.5) {
-      return;
-    }
-    this.detailsH = h;
-  }
 
   /**
    * 收起态的一行摘要，把当前配置念一遍。

@@ -6,6 +6,7 @@
  */
 import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { window, display } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { AiConfig, MealType } from '../model/Types';
@@ -33,6 +34,12 @@ struct CameraPage {
   @State busy: boolean = false;
   @State statusText: string = '';
   @State errorText: string = '';
+  /**
+   * 键盘占用的高度（vp），0 表示键盘没弹起。
+   *
+   * 用来给滚动区补一段等高空白，避免底部的主按钮被键盘挡住。
+   */
+  @State keyboardVp: number = 0;
 
   /**
    * 上一次进入本页时选中的餐次。
@@ -49,6 +56,32 @@ struct CameraPage {
     this.meal = AppState.targetMeal;
     hilog.info(DOMAIN, 'CalorieLite', 'camera for day=%{public}s meal=%{public}d',
       AppState.effectiveTargetDay(), this.meal);
+    this.watchKeyboard();
+  }
+
+  /**
+   * 监听键盘高度，换算成 vp 存进 keyboardVp。
+   *
+   * 回调给的是 px，而页面布局用 vp，所以要除以屏幕密度
+   *（这台机器 density 是 3.5，直接当 vp 用会大 3 倍）。
+   */
+  private watchKeyboard(): void {
+    const handler: Callback<number> = (heightPx: number) => {
+      const density: number = display.getDefaultDisplaySync().densityPixels;
+      const safeDensity: number = density > 0 ? density : 1;
+      this.keyboardVp = heightPx > 0 ? Math.round(heightPx / safeDensity) : 0;
+    };
+    this.keyboardHandler = handler;
+    window.getLastWindow(this.uiContext())
+      .then((hostWin: window.Window) => {
+        this.hostWindow = hostWin;
+        // 显式标出事件名与回调类型：Window 上的 on 是重载集合，
+        // 传字面量时编译器可能匹配不到正确的那一个
+        hostWin.on('keyboardHeightChange', handler);
+      })
+      .catch((e: Error) => {
+        hilog.warn(DOMAIN, 'CalorieLite', 'watchKeyboard failed: %{public}s', e.message);
+      });
   }
 
   private uiContext(): common.UIAbilityContext {
@@ -61,10 +94,23 @@ struct CameraPage {
    * 走完流程时确认页已经消费过它，这里清掉也无害。
    */
   aboutToDisappear(): void {
+    if (this.hostWindow !== null && this.keyboardHandler !== null) {
+      try {
+        this.hostWindow.off('keyboardHeightChange', this.keyboardHandler);
+      } catch (err) {
+        // 解绑失败不影响退出
+      }
+      this.hostWindow = null;
+      this.keyboardHandler = null;
+    }
     if (AppState.pending === null) {
       AppState.clearTargetDay();
     }
   }
+
+  /** 持有窗口与键盘回调，离开时必须解绑 */
+  private hostWindow: window.Window | null = null;
+  private keyboardHandler: Callback<number> | null = null;
 
   /** 拍一张并追加到列表（支持连拍多张） */
   private async onTakePhoto(): Promise<void> {
@@ -135,10 +181,19 @@ struct CameraPage {
     this.imageUris = next;
   }
 
-  /** 压缩全部图片并发起识别 */
+  /**
+   * 发起识别。
+   *
+   * 两条路径（用户要求「现在是不上传照片就不能记录，改成纯文字也能记录」）：
+   *   · 有照片  → 走识图，文字说明作为补充（原有的路径）
+   *   · 没照片  → 走纯文字识别，把用户的描述当唯一依据
+   * 两者都要求「至少有照片或有描述」，否则没有可判断的信息。
+   */
   private async analyze(): Promise<void> {
-    if (this.imageUris.length === 0) {
-      this.errorText = '先拍一张或选一张照片';
+    const notes: string = this.notes.trim();
+    const hasImages: boolean = this.imageUris.length > 0;
+    if (!hasImages && notes.length === 0) {
+      this.errorText = '拍一张照片，或者写一句吃了什么';
       return;
     }
     this.busy = true;
@@ -150,25 +205,34 @@ struct CameraPage {
       const ctx: common.UIAbilityContext = this.uiContext();
       const bases: string[] = [];
       const localUris: string[] = [];
-      for (let i = 0; i < this.imageUris.length; i++) {
-        this.statusText = this.imageUris.length > 1
-          ? `正在压缩第 ${i + 1}/${this.imageUris.length} 张…`
-          : '正在压缩图片…';
-        const prepared: PreparedImage = await ImageService.prepare(this.imageUris[i], ctx);
-        bases.push(prepared.base64);
-        localUris.push(prepared.localUri.length > 0 ? prepared.localUri : this.imageUris[i]);
+
+      if (hasImages) {
+        for (let i = 0; i < this.imageUris.length; i++) {
+          this.statusText = this.imageUris.length > 1
+            ? `正在压缩第 ${i + 1}/${this.imageUris.length} 张…`
+            : '正在压缩图片…';
+          const prepared: PreparedImage = await ImageService.prepare(this.imageUris[i], ctx);
+          bases.push(prepared.base64);
+          localUris.push(prepared.localUri.length > 0 ? prepared.localUri : this.imageUris[i]);
+        }
+        this.statusText = `正在用 ${config.model} 识别…`;
+      } else {
+        // 纯文字：没有图片可压缩，直接说明在做什么
+        this.statusText = `正在用 ${config.model} 估算热量…`;
       }
 
-      this.statusText = `正在用 ${config.model} 识别…`;
-      // 多张图一次发过去，热量与三大营养素同一次返回
-      const result: VisionResult = await VisionService.recognize(config, bases, this.notes);
+      // 多张图一次发过去，热量与三大营养素同一次返回；
+      // 纯文字时由 recognizeText 走文字专用提示词
+      const result: VisionResult = hasImages
+        ? await VisionService.recognize(config, bases, notes)
+        : await VisionService.recognizeText(config, notes);
 
       AppState.pending = new PendingResult(
         localUris,
         result.drafts,
         result.overallNote,
         result.model,
-        this.notes.trim()
+        notes
       );
       AppState.needRefreshHome = true;
       AppState.targetMeal = guessMealType(hourOf(Date.now()));
@@ -188,6 +252,24 @@ struct CameraPage {
       this.busy = false;
       this.statusText = '';
     }
+  }
+
+  /**
+   * 是否可以提交。
+   *
+   * 有照片、或有文字描述，任一即可 —— 这是「纯文字也能记录」的判定点。
+   * 两者都空时没有可判断的信息，按钮置灰。
+   */
+  private canSubmit(): boolean {
+    return this.imageUris.length > 0 || this.notes.trim().length > 0;
+  }
+
+  /** 主按钮文案：有照片是「识别」，纯文字是「估算」，忙碌时统一显示进度 */
+  private primaryLabel(): string {
+    if (this.busy) {
+      return this.imageUris.length > 0 ? '识别中…' : '估算中…';
+    }
+    return this.imageUris.length > 0 ? '开始识别' : '估算热量';
   }
 
   private handleError(err: Object): void {
@@ -246,17 +328,17 @@ struct CameraPage {
             Column({ space: 8 }) {
               Text('📷')
                 .fontSize(44)
-              Text(`拍一张或从相册选几张，最多 ${MAX_IMAGES} 张`)
+              Text('拍照识别，或直接写吃了什么')
                 .fontSize(13)
                 .fontColor(COLOR_TEXT_SUB)
                 .textAlign(TextAlign.Center)
-              Text('同一餐的多张照片一起发送，模型会合并判断，比逐张识别更准')
+              Text(`照片可选，最多 ${MAX_IMAGES} 张；同一餐多拍几张，模型会合并判断`)
                 .fontSize(11)
                 .fontColor(COLOR_TEXT_SUB)
                 .textAlign(TextAlign.Center)
             }
             .width('100%')
-            .height(200)
+            .height(180)
             .justifyContent(FlexAlign.Center)
             .backgroundColor(COLOR_CARD)
             .borderRadius(RADIUS)
@@ -312,10 +394,10 @@ struct CameraPage {
             .width('100%')
           }
 
-          // ------------------------------------------------ 补充说明
+          // ------------------------------------------------ 吃了什么（照片可选）
           Column({ space: 6 }) {
             Row() {
-              Text('补充说明')
+              Text('吃了什么')
                 .fontSize(13)
                 .fontColor(COLOR_TEXT_SUB)
               Blank()
@@ -325,12 +407,17 @@ struct CameraPage {
             }
             .width('100%')
 
+            /*
+             * 这段文字现在既可以是「补充说明」，也可以是**唯一依据**：
+             * 不拍照、只写一句吃了什么，也能记录（用户要求）。
+             * 所以占位提示先说清「不拍照也行」，再举补充说明的例子。
+             */
             TextArea({
               text: this.notes,
-              placeholder: '可选。例如「这碗面只吃了一半」「米饭是小半碗」，模型会据此调整份量'
+              placeholder: '不拍照也能记：直接写吃了什么，例如「一碗牛肉面」。\n有照片时这里是补充说明，例如「这碗面只吃了一半」'
             })
               .fontSize(14)
-              .height(80)
+              .height(88)
               .width('100%')
               .fontColor(INPUT_TEXT)
               .placeholderColor(INPUT_PLACEHOLDER)
@@ -409,9 +496,9 @@ struct CameraPage {
           }
           .width('100%')
 
-          // 主操作：开始识别
+          // 主操作：开始识别 / 估算
           Button({ type: ButtonType.Capsule }) {
-            Text(this.busy ? '识别中…' : '开始识别')
+            Text(this.primaryLabel())
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
               .fontColor(Color.White)
@@ -419,11 +506,24 @@ struct CameraPage {
           .width('100%')
           .height(50)
           .backgroundColor(COLOR_PRIMARY)
-          .enabled(!this.busy && this.imageUris.length > 0)
-          .opacity(!this.busy && this.imageUris.length > 0 ? 1 : 0.5)
+          // 有照片**或**有描述即可（纯文字也要能记录）
+          .enabled(!this.busy && this.canSubmit())
+          .opacity(!this.busy && this.canSubmit() ? 1 : 0.5)
           .onClick(() => {
             this.analyze();
           })
+
+          /*
+           * 键盘补偿占位。
+           *
+           * 用户反馈：第一次在「吃了什么」里输入时，键盘会把「估算热量」
+           * 这个主按钮挡住 —— 它在滚动区最底部，而键盘弹出后可视高度变小，
+           * 按钮正好落在键盘下面。
+           * 这里按键盘高度补一段等高空白，把按钮顶到键盘上方。
+           */
+          if (this.keyboardVp > 0) {
+            Row().height(this.keyboardVp)
+          }
 
           // 配置提示
           if (!SettingsRepo.isAiReady()) {

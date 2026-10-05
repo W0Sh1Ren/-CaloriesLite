@@ -6,17 +6,31 @@
  */
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { inputMethod } from '@kit.IMEKit';
 
-import { FoodDraft, FoodRecord, FoodSource, MealType } from '../model/Types';
+import { AiConfig, FoodDraft, FoodRecord, FoodSource, MealType } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { todayKey } from '../common/DateUtil';
 import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
 import { DailyService } from '../service/DailyService';
+import { SettingsRepo } from '../service/SettingsRepo';
+import { VisionService, VisionResult } from '../service/VisionService';
 import { AppState, PendingResult } from '../common/AppState';
 import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
+
+/** 一轮对话：用户说了什么、模型回了什么 */
+class ChatTurn {
+  ask: string = '';
+  reply: string = '';
+
+  constructor(ask: string, reply: string) {
+    this.ask = ask;
+    this.reply = reply;
+  }
+}
 
 /** 可编辑的草稿行 */
 @Observed
@@ -89,6 +103,17 @@ struct ResultConfirm {
   @State model: string = '';
   @State meal: MealType = MealType.LUNCH;
 
+  /*
+   * ── 对话调整（用户要求：上传之后给用户和模型聊天的机会，实时调整热量）
+   *
+   * chatLog 只存「聊了什么」，用于显示；
+   * 真正的依据始终是 drafts —— 每次模型返回都整体替换 drafts，
+   * 于是合计热量、卡片内容会当帧刷新。
+   */
+  @State chatLog: ChatTurn[] = [];
+  @State askText: string = '';
+  @State revising: boolean = false;
+
   aboutToAppear(): void {
     const pending: PendingResult | null = AppState.pending;
     if (pending === null) {
@@ -115,6 +140,112 @@ struct ResultConfirm {
       sum += d.kcal;
     }
     return Math.round(sum);
+  }
+
+  /** 把当前明细回写成 FoodDraft[]，供 revise 作为上下文发给模型 */
+  private currentDrafts(): FoodDraft[] {
+    const out: FoodDraft[] = [];
+    for (const d of this.drafts) {
+      out.push(new FoodDraft(
+        d.name, this.gramsOf(d), d.kcal, d.protein, d.fat, d.carb,
+        d.confidence, d.source, d.note
+      ));
+    }
+    return out;
+  }
+
+  /** 克重文本框转数字；非法输入按 0 处理（保存前另有校验） */
+  private gramsOf(d: EditableDraft): number {
+    const v: number = Number.parseFloat(d.gramsText);
+    return Number.isNaN(v) ? 0 : v;
+  }
+
+  /**
+   * 把用户这句话发给模型，按返回结果刷新明细。
+   *
+   * 实时性来自这里：模型返回后**整体替换 drafts**，
+   * 于是合计热量、逐条卡片、营养素当帧就变，不需要用户手动改。
+   * 同时把新明细写回 AppState.pending，返回再进来不会丢。
+   */
+  private async ask(): Promise<void> {
+    const text: string = this.askText.trim();
+    if (text.length === 0 || this.revising) {
+      return;
+    }
+    /*
+     * 不要求 drafts 非空：条目被删光后仍要能聊天
+     *（用户要求「记录删完了也可以聊天，不局限于修改，也可以添加」）。
+     * 空列表发给模型时上下文是「（当前没有任何条目）」，
+     * 模型据此新增即可。
+     */
+    this.revising = true;
+    /*
+     * 关键：**发请求之前**就收起输入法与焦点。
+     *
+     * 放在 await 之后是错的（上一版就是这样）：模型要一秒到十几秒才回，
+     * 这期间焦点一直留在聊天输入框上、键盘也一直弹着，
+     * 用户看到的就是「点了发送，焦点还在菜品/聊天框，等回复才收起」。
+     */
+    this.hideKeyboard();
+    try {
+      const config: AiConfig = SettingsRepo.loadAiConfig();
+      const result: VisionResult =
+        await VisionService.revise(config, this.currentDrafts(), text);
+
+      const rows: EditableDraft[] = [];
+      for (const d of result.drafts) {
+        rows.push(new EditableDraft(d));
+      }
+      this.drafts = rows;
+      // 回写，保证返回再进来看到的是改过之后的内容
+      const pending: PendingResult | null = AppState.pending;
+      if (pending !== null) {
+        pending.drafts = result.drafts;
+        pending.overallNote = result.overallNote;
+      }
+      this.overallNote = result.overallNote;
+
+      const next: ChatTurn[] = this.chatLog.slice();
+      next.push(new ChatTurn(text, result.overallNote));
+      this.chatLog = next;
+      this.askText = '';
+    } catch (err) {
+      const e: Error = err as Error;
+      const msg: string = e.message.length > 0 ? e.message : '调整失败，再试一次';
+      promptAction.showToast({ message: msg });
+      hilog.error(DOMAIN, 'CalorieLite', 'revise failed: %{public}s', msg);
+    } finally {
+      this.revising = false;
+    }
+  }
+
+  /**
+   * 收起键盘并取消焦点。
+   *
+   * 点发送时立刻调用（在发请求之前，不能等回复 —— 模型要几秒才回，
+   * 那期间键盘一直挡着）。
+   *
+   * 两步：requestFocus(null) 取消焦点，结束输入会话把键盘收下去。
+   * 之前试过把焦点转到别的节点，会让框架再挪到下一个输入框、键盘重弹，
+   * 直接取消焦点最干净。
+   *
+   * 失败只记日志：这是体验优化，不该影响主流程。
+   */
+  private hideKeyboard(): void {
+    try {
+      // focusControl 是全局命名空间（SDK 里 declare namespace），不能 import
+      focusControl.requestFocus(null);
+    } catch (err) {
+      hilog.warn(DOMAIN, 'CalorieLite', 'requestFocus(null) failed');
+    }
+    try {
+      inputMethod.getController().stopInputSession()
+        .catch((e: Error) => {
+          hilog.warn(DOMAIN, 'CalorieLite', 'stopInputSession failed: %{public}s', e.message);
+        });
+    } catch (err) {
+      hilog.warn(DOMAIN, 'CalorieLite', 'inputMethod unavailable');
+    }
   }
 
   /** 置信度对应的提示色与文案 */
@@ -208,6 +339,121 @@ struct ResultConfirm {
      * 结论：与其想办法「退两层」，不如让栈里根本不需要退两层。
      */
     router.back();
+  }
+
+  /**
+   * 对话调整面板。
+   *
+   * 放在明细下面：先看清模型给了什么，再决定要不要改。
+   * 所有返回都会整体替换 drafts，所以这里的回复与上面的卡片是联动的。
+   */
+  @Builder
+  chatPanel() {
+    Column({ space: 10 }) {
+      Row({ space: 6 }) {
+        Text('和模型聊聊')
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_TEXT)
+        Text('可以改，也可以直接加')
+          .fontSize(11)
+          .fontColor(COLOR_TEXT_SUB)
+          .layoutWeight(1)
+      }
+      .width('100%')
+
+      // 历史对话：只回显，不参与计算
+      if (this.chatLog.length > 0) {
+        Column({ space: 10 }) {
+          ForEach(this.chatLog, (t: ChatTurn, i: number) => {
+            Column({ space: 6 }) {
+              // 用户的话：靠右、浅绿底
+              Row() {
+                Blank()
+                Text(t.ask)
+                  .fontSize(13)
+                  .fontColor(COLOR_TEXT)
+                  .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                  .backgroundColor('#1A22C55E')
+                  .borderRadius(10)
+                  .constraintSize({ maxWidth: '80%' })
+              }
+              .width('100%')
+
+              // 模型的回答：靠左、浅灰底
+              if (t.reply.length > 0) {
+                Row() {
+                  Text(t.reply)
+                    .fontSize(12)
+                    .fontColor(COLOR_TEXT_SUB)
+                    .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                    .backgroundColor(COLOR_BG)
+                    .borderRadius(10)
+                    .constraintSize({ maxWidth: '80%' })
+                  Blank()
+                }
+                .width('100%')
+              }
+            }
+            .width('100%')
+          }, (t: ChatTurn, i: number) => `${i}-${t.ask}`)
+        }
+        .width('100%')
+      }
+
+      /*
+       * 条目被删光后的引导。
+       *
+       * 这里刻意不挡住输入：删完了仍然可以继续聊
+       *（「再加一碗米饭」），只是给一句提示说明现在的状态。
+       */
+      if (this.drafts.length === 0) {
+        Text('当前没有条目了。可以直接让模型加，例如「再加一碗米饭」')
+          .fontSize(11)
+          .fontColor(COLOR_TEXT_SUB)
+          .width('100%')
+      }
+
+      // 输入行
+      Row({ space: 8 }) {
+        TextInput({ text: this.askText, placeholder: '例如：米饭其实是两碗' })
+          .fontSize(14)
+          .height(42)
+          .layoutWeight(1)
+          .fontColor(INPUT_TEXT)
+          .placeholderColor(INPUT_PLACEHOLDER)
+          .backgroundColor(COLOR_BG)
+          .borderRadius(10)
+          .enabled(!this.revising)
+          .onChange((v: string) => {
+            this.askText = v;
+          })
+          .onSubmit(() => {
+            this.ask();
+          })
+
+        // 与体重记录按钮一致：矩形 + 圆角 10，和左侧输入框成一组
+        Button({ type: ButtonType.Normal }) {
+          Text(this.revising ? '…' : '发送').fontSize(14).fontColor(Color.White)
+        }
+        .width(72)
+        .height(42)
+        .backgroundColor(COLOR_PRIMARY)
+        .borderRadius(10)
+        // 只要有话说就能发送：不再要求还有条目（删光了也能加）
+        .enabled(!this.revising && this.askText.trim().length > 0)
+        .opacity(!this.revising && this.askText.trim().length > 0 ? 1 : 0.5)
+        .onClick(() => {
+          this.ask();
+        })
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor(COLOR_CARD)
+    .borderRadius(RADIUS)
+    .shadow(CARD_SHADOW)
   }
 
   build() {
@@ -330,6 +576,13 @@ struct ResultConfirm {
           ForEach(this.drafts, (item: EditableDraft, index: number) => {
             this.draftCard(item, index)
           }, (item: EditableDraft, index: number) => `${index}-${item.name}`)
+
+          /*
+           * 和模型聊聊：对结果不满意时用一句话修正
+           *（「米饭其实是两碗」「还喝了一碗汤」「这个不要了」）。
+           * 每次返回都会整体替换上面的明细，热量合计当帧刷新。
+           */
+          this.chatPanel()
 
           Row().height(80)
         }

@@ -55,13 +55,34 @@ export function activityDesc(level: ActivityLevel): string {
   }
 }
 
-/** 所有活动水平的固定顺序，供选择器渲染 */
+/**
+ * 所有活动水平 —— **供反序列化校验用，不要拿它渲染界面**。
+ *
+ * 保留 VERY_ACTIVE：老用户档案里可能存着它，
+ * 从这里删掉会让 toEnum 校验失败、活动量被重置成默认值（数据丢失）。
+ * 界面要用的四档见下面的 ACTIVITY_UI_ORDER。
+ */
 export const ACTIVITY_ORDER: ActivityLevel[] = [
   ActivityLevel.SEDENTARY,
   ActivityLevel.LIGHT,
   ActivityLevel.MODERATE,
   ActivityLevel.ACTIVE,
   ActivityLevel.VERY_ACTIVE
+];
+
+/**
+ * 界面上的活动水平选项（按运动量从小到大）。
+ *
+ * 只放四档：久坐 / 轻度 / 中度 / 高度。
+ * VERY_ACTIVE（体力劳动或每天高强度训练）对普通用户几乎用不到，
+ * 留着会让这一列比右边的目标列多一项、两列数量不齐（用户要求去掉）。
+ * 老数据仍能正常读取（见 ACTIVITY_ORDER）。
+ */
+export const ACTIVITY_UI_ORDER: ActivityLevel[] = [
+  ActivityLevel.SEDENTARY,
+  ActivityLevel.LIGHT,
+  ActivityLevel.MODERATE,
+  ActivityLevel.ACTIVE
 ];
 
 /**
