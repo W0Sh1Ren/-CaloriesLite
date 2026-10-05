@@ -4,7 +4,7 @@
  * 识别出来的每一条都可以改名字、克重、餐次，确认后才写进记录，
  * 避免 AI 估错直接污染当天数据。
  */
-import { router, promptAction } from '@kit.ArkUI';
+import { router, promptAction, KeyboardAvoidMode } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { inputMethod } from '@kit.IMEKit';
 
@@ -20,6 +20,15 @@ import { AppState, PendingResult } from '../common/AppState';
 import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
+
+/**
+ * 聊天输入框的焦点标记。
+ *
+ * 发送后用它把焦点钉回聊天框（见 hideKeyboard）：
+ * 焦点一旦空出来，框架会挪到上面菜品名称那一栏，
+ * 用户接着打字就打到菜名里去了。
+ */
+const CHAT_INPUT_ID: string = 'chatInput';
 
 /** 一轮对话：用户说了什么、模型回了什么 */
 class ChatTurn {
@@ -115,6 +124,14 @@ struct ResultConfirm {
   @State revising: boolean = false;
 
   aboutToAppear(): void {
+    /*
+     * 键盘避让用 RESIZE（页面重新排版）。
+     *
+     * 默认的 OFFSET 只把窗口压扁、页面内部仍按原高度排版，
+     * 底部的「合计 / 确认记录」栏会被键盘盖住（拍照页同样的问题）。
+     * 这一页底部栏是常驻的，所以必须让它跟着重新排版。
+     */
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     const pending: PendingResult | null = AppState.pending;
     if (pending === null) {
       // 没有待确认数据（例如异常返回），直接退回上一页
@@ -132,6 +149,11 @@ struct ResultConfirm {
     this.overallNote = pending.overallNote;
     this.model = pending.model;
     this.meal = AppState.targetMeal;
+  }
+
+  aboutToDisappear(): void {
+    // 还原系统默认，避免影响其它页面（避让模式是页级的全局设置）
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.OFFSET);
   }
 
   private totalKcal(): number {
@@ -216,27 +238,39 @@ struct ResultConfirm {
       hilog.error(DOMAIN, 'CalorieLite', 'revise failed: %{public}s', msg);
     } finally {
       this.revising = false;
+      /*
+       * 模型返回后 drafts 被整体替换，页面重建可能再次把焦点交给
+       * 第一个可用输入框（实测会落到菜品克重栏）。
+       * 这里再钉一次焦点 —— 输入框设了 enableKeyboardOnFocus(false)，
+       * 所以不会把键盘弹回来。
+       */
+      this.hideKeyboard();
     }
   }
 
   /**
-   * 收起键盘并取消焦点。
+   * 收起键盘，**焦点保持在和模型聊天的输入框上**。
    *
    * 点发送时立刻调用（在发请求之前，不能等回复 —— 模型要几秒才回，
    * 那期间键盘一直挡着）。
    *
-   * 两步：requestFocus(null) 取消焦点，结束输入会话把键盘收下去。
-   * 之前试过把焦点转到别的节点，会让框架再挪到下一个输入框、键盘重弹，
-   * 直接取消焦点最干净。
+   * 三步缺一不可：
+   *   1. requestFocus(聊天输入框)：把焦点**钉在**聊天框上。
+   *      不钉住的话，清空文本后框架会把焦点挪到「下一个可聚焦的输入框」，
+   *      也就是上面菜品名称那一栏 —— 用户接着打字就打进菜名里了。
+   *   2. 输入框设了 enableKeyboardOnFocus(false)：程序化聚焦**不弹键盘**，
+   *      所以第 1 步不会把刚收起的键盘又弹起来。
+   *      用户手指点输入框属于「点击聚焦」，不受这个开关影响，照常弹键盘。
+   *   3. stopInputSession：结束输入会话，把键盘收下去。
    *
    * 失败只记日志：这是体验优化，不该影响主流程。
    */
   private hideKeyboard(): void {
     try {
       // focusControl 是全局命名空间（SDK 里 declare namespace），不能 import
-      focusControl.requestFocus(null);
+      focusControl.requestFocus(CHAT_INPUT_ID);
     } catch (err) {
-      hilog.warn(DOMAIN, 'CalorieLite', 'requestFocus(null) failed');
+      hilog.warn(DOMAIN, 'CalorieLite', 'requestFocus failed');
     }
     try {
       inputMethod.getController().stopInputSession()
@@ -424,7 +458,24 @@ struct ResultConfirm {
           .placeholderColor(INPUT_PLACEHOLDER)
           .backgroundColor(COLOR_BG)
           .borderRadius(10)
-          .enabled(!this.revising)
+          /*
+           * 程序化聚焦时不弹键盘。
+           *
+           * 发送后 hideKeyboard() 会把焦点钉回这个输入框（防止框架把它挪到
+           * 上面菜品名称那一栏）；若不关掉这个开关，那一步会顺手把刚收起的
+           * 键盘又弹起来。
+           * 注意只影响「非点击」的聚焦：用户手指点这个框照常弹键盘。
+           */
+          .enableKeyboardOnFocus(false)
+          // 发送后 hideKeyboard() 靠这个 id 把焦点钉回本输入框
+          .id(CHAT_INPUT_ID)
+          /*
+           * **故意不加 .enabled(!this.revising)**。
+           *
+           * 被禁用的 TextInput 会丢失焦点，框架随即把焦点挪给下一个可用
+           * 输入框（菜品克重那一栏）—— 这正是「发送后焦点跑掉」的原因。
+           * 重复提交由 ask() 开头的 this.revising 守卫拦住，不需要禁用控件。
+           */
           .onChange((v: string) => {
             this.askText = v;
           })

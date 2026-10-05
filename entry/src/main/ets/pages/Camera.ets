@@ -4,9 +4,8 @@
  * 流程：拍照/选图 → 压缩 → 调 AI 视觉识别 → 查表折算 → 跳结果确认页。
  * 全程在本地压缩后才上传，图片不会以原图尺寸发出去。
  */
-import { router, promptAction } from '@kit.ArkUI';
+import { router, promptAction, KeyboardAvoidMode } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { window, display } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { AiConfig, MealType } from '../model/Types';
@@ -35,13 +34,6 @@ struct CameraPage {
   @State statusText: string = '';
   @State errorText: string = '';
   /**
-   * 键盘占用的高度（vp），0 表示键盘没弹起。
-   *
-   * 用来给滚动区补一段等高空白，避免底部的主按钮被键盘挡住。
-   */
-  @State keyboardVp: number = 0;
-
-  /**
    * 上一次进入本页时选中的餐次。
    *
    * 从记录页给某一天补记时，AppState.targetMeal 会先被设成那一天的餐次；
@@ -56,32 +48,18 @@ struct CameraPage {
     this.meal = AppState.targetMeal;
     hilog.info(DOMAIN, 'CalorieLite', 'camera for day=%{public}s meal=%{public}d',
       AppState.effectiveTargetDay(), this.meal);
-    this.watchKeyboard();
-  }
-
-  /**
-   * 监听键盘高度，换算成 vp 存进 keyboardVp。
-   *
-   * 回调给的是 px，而页面布局用 vp，所以要除以屏幕密度
-   *（这台机器 density 是 3.5，直接当 vp 用会大 3 倍）。
-   */
-  private watchKeyboard(): void {
-    const handler: Callback<number> = (heightPx: number) => {
-      const density: number = display.getDefaultDisplaySync().densityPixels;
-      const safeDensity: number = density > 0 ? density : 1;
-      this.keyboardVp = heightPx > 0 ? Math.round(heightPx / safeDensity) : 0;
-    };
-    this.keyboardHandler = handler;
-    window.getLastWindow(this.uiContext())
-      .then((hostWin: window.Window) => {
-        this.hostWindow = hostWin;
-        // 显式标出事件名与回调类型：Window 上的 on 是重载集合，
-        // 传字面量时编译器可能匹配不到正确的那一个
-        hostWin.on('keyboardHeightChange', handler);
-      })
-      .catch((e: Error) => {
-        hilog.warn(DOMAIN, 'CalorieLite', 'watchKeyboard failed: %{public}s', e.message);
-      });
+    /*
+     * 键盘避让改成 RESIZE（页面**重新排版**），默认的 OFFSET 是整体上移。
+     *
+     * 用户反馈「输入法把估算热量按钮挡住」。实测根因：
+     * OFFSET 模式下系统只把 WindowScene 压扁（2832 → 1733），
+     * 但页面内部仍按原高度排版 —— 底栏被算在 y=2685，落在键盘后面。
+     * 换成 RESIZE 后页面按新高度重新排版，底栏自然回到可视区底部。
+     *
+     * 顺带说明：参考记录页的体重输入框之所以没这个问题，
+     * 是因为那里输入框在长滚动区中部，OFFSET 上移后本来就在键盘上方。
+     */
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
   }
 
   private uiContext(): common.UIAbilityContext {
@@ -94,23 +72,16 @@ struct CameraPage {
    * 走完流程时确认页已经消费过它，这里清掉也无害。
    */
   aboutToDisappear(): void {
-    if (this.hostWindow !== null && this.keyboardHandler !== null) {
-      try {
-        this.hostWindow.off('keyboardHeightChange', this.keyboardHandler);
-      } catch (err) {
-        // 解绑失败不影响退出
-      }
-      this.hostWindow = null;
-      this.keyboardHandler = null;
-    }
+    /*
+     * 还原成系统默认的 OFFSET，避免影响其它页面。
+     * 键盘避让模式是「页」级的全局设置，不回退的话，
+     * 从这一页返回后首页也会变成 RESIZE。
+     */
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.OFFSET);
     if (AppState.pending === null) {
       AppState.clearTargetDay();
     }
   }
-
-  /** 持有窗口与键盘回调，离开时必须解绑 */
-  private hostWindow: window.Window | null = null;
-  private keyboardHandler: Callback<number> | null = null;
 
   /** 拍一张并追加到列表（支持连拍多张） */
   private async onTakePhoto(): Promise<void> {
@@ -470,62 +441,7 @@ struct CameraPage {
             .borderRadius(RADIUS)
           }
 
-          // ------------------------------------------------ 操作
-          Row({ space: 10 }) {
-            Button({ type: ButtonType.Capsule }) {
-              Text('拍照').fontSize(16).fontColor(COLOR_TEXT)
-            }
-            .layoutWeight(1)
-            .height(48)
-            .backgroundColor(COLOR_CARD)
-            .enabled(!this.busy)
-            .onClick(() => {
-              this.onTakePhoto();
-            })
-
-            Button({ type: ButtonType.Capsule }) {
-              Text('相册').fontSize(16).fontColor(COLOR_TEXT)
-            }
-            .layoutWeight(1)
-            .height(48)
-            .backgroundColor(COLOR_CARD)
-            .enabled(!this.busy)
-            .onClick(() => {
-              this.onPickGallery();
-            })
-          }
-          .width('100%')
-
-          // 主操作：开始识别 / 估算
-          Button({ type: ButtonType.Capsule }) {
-            Text(this.primaryLabel())
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Color.White)
-          }
-          .width('100%')
-          .height(50)
-          .backgroundColor(COLOR_PRIMARY)
-          // 有照片**或**有描述即可（纯文字也要能记录）
-          .enabled(!this.busy && this.canSubmit())
-          .opacity(!this.busy && this.canSubmit() ? 1 : 0.5)
-          .onClick(() => {
-            this.analyze();
-          })
-
-          /*
-           * 键盘补偿占位。
-           *
-           * 用户反馈：第一次在「吃了什么」里输入时，键盘会把「估算热量」
-           * 这个主按钮挡住 —— 它在滚动区最底部，而键盘弹出后可视高度变小，
-           * 按钮正好落在键盘下面。
-           * 这里按键盘高度补一段等高空白，把按钮顶到键盘上方。
-           */
-          if (this.keyboardVp > 0) {
-            Row().height(this.keyboardVp)
-          }
-
-          // 配置提示
+          // ------------------------------------------------ 说明 / 配置提示
           if (!SettingsRepo.isAiReady()) {
             Column({ space: 8 }) {
               Text('识别功能还没配置')
@@ -570,6 +486,61 @@ struct CameraPage {
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
+
+      /*
+       * ── 固定底栏：拍照 / 相册 + 主按钮
+       *
+       * 原来是放在滚动区最底部的，结果键盘弹起时被挡住
+       *（用户截图反馈）。放进固定底栏后：
+       *   Column 根节点会因键盘避让而收缩高度，
+       *   Scroll 的 layoutWeight(1) 跟着变矮，
+       *   底栏自然落在键盘上方 —— 不依赖任何额外补偿。
+       */
+      Column({ space: 10 }) {
+        Row({ space: 10 }) {
+          Button({ type: ButtonType.Capsule }) {
+            Text('拍照').fontSize(16).fontColor(COLOR_TEXT)
+          }
+          .layoutWeight(1)
+          .height(48)
+          .backgroundColor(COLOR_CARD)
+          .enabled(!this.busy)
+          .onClick(() => {
+            this.onTakePhoto();
+          })
+
+          Button({ type: ButtonType.Capsule }) {
+            Text('相册').fontSize(16).fontColor(COLOR_TEXT)
+          }
+          .layoutWeight(1)
+          .height(48)
+          .backgroundColor(COLOR_CARD)
+          .enabled(!this.busy)
+          .onClick(() => {
+            this.onPickGallery();
+          })
+        }
+        .width('100%')
+
+        Button({ type: ButtonType.Capsule }) {
+          Text(this.primaryLabel())
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+        }
+        .width('100%')
+        .height(50)
+        .backgroundColor(COLOR_PRIMARY)
+        // 有照片**或**有描述即可（纯文字也要能记录）
+        .enabled(!this.busy && this.canSubmit())
+        .opacity(!this.busy && this.canSubmit() ? 1 : 0.5)
+        .onClick(() => {
+          this.analyze();
+        })
+      }
+      .width('100%')
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 10, bottom: 12 })
+      .backgroundColor(COLOR_BG)
     }
     .width('100%')
     .height('100%')
