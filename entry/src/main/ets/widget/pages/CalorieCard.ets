@@ -1,109 +1,242 @@
 /**
  * 桌面卡片：2x2 热量概览。
  *
- * 布局：
- *   ┌──────────────────────────┐
- *   │   ╭───╮   蛋白 ▓▓▓░░ 40/56│
- *   │   │环 │   脂肪 ▓▓░░░ 20/56│
- *   │   ╰───╯   碳水 ▓▓▓▓░ 90/200│
- *   ├──────────────────────────┤
- *   │        拍照记录           │
- *   └──────────────────────────┘
+ * ═══════════════════════════════════════════════════════════════════════
+ *  ★ 想调布局，只看这一节；其余都是功能代码，不用动。
+ * ═══════════════════════════════════════════════════════════════════════
  *
- * 点击「拍照记录」→ 直接进应用的拍照识别；点其它位置 → 只进首页。
+ * 当前布局（自上而下三层）：
  *
- * 数据来自 CalorieCardAbility 的 formBindingData：卡片进程会把其中的
- * 键值写进 LocalStorage，UI 用 @LocalStorageProp 按**同名键**读取。
- * 所以下面的属性名必须与 ability 里 data['...'] 的键名一一对应，
- * 改名要两边同时改（键名不一致时不会报错，只会一直显示默认值）。
+ *   ┌──────────────────────────────────┐
+ *   │ 轻卡记                 14:36 更新 │  ← ① 顶部标题行
+ *   │  ╭────╮                           │
+ *   │  │ 环 │  蛋白 ▓▓▓▓░░░░ 40 / 188 g │  ← ② 中部：环 + 三条营养素
+ *   │  │    │  脂肪 ▓▓░░░░░░ 20 / 56 g  │
+ *   │  ╰────╯  碳水 ▓▓▓░░░░░ 90 / 314 g │
+ *   │ ┌──────┐┌───────────────────────┐ │
+ *   │ │ 刷新 ││      📷 拍照记录       │ │  ← ③ 底部按钮行
+ *   │ └──────┘└───────────────────────┘ │
+ *   └──────────────────────────────────┘
  *
- * 卡片里**不做**任何存储读取：卡片 UI 每次刷新都会重建，
- * 在里面读不到就整块空白，兜底统一放在 ability 里。
+ * ── 改哪里（都在本文件，按 build() 里的三段注释找）
+ *
+ *   想改的东西                 改哪个属性
+ *   ─────────────────────────  ────────────────────────────────────────
+ *   卡片内边距                  build() 最外层 Column 的 .padding(…)
+ *   卡片圆角 / 背景色           同上的 .borderRadius / .backgroundColor
+ *   顶部标题字号 / 颜色         build() ① 里两个 Text 的 .fontSize / .fontColor
+ *   标题行与中部的间距          build() ① 那行 Row 的 .margin({ bottom: 6 })
+ *   环的大小                    kcalRing() 里 Progress 与 Stack 的 .width/.height
+ *                                （两处必须一起改，否则圆和数字会错位）
+ *   环的粗细                    kcalRing() 里 .style({ strokeWidth: 7 })
+ *   环里的数字 / 分母字号        kcalRing() 里两个 Text 的 .fontSize
+ *   左侧热区宽度（点环进首页）   build() ② 里包着 kcalRing() 的 Column 的 .width(84)
+ *   营养素条的粗细              macroBar() 里 Stack 内两个 Row 的 .height(4)
+ *                                （底层轨道与上层进度条必须同高）
+ *   营养素三行的间距            build() ② 里 Column 的 space: 7
+ *   营养素文字字号              macroBar() 里两个 Text 的 .fontSize
+ *   按钮高度 / 圆角             build() ③ 里各按钮的 .height(30) / .borderRadius(15)
+ *   两个按钮的宽度比            build() ③ 里 .layoutWeight(1) 与 .layoutWeight(2)
+ *   按钮行与中部的间距          build() ③ 那行 Row 的 .margin({ top: 6 })
+ *
+ * ── 配色（改文件顶部这几个常量，全卡片统一生效）
+ *   COLOR_PRIMARY   主色（环、拍照按钮）       现为品牌绿 #22C55E
+ *   COLOR_TEXT      主文字                     现为 #1A1A1A
+ *   COLOR_TEXT_SUB  次要文字（标签、时间）      现为 #8A8F99
+ *   COLOR_TRACK     底色（环的轨道、刷新按钮）  现为 #E8EBEF
+ *
+ *   注意：三条营养素的颜色**不在这里**。它们按营养素区分，由后端推过来
+ *   （proteinColor / fatColor / carbColor，见 CardData.ets），
+ *   与主应用 Theme.ets 的 COLOR_PROTEIN / FAT / CARB 一致。
+ *   想改那三个颜色要改 CardData.ets，改这里没用。
+ *
+ * ── 改完怎么生效
+ *   1. tools\sync-src.ps1 然后 tools\build.ps1
+ *   2. hdc install -r <产出的 hap>
+ *   3. **桌面上的卡片要先删掉再重新添加** —— 布局改动不会热更到已添加的卡片
+ *
+ * ── 点击行为（别改坏）
+ *   · 左侧的环         → 进应用首页（build ② 里那个 Column 的 .onClick）
+ *   · 底部「拍照记录」  → 直接进拍照识别，记到今天（build ③，router 事件）
+ *   · 底部「刷新」      → 只重算数据，不拉起应用（build ③，message 事件）
+ *   · 三条营养素条      → **不响应**（用户要求减少误触）
+ *
+ * ═══════════════════════════════════════════════════════════════════════
+ *
+ * ── 三条硬性约束，改这个文件前务必先读
+ *
+ * 1. **零派生**。卡片跑在系统的卡片框架进程里，它的响应式追踪不会追踪
+ *    getter / 辅助方法内部对 @LocalStorageProp 的依赖。所以这里
+ *    **不做任何运算**：不写 `this.intake / this.budget`，不写
+ *    `get xxx()`，也不把属性当参数传给辅助方法。
+ *    所有派生都在 CardData.ets 里算好，这里只贴值。
+ *    （写错的表现是进度条按 0 渲染、文字为空，且不报错。）
+ *
+ *    ※ 第 1、3 条容易互相踩：想在卡片里「顺手算一下」是最常见的错，
+ *      一定要把新字段加到 CardData 里算好再推过来。
+ *
+ * 2. **不用 Button 组件**。卡片里 Button 的带参构造不渲染文字
+ *    （只剩背景色几个白点）。可点击的「按钮」一律用
+ *    Text / Row + backgroundColor + borderRadius + onClick 模拟。
+ *
+ * 3. **数据只从 @LocalStorageProp 来**，不能在卡片内部维护业务状态。
+ *    键名必须与 CardData.toPayload() 的键、以及下面声明处的初值
+ *    （CardData.fallback()）逐一对齐 —— 不一致不会报错，
+ *    只会一直显示默认值，或者先显示默认值再跳变（看起来是闪一下）。
+ *
+ * 另外：卡片环境不支持 animateTo 与 getUIContext，编译期就报
+ *   'animateTo' can't support form application
+ * 所以这里不做任何动画，避免首帧闪烁只能靠「给有意义的默认值」。
  */
+import { CardData } from '../CardData';
 
-const COLOR_PRIMARY = '#22C55E';
 const COLOR_TEXT = '#1A1A1A';
 const COLOR_TEXT_SUB = '#8A8F99';
 const COLOR_TRACK = '#E8EBEF';
-const COLOR_BG = '#F5F8F6';
+const COLOR_PRIMARY = '#22C55E';
 
 /** 卡片的「拍照记录」用这个 want 参数告诉应用该直接进拍照页 */
 const ROUTE_CAMERA = 'camera';
+
+/**
+ * 卡片跳转的目标 UIAbility 名。
+ *
+ * postCardAction 的 router 事件用它指定拉起哪个 Ability，
+ * 与 module.json5 里 EntryAbility 的 name 一致。
+ */
+const ENTRY_ABILITY = 'EntryAbility';
+
+/** 「刷新」按钮的业务动作名，与 CalorieCardAbility 里保持一致 */
+const ACTION_REFRESH = 'refresh';
 
 @Entry
 @Component
 struct CalorieCard {
   /*
-   * 键名必须与 CalorieCardAbility.buildData() 里的键一致。
-   *
-   * 这里的初值必须与 ability 的兜底值**逐一对齐**（见该文件的
-   * DEFAULT_BUDGET 与 defaultData()）：
-   * 卡片在绑定数据到位前会先按这里的初值渲染一帧，两边不一致的话
-   * 那一帧的数字和最终值不同，看起来就是「闪一下」。
+   * 键名必须与 CardData.toPayload() 的键一致，初值必须与 CardData.fallback()
+   * 的结果一致（见该文件）。两边不一致时，卡片在绑定数据到位前那一帧
+   * 会与最终值不同，看起来就是「闪一下」。
    */
   @LocalStorageProp('intake') intake: number = 0;
   @LocalStorageProp('budget') budget: number = 2000;
-  @LocalStorageProp('protein') protein: number = 0;
-  @LocalStorageProp('fat') fat: number = 0;
-  @LocalStorageProp('carb') carb: number = 0;
-  @LocalStorageProp('proteinTarget') proteinTarget: number = 188;
-  @LocalStorageProp('fatTarget') fatTarget: number = 56;
-  @LocalStorageProp('carbTarget') carbTarget: number = 314;
+  @LocalStorageProp('kcalRingPct') kcalRingPct: string = '0%';
+  @LocalStorageProp('remainText') remainText: string = '还可以吃 2000';
 
-  /*
-   * 这里**不能**做首帧淡入（本来想用 opacity + animateTo 盖住默认值那一帧）：
-   * 卡片环境不支持 animateTo 与 getUIContext，编译期就报
-   *   'animateTo' can't support form application
-   *   'getUIContext' can't support form application
-   * 所以避免闪烁只能靠「给有意义的默认值」——
-   * 见上面各字段的初值与 CalorieCardAbility 的 DEFAULT_BUDGET。
-   */
+  @LocalStorageProp('proteinPct') proteinPct: string = '0%';
+  @LocalStorageProp('proteinText') proteinText: string = '0 / 188 g';
+  @LocalStorageProp('proteinColor') proteinColor: string = '#22C55E';
 
-  /** 完成比例 0~1，用于环形与营养条 */
-  private static ratio(now: number, target: number): number {
-    if (target <= 0) {
-      return 0;
-    }
-    const r: number = now / target;
-    return r > 1 ? 1 : r;
-  }
+  @LocalStorageProp('fatPct') fatPct: string = '0%';
+  @LocalStorageProp('fatText') fatText: string = '0 / 56 g';
+  @LocalStorageProp('fatColor') fatColor: string = '#F5C142';
 
-  /**
-   * 今天是否还没有任何记录。
-   *
-   * 用来决定右侧显示三条营养素进度，还是显示「还没有记录」。
-   * 全 0 的三条进度条看起来和「数据没加载出来」一模一样，
-   * 换成一句文案才说明得清楚。
-   */
-  private isEmptyDay(): boolean {
-    return this.intake <= 0;
-  }
+  @LocalStorageProp('carbPct') carbPct: string = '0%';
+  @LocalStorageProp('carbText') carbText: string = '0 / 314 g';
+  @LocalStorageProp('carbColor') carbColor: string = '#4C8DFF';
+
+  @LocalStorageProp('emptyDay') emptyDay: boolean = true;
+  @LocalStorageProp('emptyTitle') emptyTitle: string = '今天还没记录';
+  @LocalStorageProp('emptyHint') emptyHint: string = '点下面拍一张';
+  /* 顶部标题行：左上角应用名、右上角数据刷新时间（时间由后端格式化好） */
+  @LocalStorageProp('appName') appName: string = '轻卡记';
+  @LocalStorageProp('updatedText') updatedText: string = '';
 
   build() {
     Column() {
-      // ------------------------------------------------ 上半：环 + 三大营养素
-      Row({ space: 10 }) {
-        this.ring()
+      /*
+       * ═══════════════ ① 顶部标题行：应用名（左） + 刷新时间（右） ═══════════════
+       *
+       * 想调：
+       *   · 两个文字的大小/颜色 → 下面两个 Text 的 .fontSize / .fontColor
+       *   · 这一行与中部的距离 → 这行 Row 的 .margin({ bottom: 6 })
+       *   · 时间为空时右上角会空着；时间为后端推来的 updatedText，
+       *     想看它怎么算的见 CardData.nowText()
+       */
+      Row() {
+        Text(this.appName)
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_TEXT)
+        Blank()
+        Text(this.updatedText)
+          .fontSize(9)
+          .fontColor(COLOR_TEXT_SUB)
+      }
+      .width('100%')
+      .margin({ bottom: 6 })
 
-        if (this.isEmptyDay()) {
-          // 还没记录：右侧用一句文案代替三条空进度条
-          Column({ space: 6 }) {
-            Text('还没有记录')
+      /*
+       * ═══════════════ ② 中部：热量环（左） + 三大营养素（右） ═══════════════
+       *
+       * 这一行用 layoutWeight(1) 吃掉上下两层之外的全部高度，所以
+       * 「环和营养素看起来偏上/偏下」时，调的是这一段的 .layoutWeight 或
+       * 上下两段的 .margin，而不是这里的 height。
+       *
+       * 想调：
+       *   · 环与右侧文字的间距 → 这行 Row 的 space: 8
+       *   · 左列宽度（也就是点环进首页的热区宽度）→ 下面 Column 的 .width(68)
+       *     缩小它会让右侧营养素整体左移、也把环一起往左挪
+       *   · 三条营养素的间距 → 下面 Column 的 space: 7
+       *   · 三行垂直居中还是靠上 → 下面 Column 的 .justifyContent
+       *   · 整行还要更靠左 → 改最外层 Column 的 .padding({ left: … })，
+       *     见 build() 末尾（现在 left 是 8，改小就整体再靠左）
+       */
+      Row({ space: 8 }) {
+        /*
+         * 左侧：热量环。
+         *
+         * 用 Column 包一层是**必须的**：@Builder 调用返回 void，
+         * 不能把 .onClick 直接链在 this.kcalRing() 后面（编译不过）。
+         * 点击事件因此绑在这个外层 Column 上 —— 整块 68vp 宽、占满行高，
+         * 热区比圆本身大，不容易点空。
+         *
+         * 点击用 postCardAction（卡片专用的全局函数），**不要换成 FormLink**：
+         * 卡片实战文档给的写法就是 postCardAction + .onClick，
+         * FormLink 这个容器组件在这里的表现是「点了没反应」（实测过）。
+         */
+        Column() {
+          this.kcalRing()
+        }
+        .width(68)
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+        .onClick(() => {
+          postCardAction(this, {
+            action: 'router',
+            abilityName: ENTRY_ABILITY
+          });
+        })
+
+        /*
+         * 右侧：有记录 → 三条营养素进度；没记录 → 一句引导。
+         *
+         * emptyDay 是后端算好的布尔值（不在卡片里判断 intake <= 0，那是派生）。
+         * 整块**不加 .onClick** —— 用户要求这块不响应点击，减少误触。
+         */
+        if (this.emptyDay) {
+          Column({ space: 5 }) {
+            Text(this.emptyTitle)
               .fontSize(12)
               .fontColor(COLOR_TEXT_SUB)
-            Text('点下面拍一张')
+            Text(this.emptyHint)
               .fontSize(10)
               .fontColor(COLOR_TEXT_SUB)
           }
           .layoutWeight(1)
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Start)
         } else {
-          Column({ space: 9 }) {
-            this.macroBar('蛋白', this.protein, this.proteinTarget)
-            this.macroBar('脂肪', this.fat, this.fatTarget)
-            this.macroBar('碳水', this.carb, this.carbTarget)
+          Column({ space: 7 }) {
+            // 三个参数依次是：标签、已吃/目标文案、进度百分比、配色
+            // 全部由后端算好（CardData），这里只透传
+            this.macroBar('蛋白', this.proteinText, this.proteinPct, this.proteinColor)
+            this.macroBar('脂肪', this.fatText, this.fatPct, this.fatColor)
+            this.macroBar('碳水', this.carbText, this.carbPct, this.carbColor)
           }
           .layoutWeight(1)
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Start)
         }
       }
@@ -111,57 +244,116 @@ struct CalorieCard {
       .layoutWeight(1)
       .alignItems(VerticalAlign.Center)
 
-      Divider().color(COLOR_TRACK).margin({ top: 6, bottom: 6 })
-
-      // ------------------------------------------------ 下半：拍照记录
       /*
-       * FormLink 是卡片专用的跳转组件（普通 router 在卡片里不可用）。
-       * 带 params.cardRoute='camera'，EntryAbility 读到后会让首页跳拍照页；
-       * 卡片其它区域不带参数，落到首页即可。
+       * ═══════════════ ③ 底部按钮行：拍照记录（左，宽） + 刷新（右，窄） ═══════════════
+       *
+       * 两个按钮并排，宽度比由 layoutWeight 决定（左 2 : 右 1）。
+       * 想改成等宽就把两边的 layoutWeight 都改成 1。
+       *
+       * 想调：
+       *   · 两按钮间距     → 这行 Row 的 space: 8
+       *   · 与中部的距离   → 这行 Row 的 .margin({ top: 6 })
+       *   · 按钮高度/圆角  → 各自 Text/Row 的 .height(30) / .borderRadius(15)
+       *                      （圆角取高度的一半才是胶囊形）
+       *
+       * 都用 Text / Row 模拟按钮而不是 Button —— 见文件头约束 2。
        */
-      FormLink({
-        action: 'router',
-        abilityName: 'EntryAbility',
-        params: { cardRoute: ROUTE_CAMERA }
-      }) {
+      Row({ space: 8 }) {
+        /*
+         * 拍照记录（左，主操作）：router 事件拉起应用，
+         * 带 cardRoute 让首页跳拍照页（处理入口 Index.consumeCardRoute）。
+         */
         Row() {
           Text('📷').fontSize(13)
           Text('拍照记录')
-            .fontSize(13)
+            .fontSize(12)
             .fontWeight(FontWeight.Medium)
             .fontColor(Color.White)
-            .margin({ left: 5 })
+            .margin({ left: 4 })
         }
-        .width('100%')
-        .height(32)
+        .height(30)
+        .layoutWeight(2)
         .justifyContent(FlexAlign.Center)
         .backgroundColor(COLOR_PRIMARY)
-        .borderRadius(10)
+        .borderRadius(15)
+        .onClick(() => {
+          postCardAction(this, {
+            action: 'router',
+            abilityName: ENTRY_ABILITY,
+            params: { cardRoute: ROUTE_CAMERA }
+          });
+        })
+
+        /*
+         * 刷新（右，次要）：message 事件交给 FormExtensionAbility 重算并回推，
+         * 不拉起应用（处理入口 CalorieCardAbility.onFormEvent）。
+         *
+         * 用浅底而不是主色：它是次要操作，不该和「拍照记录」抢视觉重量。
+         */
+        Text('刷新')
+          .fontSize(12)
+          .fontColor(COLOR_TEXT)
+          .textAlign(TextAlign.Center)
+          .height(30)
+          .layoutWeight(1)
+          .backgroundColor(COLOR_TRACK)
+          .borderRadius(15)
+          .onClick(() => {
+            postCardAction(this, {
+              action: 'message',
+              params: { action: ACTION_REFRESH }
+            });
+          })
       }
       .width('100%')
+      .margin({ top: 6 })
     }
     .width('100%')
     .height('100%')
-    .padding(12)
+    /*
+     * 卡片内边距。
+     *
+     * left 比 right 小是**故意的**：环和营养素条都靠左，左边留白少一点
+     * 整体视觉就更贴左（用户要求「环和营养素靠左一点」）。
+     * 想整体再往左，把这个 left 继续改小；想左右对称就取同一个值。
+     *
+     * 注意这个值同时决定了可用内容宽度：2x2 卡片本体约 155vp 宽，
+     * 减去左右内边距才是环 + 营养素能用的空间。
+     */
+    .padding({ left: 8, right: 12, top: 10, bottom: 10 })
     .backgroundColor('#FFFFFF')
     .borderRadius(16)
   }
 
-  /** 左侧热量环：环形进度 + 中心数字 */
+  /**
+   * 左侧热量环：环形进度 + 中心数字。
+   *
+   * 想调：
+   *   · 环的大小 → Progress 与 Stack 的 .width/.height（**两处必须一起改**，
+   *                只改一个会让圆和中间的数字错位）
+   *                还要 ≤ 左列容器的 .width(68)，超了会被裁掉
+   *   · 环的粗细 → .style({ strokeWidth: 7 })
+   *   · 数字字号 → 上面那个 Text 的 .fontSize(15)
+   *   · 分母字号 → 下面那个 Text 的 .fontSize(9)
+   *
+   * Progress 的 value/total 直接用 intake/budget 两个原始数字 ——
+   * Progress 需要的是「值 + 总量」而不是百分比字符串，这属于贴值。
+   * 真正的百分比字符串 kcalRingPct 也由后端算好了，但这里用不上。
+   */
   @Builder
-  ring() {
+  kcalRing() {
     Stack() {
       Progress({ value: this.intake, total: this.budget > 0 ? this.budget : 1, type: ProgressType.Ring })
-        .width(74)
-        .height(74)
+        .width(60)
+        .height(60)
         .color(COLOR_PRIMARY)
         // 底环用浅灰，未完成部分才看得出刻度感
         .backgroundColor(COLOR_TRACK)
-        .style({ strokeWidth: 7 })
+        .style({ strokeWidth: 6 })
 
-      Column({ space: 1 }) {
+      Column({ space: 0 }) {
         Text(`${this.intake}`)
-          .fontSize(17)
+          .fontSize(15)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLOR_TEXT)
         Text(`/ ${this.budget}`)
@@ -169,20 +361,32 @@ struct CalorieCard {
           .fontColor(COLOR_TEXT_SUB)
       }
     }
-    .width(74)
-    .height(74)
+    .width(60)
+    .height(60)
   }
 
-  /** 一条营养素：标签 + 细进度条 + 克数 */
+  /**
+   * 一条营养素：标签 + 细进度条 + 克数。
+   *
+   * 想调：
+   *   · 条的粗细     → Stack 内两个 Row 的 .height(4)
+   *                    （**底层轨道与上层进度条必须同高**，否则会露出底色边）
+   *   · 标签/数值字号 → 两个 Text 的 .fontSize
+   *   · 标签与数值的左右分布 → 那个 Row 里的 Blank()
+   *
+   * 四个参数都是后端算好的成品：标签文字、文案、百分比、颜色。
+   * 进度条宽度直接吃百分比字符串（形如 "62%"），这里**不做任何运算**
+   *（见文件头约束 1：卡片里做派生会读不到值）。
+   */
   @Builder
-  macroBar(label: string, now: number, target: number) {
+  macroBar(label: string, text: string, pct: string, color: string) {
     Column({ space: 3 }) {
       Row() {
         Text(label)
           .fontSize(10)
           .fontColor(COLOR_TEXT_SUB)
         Blank()
-        Text(`${now} / ${target} g`)
+        Text(text)
           .fontSize(9)
           .fontColor(COLOR_TEXT_SUB)
       }
@@ -193,12 +397,12 @@ struct CalorieCard {
         Row()
           .width('100%')
           .height(4)
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_TRACK)
           .borderRadius(2)
         Row()
-          .width(`${CalorieCard.ratio(now, target) * 100}%`)
+          .width(pct)
           .height(4)
-          .backgroundColor(COLOR_PRIMARY)
+          .backgroundColor(color)
           .borderRadius(2)
       }
       .width('100%')

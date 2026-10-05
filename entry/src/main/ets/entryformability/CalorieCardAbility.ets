@@ -6,6 +6,9 @@
  *
  * 必须在 onCreate 里调 Store.init(this.context)：不初始化的话
  * Store 的读取全部返回默认值，卡片会一直显示 0（而不是报错），很难排查。
+ *
+ * **所有派生计算都在 CardData 里做完**，这里只负责「读数据 → 转 payload → 推送」。
+ * 卡片 UI 不做任何运算（原因见 CardData.ets 顶部说明）。
  */
 import { formBindingData, FormExtensionAbility, formInfo, formProvider } from '@kit.FormKit';
 import { Want } from '@kit.AbilityKit';
@@ -15,32 +18,12 @@ import { Store } from '../common/Store';
 import { todayKey } from '../common/DateUtil';
 import { DailyService, HomeData } from '../service/DailyService';
 import { macroTargetFor, MacroTarget } from '../model/Enums';
+import { CardData } from '../widget/CardData';
 
 const DOMAIN = 0x0000;
 
-/**
- * 兜底默认预算（千卡）。
- *
- * 只在读不到档案时使用（例如首次安装、还没走设置向导）。
- * 不能给 0：卡片会先渲染一帧「0 / 0」再跳到真实值，用户看到的是闪一下。
- * 取 2000 接近普通成年人的维持热量，即使兜底也不会显示得离谱。
- */
-const DEFAULT_BUDGET: number = 2000;
-
-/*
- * 其余兜底值。
- *
- * 摄入与已吃克数保持一致：都是 0（今天还没记录），这是**真实**的展示值，
- * 不要为了「看起来有内容」编数字 —— 那会让用户以为已经记过了。
- * 有内容的部分（预算与营养素目标）已经给足，环与三条进度条都有刻度，
- * 整张卡片不会显得像没加载出来。
- *
- * 这几个值必须与 CalorieCard.ets 里 @LocalStorageProp 的声明初值一致。
- */
-const DEFAULT_INTAKE: number = 0;
-const DEFAULT_PROTEIN: number = 0;
-const DEFAULT_FAT: number = 0;
-const DEFAULT_CARB: number = 0;
+/** 卡片「刷新」按钮发来的业务动作名，与 CalorieCard.ets 里保持一致 */
+const ACTION_REFRESH: string = 'refresh';
 
 export default class CalorieCardAbility extends FormExtensionAbility {
 
@@ -67,8 +50,13 @@ export default class CalorieCardAbility extends FormExtensionAbility {
     return d;
   }
 
-  /** 数据变化后作废缓存（应用侧改完记录可以让卡片下次刷新拿到新值） */
-  private static invalidateCache(): void {
+  /**
+   * 数据变化后作废缓存。
+   *
+   * 应用侧记完一笔后调 formProvider.reloadAllForms()，系统会回调
+   * onUpdateForm；不清缓存的话那次回调拿到的还是旧数据，卡片不会变。
+   */
+  static invalidateCache(): void {
     CalorieCardAbility.cachedData = null;
     CalorieCardAbility.cachedDay = '';
   }
@@ -76,63 +64,22 @@ export default class CalorieCardAbility extends FormExtensionAbility {
   /**
    * 把当日汇总整理成卡片能用的扁平数据。
    *
-   * 卡片页面只做展示，不在里面读存储 —— 卡片 UI 里写业务逻辑
-   * 会在每次刷新时重复执行，而且读不到就整块空白，不如在这里兜住。
-   *
-   * 兜底值必须与 CalorieCard.ets 里 @LocalStorageProp 的声明初值
-   * **逐一对齐**：卡片在绑定数据到位前会先按声明初值渲染一帧，
-   * 两边不一致时那一帧的数字和最终值不同，看起来就是「闪一下」。
+   * 读存储失败时返回 CardData.fallback()，保证卡片永远有内容可渲染
+   *（而不是整块空白）。
    */
   private static buildData(): Record<string, Object> {
-    const data: Record<string, Object> = CalorieCardAbility.fallbackData();
     try {
       const home: HomeData = DailyService.homeData(todayKey());
-      const budget: number = Math.round(home.summary.budget);
+      const target: MacroTarget = macroTargetFor(home.summary.budget);
+      const data: CardData = CardData.from(home.summary, target);
       hilog.info(DOMAIN, 'CalorieLite',
         'card data: storeReady=%{public}s budget=%{public}d intake=%{public}d',
-        `${Store.isReady()}`, budget, Math.round(home.summary.intake));
-
-      if (budget > 0) {
-        // 推荐克数按当日预算推算，与首页同源，避免两处数字互相矛盾
-        const t: MacroTarget = macroTargetFor(budget);
-        data['budget'] = budget;
-        data['proteinTarget'] = t.protein;
-        data['fatTarget'] = t.fat;
-        data['carbTarget'] = t.carb;
-      }
-      // 摄入与已吃克数可以真是 0（今天还没记录），照实写
-      data['intake'] = Math.round(home.summary.intake);
-      data['protein'] = Math.round(home.summary.protein);
-      data['fat'] = Math.round(home.summary.fat);
-      data['carb'] = Math.round(home.summary.carb);
+        `${Store.isReady()}`, data.budget, data.intake);
+      return data.toPayload();
     } catch (err) {
       hilog.error(DOMAIN, 'CalorieLite', 'card data build failed: %{public}s', JSON.stringify(err));
+      return CardData.fallback().toPayload();
     }
-    return data;
-  }
-
-  /**
-   * 兜底数据。
-   *
-   * 与 CalorieCard.ets 的 @LocalStorageProp 初值保持一致，
-   * 这样「绑定数据还没到」那一帧与真实数据帧长得一样，不会闪。
-   *
-   * 刻意**不填全 0**：全 0 时环形是空的、三条营养素条也是空的，
-   * 整张卡片看着像没加载出来；给一组正常值后，
-   * 「还没记录」在观感上就是「今天刚开始」，而不是「卡片坏了」。
-   */
-  private static fallbackData(): Record<string, Object> {
-    const data: Record<string, Object> = {};
-    const t: MacroTarget = macroTargetFor(DEFAULT_BUDGET);
-    data['intake'] = DEFAULT_INTAKE;
-    data['budget'] = DEFAULT_BUDGET;
-    data['protein'] = DEFAULT_PROTEIN;
-    data['fat'] = DEFAULT_FAT;
-    data['carb'] = DEFAULT_CARB;
-    data['proteinTarget'] = t.protein;
-    data['fatTarget'] = t.fat;
-    data['carbTarget'] = t.carb;
-    return data;
   }
 
   /** 添加卡片：给出初始数据 */
@@ -144,17 +91,21 @@ export default class CalorieCardAbility extends FormExtensionAbility {
   }
 
   /**
-   * 定时刷新（updateDuration=1，即每 30 分钟一次）。
+   * 刷新卡片：系统定时刷新（updateDuration=1，即 30 分钟）触发，
+   * 以及主应用调 reloadAllForms() 后由系统回调。
    *
-   * 只负责把最新数据推给卡片；卡片页面收到后自行重绘。
-   * 数据走 dataForToday() 的缓存，同一天不会因为
-   * onAddForm / onUpdateForm 先后触发而推两份不同的内容。
+   * 每次都重算 —— 这正是「记完一笔，卡片跟着变」生效的地方，
+   * 所以这里**不能**走带缓存的 dataForToday()（那会一直推旧值）。
    */
   onUpdateForm(formId: string): void {
     Store.init(this.context);
     try {
+      const fresh: Record<string, Object> = CalorieCardAbility.buildData();
+      // 顺手刷新缓存，避免下一次 onAddForm 推到旧内容
+      CalorieCardAbility.cachedDay = todayKey();
+      CalorieCardAbility.cachedData = fresh;
       const binding: formBindingData.FormBindingData =
-        formBindingData.createFormBindingData(CalorieCardAbility.dataForToday());
+        formBindingData.createFormBindingData(fresh);
       // 用 formProvider 而不是 this.context.updateForm：
       // FormExtensionContext 上没有 updateForm 方法（实测编译报
       // 「Property 'updateForm' does not exist on type 'FormExtensionContext'」）。
@@ -169,6 +120,72 @@ export default class CalorieCardAbility extends FormExtensionAbility {
 
   onCastToNormalForm(formId: string): void {
     // 本卡片不支持临时转常驻
+  }
+
+  /**
+   * 卡片上的「刷新」按钮走这里。
+   *
+   * 卡片 UI 通过 postCardAction({action:'message', params:{action:'refresh'}})
+   * 把事件发过来，这里重算并推送。用 message 而不是 router：
+   * 刷新只是换数据，不该把用户拉到应用里去。
+   *
+   * message 的 JSON 结构在不同资料里表述不一（可能是完整对象、也可能只有
+   * params 内容），所以按文档建议做**防御式解析**，两种都认。
+   */
+  onFormEvent(formId: string, message: string): void {
+    hilog.info(DOMAIN, 'CalorieLite', 'onFormEvent: %{public}s', message);
+    let action: string = CalorieCardAbility.parseAction(message);
+    if (action !== ACTION_REFRESH) {
+      return;
+    }
+    Store.init(this.context);
+    try {
+      // 与 onUpdateForm 一致：重算而不是读缓存，否则「刷新」刷不出新数据
+      const fresh: Record<string, Object> = CalorieCardAbility.buildData();
+      CalorieCardAbility.cachedDay = todayKey();
+      CalorieCardAbility.cachedData = fresh;
+      formProvider.updateForm(formId, formBindingData.createFormBindingData(fresh))
+        .catch((e: Error) => {
+          hilog.error(DOMAIN, 'CalorieLite', 'refresh updateForm failed: %{public}s', e.message);
+        });
+    } catch (err) {
+      hilog.error(DOMAIN, 'CalorieLite', 'onFormEvent failed: %{public}s', JSON.stringify(err));
+    }
+  }
+
+  /**
+   * 从 message 里取出业务动作名。
+   *
+   * 兼容三种可能形态（文档实测过的三种）：
+   *   '{"action":"message","params":{"action":"refresh"}}' → params.action
+   *   '{"action":"refresh"}'                              → 顶层 action
+   *   'refresh'（纯字符串，不是合法 JSON）                  → 原文
+   * 兜底取顶层 action 时要排除 'message' 本身 —— 那是事件类型，不是业务动作。
+   */
+  private static parseAction(message: string): string {
+    if (message === null || message === undefined || message.length === 0) {
+      return '';
+    }
+    try {
+      const obj: Record<string, Object> = JSON.parse(message) as Record<string, Object>;
+      const paramsObj: Object | undefined = obj['params'];
+      if (paramsObj !== null && paramsObj !== undefined) {
+        const inner: Record<string, Object> = paramsObj as Record<string, Object>;
+        const innerAction: Object | undefined = inner['action'];
+        if (typeof innerAction === 'string' && innerAction.length > 0) {
+          return innerAction as string;
+        }
+      }
+      const topAction: Object | undefined = obj['action'];
+      if (typeof topAction === 'string' && (topAction as string) !== 'message'
+        && (topAction as string).length > 0) {
+        return topAction as string;
+      }
+      return '';
+    } catch (e) {
+      // 不是合法 JSON，可能就是纯动作字符串
+      return message;
+    }
   }
 
   onRemoveForm(formId: string): void {

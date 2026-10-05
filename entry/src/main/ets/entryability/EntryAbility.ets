@@ -41,6 +41,9 @@ export default class EntryAbility extends UIAbility {
 
     this.cardRoute = EntryAbility.readCardRoute(want);
 
+    // 把 context 交给 AppState：页面里记完一笔要靠它刷新桌面卡片
+    AppState.setAbilityContext(this.context);
+
     hilog.info(DOMAIN, 'CalorieLite', '%{public}s', 'Ability onCreate');
   }
 

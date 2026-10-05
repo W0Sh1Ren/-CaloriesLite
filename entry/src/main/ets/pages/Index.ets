@@ -16,7 +16,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 import { MealType, FoodRecord, ExerciseRecord } from '../model/Types';
-import { MEAL_ORDER, mealTypeLabel, macroTargetFor } from '../model/Enums';
+import { MEAL_ORDER, mealTypeLabel, macroTargetFor, guessMealType } from '../model/Enums';
 import { friendlyDate, todayKey, shiftDay, hourOf } from '../common/DateUtil';
 import { DailyService, HomeData } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
@@ -463,6 +463,15 @@ struct Index {
       // 自增版本号，驱动环等自绘组件重绘
       this.dataVersion++;
       this.scheduleImageMaintenance();
+      /*
+       * 顺手刷新桌面卡片。
+       *
+       * 放在 reload 里而不是每个「保存成功」的分支里：reload 是当日数据
+       * 变更的唯一汇聚点（别的页面写入后都会回调到 dataListener → reload），
+       * 写一处就覆盖全部入口 —— 拍照确认、补记、删除、运动、体重。
+       * reload 有重入守卫，卡片刷新也不会反向触发这里，不会形成回路。
+       */
+      AppState.refreshCard();
     } catch (err) {
       const e: Error = err as Error;
       hilog.error(DOMAIN, 'CalorieLite', 'reload failed: %{public}s', e.message);
@@ -913,10 +922,10 @@ struct Index {
   /**
    * 处理桌面卡片带来的跳转意图。
    *
-   * 卡片的「拍照记录」区带 cardRoute='camera' 拉起应用，
+   * 卡片的「拍照记录」按钮带 cardRoute='camera' 拉起应用，
    * EntryAbility 写进 AppState，这里读走并跳到拍照页，读完清空
    *（否则每次刷新都会重新跳一次）。
-   * 卡片其它区域不带参数，落到首页即可，无需处理。
+   * 卡片左侧的环不带参数，落到首页即可，无需处理。
    */
   private consumeCardRoute(): void {
     const route: string = AppState.cardRoute;
@@ -925,6 +934,18 @@ struct Index {
     }
     AppState.cardRoute = '';
     if (route === 'camera') {
+      /*
+       * 点卡片按钮记的是**今天**，所以这里必须显式把目标日期设成今天。
+       *
+       * 不设的话会沿用 AppState.targetDay 里残留的值：用户可能刚在
+       * 记录页翻到 10 月 3 日补记过（那个日期会留在 targetDay 里），
+       * 之后从桌面卡片点「拍照记录」，记录会落到 10 月 3 日而不是今天。
+       */
+      AppState.targetDay = todayKey();
+      // 餐次按当前时间猜，用户也可以在结果页改
+      AppState.targetMeal = guessMealType(hourOf(Date.now()));
+      // 卡片是「回首页看看」的入口，先把视图切回今天那一页
+      this.switchTo(0);
       try {
         router.pushUrl({ url: 'pages/Camera' });
       } catch (err) {

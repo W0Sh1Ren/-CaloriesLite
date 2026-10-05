@@ -9,6 +9,10 @@
  */
 import { DailySummary, FoodDraft, MealType } from '../model/Types';
 import { todayKey } from './DateUtil';
+import { common } from '@kit.AbilityKit';
+import { formProvider } from '@kit.FormKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 /** 拍照识别页 → 首页 的待确认结果 */
 export class PendingResult {
@@ -161,6 +165,49 @@ export class AppState {
    * 而且应用未启动时还没建立路由栈，只能等首页加载完再跳。
    */
   static cardRoute: string = '';
+
+  /**
+   * UIAbility 的上下文，供刷新桌面卡片用（EntryAbility 在 onCreate 时存入）。
+   *
+   * formProvider.reloadAllForms 只能在 UIAbility 里调用，且需要它的 context；
+   * 记录保存发生在页面里，所以在这里存一份。
+   */
+  private static abilityContext: common.UIAbilityContext | null = null;
+
+  /** EntryAbility 启动时调用 */
+  static setAbilityContext(ctx: common.UIAbilityContext): void {
+    AppState.abilityContext = ctx;
+  }
+
+  /**
+   * 通知系统刷新桌面卡片。
+   *
+   * 用 reloadAllForms 而不是 updateForm：后者需要 formId，而 formId 只在
+   * FormExtensionAbility.onAddForm 时拿得到，主应用进程与之不共享内存
+   *（要跨进程共享得把 formId 落盘，见卡片实战文档第 9 节）。
+   * reloadAllForms 由系统广播给卡片服务，卡片服务再走 onUpdateForm 重算，
+   * 不需要主应用知道 formId。
+   *
+   * 失败只记日志：「记完一笔卡片立刻变」是体验优化，
+   * 失败还有 30 分钟的定时刷新兜底，不该影响记录本身。
+   */
+  static refreshCard(): void {
+    const ctx: common.UIAbilityContext | null = AppState.abilityContext;
+    if (ctx === null) {
+      return;
+    }
+    try {
+      formProvider.reloadAllForms(ctx)
+        .then((n: number) => {
+          hilog.info(0x0000, 'CalorieLite', 'reloadAllForms -> %{public}d', n);
+        })
+        .catch((e: BusinessError) => {
+          hilog.warn(0x0000, 'CalorieLite', 'reloadAllForms failed: %{public}s', e.message);
+        });
+    } catch (err) {
+      hilog.warn(0x0000, 'CalorieLite', 'reloadAllForms unavailable');
+    }
+  }
 
   static clearPending(): void {
     AppState.pending = null;

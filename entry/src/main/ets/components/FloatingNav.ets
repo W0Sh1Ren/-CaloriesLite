@@ -23,9 +23,9 @@ import {
  * 用极淡的绿而不是纯白：白色在浅色内容上几乎看不见，
  * 而品牌绿既能被识别为「这是可交互的」又不会盖住图标。
  */
-const GLOW_RGBA: string = 'rgba(34, 197, 94, 0.30)';
+const GLOW_RGBA: string = 'rgba(34, 197, 94, 0.75)';
 /** 光斑半径（vp）。略大于一个格子的半宽，扫过一格时光感是连续的 */
-const GLOW_RADIUS: number = 78;
+const GLOW_RADIUS: number = 120;
 
 /**
  * 玻璃边缘的对比度描边。
