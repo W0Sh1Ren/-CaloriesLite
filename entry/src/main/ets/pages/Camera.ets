@@ -16,9 +16,12 @@ import { ImageService, PreparedImage, ImageError } from '../service/ImageService
 import { VisionService, VisionResult, VisionError } from '../service/VisionService';
 import { PermissionUtil } from '../common/PermissionUtil';
 import { AppState, PendingResult } from '../common/AppState';
-import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_MEAL_EXPAND, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
 
 const DOMAIN = 0x0000;
+
+/** 空状态引导区的完整高度（vp），收起时插值到 0 */
+const HINT_FULL_H: number = 180;
 
 /** 一次最多几张照片 */
 const MAX_IMAGES: number = 4;
@@ -44,13 +47,14 @@ struct CameraPage {
   @State meal: MealType = MealType.LUNCH;
 
   /**
-   * 是否正在输入「吃了什么」。
+   * 空状态图片区的高度与透明度（vp）。
    *
-   * 为 true 时把上面那块 180vp 的空状态图片区收掉：
-   * 键盘弹起后可视高度只剩约 450vp，留着它会把输入框与「估算热量」
-   * 一起挤出视野。收起后两者都留在键盘上方，相对位置也不变。
+   * 输入时在 180 ↔ 0 之间插值，配合透明度做淡出淡入。
+   * 不能靠条件渲染切换：那样没有中间帧、观感是硬闪
+   *（详见 docs/展开动画3.0.md 的结论）。
    */
-  @State typing: boolean = false;
+  @State hintH: number = HINT_FULL_H;
+  @State hintAlpha: number = 1;
 
   aboutToAppear(): void {
     // 进来就把目标日期固定下来：供识别结果页与返回首页使用
@@ -73,6 +77,23 @@ struct CameraPage {
 
   private uiContext(): common.UIAbilityContext {
     return this.getUIContext().getHostContext() as common.UIAbilityContext;
+  }
+
+  /**
+   * 输入状态切换时，带动画地收起 / 展开上方的空状态引导。
+   *
+   * 高度与透明度在同一个 animateTo 里插值，两端都是数字，
+   * 所以有中间帧；时长与缓动沿用项目里餐次折叠那套（DUR_MEAL_EXPAND + EaseInOut），
+   * 手感保持一致。
+   */
+  private setTyping(on: boolean): void {
+    this.getUIContext().animateTo({
+      duration: DUR_MEAL_EXPAND,
+      curve: Curve.EaseInOut
+    }, () => {
+      this.hintH = on ? 0 : HINT_FULL_H;
+      this.hintAlpha = on ? 0 : 1;
+    });
   }
 
   /**
@@ -306,34 +327,37 @@ struct CameraPage {
           // ------------------------------------------------ 图片区
           if (this.imageUris.length === 0) {
             /*
-             * 正在输入时把这块空状态提示收掉。
+             * 空状态引导区：**始终挂载**，只动高度与透明度。
              *
-             * 它高 180vp，只是「还没拍照」的引导，不是内容。
-             * 键盘弹起后可视高度只剩约 450vp，留着它会把下面的
-             * 输入框和「估算热量」一起挤出视野（实测按钮正好滑出）。
-             * 收起后输入框与按钮自然浮到键盘上方，且两者的相对位置不变
-             * —— 符合「按钮跟着输入框一起动」的要求。
+             * 不要用 if (typing) 条件渲染 —— 那样高度是瞬间从 180 跳到 0，
+             * 观感是硬闪（本项目在餐次折叠、个人情况展开上都踩过这个坑，
+             * 见 docs/展开动画3.0.md）。
+             * 始终挂载 + .height() 在数字之间插值，才有中间帧。
+             * clip(true) 负责把超出的内容裁掉，视觉上就是「收起来」。
+             *
+             * 收起它是因为：键盘弹起后可视高度只剩约 450vp，
+             * 这块 180vp 的引导会把输入框和「估算热量」一起挤出视野。
              */
-            if (!this.typing) {
-              Column({ space: 8 }) {
-                Text('📷')
-                  .fontSize(44)
-                Text('拍照识别，或直接写吃了什么')
-                  .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
-                  .textAlign(TextAlign.Center)
-                Text(`照片可选，最多 ${MAX_IMAGES} 张；同一餐多拍几张，模型会合并判断`)
-                  .fontSize(11)
-                  .fontColor(COLOR_TEXT_SUB)
-                  .textAlign(TextAlign.Center)
-              }
-              .width('100%')
-              .height(180)
-              .justifyContent(FlexAlign.Center)
-              .backgroundColor(COLOR_CARD)
-              .borderRadius(RADIUS)
-              .shadow(CARD_SHADOW)
+            Column({ space: 8 }) {
+              Text('📷')
+                .fontSize(44)
+              Text('拍照识别，或直接写吃了什么')
+                .fontSize(13)
+                .fontColor(COLOR_TEXT_SUB)
+                .textAlign(TextAlign.Center)
+              Text(`照片可选，最多 ${MAX_IMAGES} 张；同一餐多拍几张，模型会合并判断`)
+                .fontSize(11)
+                .fontColor(COLOR_TEXT_SUB)
+                .textAlign(TextAlign.Center)
             }
+            .width('100%')
+            .height(this.hintH)
+            .justifyContent(FlexAlign.Center)
+            .backgroundColor(COLOR_CARD)
+            .borderRadius(RADIUS)
+            .shadow(CARD_SHADOW)
+            .clip(true)
+            .opacity(this.hintAlpha)
           } else {
             // 缩略图横向排列，每张右上角带删除
             Scroll() {
@@ -418,13 +442,12 @@ struct CameraPage {
               .onChange((v: string) => {
                 this.notes = v;
               })
-              // 输入中获得/失去焦点：用来收起上方那块空状态提示，
-              // 腾出高度让输入框和「估算热量」都留在键盘上方
+              // 聚焦/失焦：带动画地收起或展开上方那块空状态引导
               .onFocus(() => {
-                this.typing = true;
+                this.setTyping(true);
               })
               .onBlur(() => {
-                this.typing = false;
+                this.setTyping(false);
               })
           }
           .width('100%')
