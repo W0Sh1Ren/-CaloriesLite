@@ -27,7 +27,51 @@ const DOMAIN = 0x0000;
  */
 const DEFAULT_BUDGET: number = 2000;
 
+/*
+ * 其余兜底值。
+ *
+ * 摄入与已吃克数保持一致：都是 0（今天还没记录），这是**真实**的展示值，
+ * 不要为了「看起来有内容」编数字 —— 那会让用户以为已经记过了。
+ * 有内容的部分（预算与营养素目标）已经给足，环与三条进度条都有刻度，
+ * 整张卡片不会显得像没加载出来。
+ *
+ * 这几个值必须与 CalorieCard.ets 里 @LocalStorageProp 的声明初值一致。
+ */
+const DEFAULT_INTAKE: number = 0;
+const DEFAULT_PROTEIN: number = 0;
+const DEFAULT_FAT: number = 0;
+const DEFAULT_CARB: number = 0;
+
 export default class CalorieCardAbility extends FormExtensionAbility {
+
+  /**
+   * 已算好的数据缓存，键是 dayKey。
+   *
+   * onAddForm 与 onUpdateForm 会先后触发，如果每次都重算并推送，
+   * 卡片就会被连续改写两次 —— 这是「闪一下」的一个来源。
+   * 同一天只算一次，两次回调推的是同一份内容，界面就不会二次跳动。
+   * 换天（dayKey 变化）时自动重算。
+   */
+  private static cachedDay: string = '';
+  private static cachedData: Record<string, Object> | null = null;
+
+  /** 取当日数据（带缓存），保证同一份内容不会被反复推送 */
+  private static dataForToday(): Record<string, Object> {
+    const day: string = todayKey();
+    if (CalorieCardAbility.cachedData !== null && CalorieCardAbility.cachedDay === day) {
+      return CalorieCardAbility.cachedData;
+    }
+    const d: Record<string, Object> = CalorieCardAbility.buildData();
+    CalorieCardAbility.cachedDay = day;
+    CalorieCardAbility.cachedData = d;
+    return d;
+  }
+
+  /** 数据变化后作废缓存（应用侧改完记录可以让卡片下次刷新拿到新值） */
+  private static invalidateCache(): void {
+    CalorieCardAbility.cachedData = null;
+    CalorieCardAbility.cachedDay = '';
+  }
 
   /**
    * 把当日汇总整理成卡片能用的扁平数据。
@@ -35,25 +79,19 @@ export default class CalorieCardAbility extends FormExtensionAbility {
    * 卡片页面只做展示，不在里面读存储 —— 卡片 UI 里写业务逻辑
    * 会在每次刷新时重复执行，而且读不到就整块空白，不如在这里兜住。
    *
-   * 所有字段都保证是**有意义的非零默认值**：
-   * 卡片那边 @LocalStorageProp 的默认值是 0，绑定数据到位前会先渲染一帧，
-   * 若这里也给 0，用户看到的就是「先闪一下 0 / 0 再变成真实数字」。
-   * 给默认预算后，那一帧显示的是 0 / 2000，观感是正常的「今天还没吃」。
+   * 兜底值必须与 CalorieCard.ets 里 @LocalStorageProp 的声明初值
+   * **逐一对齐**：卡片在绑定数据到位前会先按声明初值渲染一帧，
+   * 两边不一致时那一帧的数字和最终值不同，看起来就是「闪一下」。
    */
   private static buildData(): Record<string, Object> {
-    const data: Record<string, Object> = {};
-    data['intake'] = 0;
-    data['budget'] = DEFAULT_BUDGET;
-    data['protein'] = 0;
-    data['fat'] = 0;
-    data['carb'] = 0;
-    const dt: MacroTarget = macroTargetFor(DEFAULT_BUDGET);
-    data['proteinTarget'] = dt.protein;
-    data['fatTarget'] = dt.fat;
-    data['carbTarget'] = dt.carb;
+    const data: Record<string, Object> = CalorieCardAbility.fallbackData();
     try {
       const home: HomeData = DailyService.homeData(todayKey());
       const budget: number = Math.round(home.summary.budget);
+      hilog.info(DOMAIN, 'CalorieLite',
+        'card data: storeReady=%{public}s budget=%{public}d intake=%{public}d',
+        `${Store.isReady()}`, budget, Math.round(home.summary.intake));
+
       if (budget > 0) {
         // 推荐克数按当日预算推算，与首页同源，避免两处数字互相矛盾
         const t: MacroTarget = macroTargetFor(budget);
@@ -73,24 +111,50 @@ export default class CalorieCardAbility extends FormExtensionAbility {
     return data;
   }
 
+  /**
+   * 兜底数据。
+   *
+   * 与 CalorieCard.ets 的 @LocalStorageProp 初值保持一致，
+   * 这样「绑定数据还没到」那一帧与真实数据帧长得一样，不会闪。
+   *
+   * 刻意**不填全 0**：全 0 时环形是空的、三条营养素条也是空的，
+   * 整张卡片看着像没加载出来；给一组正常值后，
+   * 「还没记录」在观感上就是「今天刚开始」，而不是「卡片坏了」。
+   */
+  private static fallbackData(): Record<string, Object> {
+    const data: Record<string, Object> = {};
+    const t: MacroTarget = macroTargetFor(DEFAULT_BUDGET);
+    data['intake'] = DEFAULT_INTAKE;
+    data['budget'] = DEFAULT_BUDGET;
+    data['protein'] = DEFAULT_PROTEIN;
+    data['fat'] = DEFAULT_FAT;
+    data['carb'] = DEFAULT_CARB;
+    data['proteinTarget'] = t.protein;
+    data['fatTarget'] = t.fat;
+    data['carbTarget'] = t.carb;
+    return data;
+  }
+
   /** 添加卡片：给出初始数据 */
   onAddForm(want: Want): formBindingData.FormBindingData {
     Store.init(this.context);
-    return formBindingData.createFormBindingData(CalorieCardAbility.buildData());
+    // 用带缓存的入口：紧接着的 onUpdateForm 会拿到同一份内容，
+    // 卡片不会被连续改写两次（那是「闪一下」的一个来源）
+    return formBindingData.createFormBindingData(CalorieCardAbility.dataForToday());
   }
 
   /**
    * 定时刷新（updateDuration=1，即每 30 分钟一次）。
    *
    * 只负责把最新数据推给卡片；卡片页面收到后自行重绘。
-   * 另外卡片页面自己也挂了 1 分钟的定时器，那是为了在应用正在使用时
-   * 更快看到变化 —— 系统级的 updateForm 最快也是 30 分钟。
+   * 数据走 dataForToday() 的缓存，同一天不会因为
+   * onAddForm / onUpdateForm 先后触发而推两份不同的内容。
    */
   onUpdateForm(formId: string): void {
     Store.init(this.context);
     try {
       const binding: formBindingData.FormBindingData =
-        formBindingData.createFormBindingData(CalorieCardAbility.buildData());
+        formBindingData.createFormBindingData(CalorieCardAbility.dataForToday());
       // 用 formProvider 而不是 this.context.updateForm：
       // FormExtensionContext 上没有 updateForm 方法（实测编译报
       // 「Property 'updateForm' does not exist on type 'FormExtensionContext'」）。

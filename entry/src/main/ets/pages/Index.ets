@@ -32,20 +32,22 @@ import { MacroBar } from '../components/MacroBar';
 import { RollingNumber } from '../components/RollingNumber';
 import { GlassTopBar, topReserve } from '../components/GlassTopBar';
 import { RecordRow } from '../components/RecordRow';
+import { MealFold } from '../components/MealFold';
 import { FloatingNav, NavItem } from '../components/FloatingNav';
 import { HistoryTab } from './HistoryTab';
 import { ProfileTab } from './ProfileTab';
 
 const DOMAIN = 0x0000;
 
-/**
- * 餐次明细区高度的占位初值（vp），用于「展开动画 1.0」。
- *
- * 不能给 0：高度 0 时内层不被布局，onAreaChange 量不到真实高度，
- * 高度会永远是 0、展开后一片空白（循环依赖）。
- * 给一个足够容纳多条记录的值，量到真实高度后即被替换。
+/*
+ * 这里原本有个 MEAL_BODY_PLACEHOLDER_H = 400，是「展开动画 1.0/2.0初期」
+ * 用来让收起态内层能被布局的占位高度。已删除，原因：
+ *   1. 占位值与真实高度不同 → 展开瞬间按占位值渲染，看起来是跳一下；
+ *   2. 测量发生在「高度 = 占位值」的裁切容器里，内容超过 400 时
+ *      量到的值被截断，写回去长度永远不够（超过 5 道菜只显示 5 道）。
+ * 现在改成：收起态高度 0 但**不裁切**，内层按自然尺寸布局，
+ * onAreaChange 直接量到真实高度，不需要占位值。
  */
-const MEAL_BODY_PLACEHOLDER_H: number = 400;
 
 /**
  * 首页悬浮「拍照识别」按钮的高度。
@@ -142,14 +144,17 @@ struct Index {
   @State modalOpen: boolean = false;
 
   /**
-   * 餐次明细的展开动画状态（展开动画 1.0，见 docs/展开动画1.0.md）。
+   * 各餐次的展开透明度（展开动画 2.0）。
    *
-   * mealBodyH：明细区自然高度，初值是足够大的占位值而不是 0 ——
-   *   高度 0 时内层不被布局、onAreaChange 不触发，会陷入循环依赖。
-   * mealAlpha：透明度，**动效就来自它**（高度是即时变化的）。
+   * 明细区的**高度**由 MealFold 组件自己持有 @State —— 它必须按实例隔离，
+   * 放在这里用 Map<meal, number> 存时 onAreaChange 的归属不可靠，
+   * 会出现「箭头显示展开、内容却是空的」。
+   * 透明度留在这里，是因为它要在 toggleMeal 的 animateTo 里和展开状态
+   * 同一帧改变，动效才同步。
+   *
+   * 改动时换一个新 Map 才触发重建（ArkTS 只比较引用）。
    */
-  @State mealBodyH: number = MEAL_BODY_PLACEHOLDER_H;
-  @State mealAlpha: number = 0;
+  @State mealAlphaMap: Map<MealType, number> = new Map<MealType, number>();
 
   /**
    * 数据版本号：每次重读当日数据就自增，传给环等自绘组件做强制重绘。
@@ -438,6 +443,12 @@ struct Index {
     }
     this.isReloading = true;
     try {
+      /*
+       * 换日期后明细高度不需要在这里清理：
+       * 各餐次的明细高度由 MealFold 自己持有，而它的 content 会随
+       * 当日记录重建，onAreaChange 会重新报一次真实高度。
+       * （早期版本把高度缓存在页面里，换天必须手动清，否则沿用旧长度。）
+       */
       this.data = DailyService.homeData(this.dayKey);
       AppState.mirrorToday(this.data.summary);
       // 自增版本号，驱动环等自绘组件重绘
@@ -813,11 +824,12 @@ struct Index {
   /**
    * 展开/收起某一餐。
    *
-   * 套用「展开动画 1.0」（见 docs/展开动画1.0.md，在「我的 → 个人情况」
-   * 上定型、用户确认「非常好」）：
-   *   高度即时变化 + 透明度用 animateTo 插值 —— 动效来自透明度。
-   * 高度动画在这套结构下始终没有中间帧（.height() 从占位值跳到实测值
-   * 那一帧不可插值），所以不要改回靠高度做动效。
+   * 套用「展开动画 2.0」（docs/展开动画2.0.md）：
+   * 高度即时变化 + 透明度用 animateTo 插值，动效来自透明度。
+   *
+   * 明细的**高度**由 MealFold 组件各自持有 —— 早期版本把高度存在本组件里
+   * 用 Map<meal, number> 共用，结果是 onAreaChange 的归属不可靠，
+   * 出现「箭头显示展开、内容却是空的」。这里只维护「展开状态 + 透明度」。
    */
   private toggleMeal(meal: MealType): void {
     const next: MealType[] = [];
@@ -829,32 +841,40 @@ struct Index {
         next.push(m);
       }
     }
+    /*
+     * 展开与收起都不需要重置高度：高度在 MealFold 内部，
+     * 收起期间它已经量成真实值，展开时直接用它，起点就是对的。
+     * （早期版本在展开前把高度重置成占位值 400，
+     * 那个值与真实高度不同，于是展开瞬间会按 400 渲染一下 —— 看起来是跳一下。）
+     */
     if (!removed) {
       next.push(meal);
-      // 展开前恢复占位高度，逼它重新量一次（明细条数可能已变）
-      this.mealBodyH = MEAL_BODY_PLACEHOLDER_H;
       this.getUIContext().animateTo({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut }, () => {
         this.expandedMeals = next;
-        this.mealAlpha = 1;
+        this.setMealAlpha(meal, 1);
       });
       return;
     }
     this.getUIContext().animateTo({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut }, () => {
       this.expandedMeals = next;
-      this.mealAlpha = 0;
+      this.setMealAlpha(meal, 0);
     });
   }
 
-  /** 量餐次明细的自然高度（套用展开动画 1.0 的测量环节） */
-  private onMealBodyArea(area: Area): void {
-    const h: number = Number.parseFloat(`${area.height}`);
-    if (Number.isNaN(h) || h <= 0.5) {
-      return;
-    }
-    if (Math.abs(h - this.mealBodyH) < 0.5) {
-      return;
-    }
-    this.mealBodyH = h;
+  /** 取某餐的展开透明度 */
+  private mealAlphaOf(meal: MealType): number {
+    const v: number | undefined = this.mealAlphaMap.get(meal);
+    return v === undefined ? 0 : v;
+  }
+
+  /** 写某餐的展开透明度 */
+  private setMealAlpha(meal: MealType, a: number): void {
+    const next: Map<MealType, number> = new Map<MealType, number>();
+    this.mealAlphaMap.forEach((v: number, k: MealType) => {
+      next.set(k, v);
+    });
+    next.set(meal, a);
+    this.mealAlphaMap = next;
   }
 
   /**
@@ -936,70 +956,38 @@ struct Index {
       }
 
       /*
-       * 明细区：套一层「按高度收缩 + 裁切 + 透明度」的容器，
-       * 套用展开动画 1.0（见 docs/展开动画1.0.md）。
+       * 明细区：交给 MealFold 自己量高度、自己做展开动画。
+       *
+       * 高度状态必须由子组件各自持有：放在这里用 Map<meal, h> 存时，
+       * onAreaChange 报的是哪一张不可靠，会出现「箭头显示展开、内容是空的」。
+       * 组件实例天然隔离，不需要 key。
        */
-      Column() {
-        if (this.isExpanded(meal)) {
-          Column({ space: 8 }) {
-            if (DailyService.recordsOf(this.data.records, meal).length === 0) {
-              Row() {
-                Text('还没有记录')
-                  .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
-              }
-              .width('100%')
-              .padding(14)
-            } else {
-              ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
-                RecordRow({
-                  record: record,
-                  onDelete: (id: string) => {
-                    const target: FoodRecord | undefined =
-                      this.data.records.find((r: FoodRecord) => r.id === id);
-                    if (target !== undefined) {
-                      this.confirmDelete(target);
-                    }
-                  }
-                })
-              }, (record: FoodRecord) => record.id)
-            }
-          }
-          .width('100%')
-          // 浅底块：与白色卡片形成第二层，明细区一眼是「卡片里的内容」
-          .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-          .backgroundColor(COLOR_BG)
-          /*
-           * 底部的圆角要跟着卡片：卡片圆角 18、外层 padding 0，
-           * 明细块在最底下，不补圆角就会溢出卡片边角。
-           */
-          .borderRadius({ bottomLeft: RADIUS, bottomRight: RADIUS })
-          // 展开时量一次自然高度，供收起动画用
-          .onAreaChange((oldValue: Area, newValue: Area) => {
-            this.onMealBodyArea(newValue);
-          })
+      MealFold({
+        expanded: this.isExpanded(meal),
+        alpha: this.mealAlphaOf(meal),
+        content: () => {
+          this.mealDetail(meal);
         }
-      }
-      .width('100%')
-      /*
-       * 展开动画 1.0：
-       * 高度即时变化（展开 = 实测高度，收起 = 0），动效由透明度承担。
-       * 不要再挂 transition：条件为假时节点立刻从树上移除，
-       * transition 跑在不参与布局的元素上，会与下方控件重叠（踩过）。
-       */
-      .height(this.isExpanded(meal) ? this.mealBodyH : 0)
-      .clip(true)
-      .opacity(this.isExpanded(meal) ? this.mealAlpha : 0)
+      })
 
-      // 收起态给一行摘要，避免完全看不到吃了什么
-      // （原来是 else if 链，套上外层动画容器后必须写成独立 if）
-      if (!this.isExpanded(meal) && DailyService.recordsOf(this.data.records, meal).length > 0) {
+      /*
+       * 收起态摘要：有记录时列菜名，没记录时也要说话。
+       *
+       * 原来只在「有记录」时显示，于是没记录的餐次折叠后一片空白
+       * —— 用户反馈「折叠的时候没有概括也没有多少千卡」。
+       */
+      if (!this.isExpanded(meal)) {
         Row() {
           Text(this.mealSummary(meal))
             .fontSize(12)
             .fontColor(COLOR_TEXT_SUB)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          Text(this.mealKcalText(meal))
+            .fontSize(12)
+            .fontColor(COLOR_TEXT_SUB)
+            .margin({ left: 8 })
         }
         .width('100%')
         .padding({ left: 14, right: 14, bottom: 12 })
@@ -1013,9 +1001,60 @@ struct Index {
     .clip(true)
   }
 
-  /** 收起态的一行摘要，例如「白米饭、番茄炒蛋」 */
+  /**
+   * 一餐的明细内容（MealFold 的 @BuilderParam）。
+   *
+   * 在这里而不是内联进 MealFold：明细要渲染 RecordRow 并接删除回调，
+   * 那些都依赖本组件的状态与方法；MealFold 只负责「按高度收放 + 淡入淡出」。
+   */
+  @Builder
+  mealDetail(meal: MealType) {
+    Column({ space: 8 }) {
+      if (DailyService.recordsOf(this.data.records, meal).length === 0) {
+        Row() {
+          Text('还没有记录')
+            .fontSize(13)
+            .fontColor(COLOR_TEXT_SUB)
+        }
+        .width('100%')
+        .padding(14)
+      } else {
+        ForEach(DailyService.recordsOf(this.data.records, meal), (record: FoodRecord) => {
+          RecordRow({
+            record: record,
+            onDelete: (id: string) => {
+              const target: FoodRecord | undefined =
+                this.data.records.find((r: FoodRecord) => r.id === id);
+              if (target !== undefined) {
+                this.confirmDelete(target);
+              }
+            }
+          })
+        }, (record: FoodRecord) => record.id)
+      }
+    }
+    .width('100%')
+    // 浅底块：与白色卡片形成第二层，明细区一眼是「卡片里的内容」
+    .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+    .backgroundColor(COLOR_BG)
+    /*
+     * 底部圆角跟着卡片：卡片圆角 18、外层 padding 0，
+     * 明细块在最底下，不补圆角就会溢出卡片边角。
+     */
+    .borderRadius({ bottomLeft: RADIUS, bottomRight: RADIUS })
+  }
+
+  /**
+   * 收起态的一行摘要，例如「白米饭、番茄炒蛋」。
+   *
+   * 没有记录时返回「还没有记录」而**不是空串**：
+   * 空串会让整行只剩右侧的「0 千卡」，看起来像数据缺失。
+   */
   private mealSummary(meal: MealType): string {
     const list: FoodRecord[] = DailyService.recordsOf(this.data.records, meal);
+    if (list.length === 0) {
+      return '还没有记录';
+    }
     const names: string[] = [];
     for (const r of list) {
       names.push(r.name);
@@ -1024,6 +1063,16 @@ struct Index {
       }
     }
     return names.length < list.length ? `${names.join('、')} 等 ${list.length} 项` : names.join('、');
+  }
+
+  /**
+   * 收起态右侧的热量文案。
+   *
+   * 没有记录时显式写「0 千卡」，不要留空 ——
+   * 用户明确反馈过折叠后「没有概括也没有显示多少千卡」。
+   */
+  private mealKcalText(meal: MealType): string {
+    return `${this.mealKcal(DailyService.recordsOf(this.data.records, meal))} 千卡`;
   }
 
   @Builder

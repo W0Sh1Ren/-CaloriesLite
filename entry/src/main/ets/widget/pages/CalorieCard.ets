@@ -36,9 +36,10 @@ struct CalorieCard {
   /*
    * 键名必须与 CalorieCardAbility.buildData() 里的键一致。
    *
-   * 默认值刻意与 ability 的兜底值保持一致（预算 2000、营养素目标按
-   * macroTargetFor(2000) 算出来），不要全填 0：
-   * 绑定数据到位前会先渲染一帧，填 0 的话用户看到的是「闪一下 0 / 0」。
+   * 这里的初值必须与 ability 的兜底值**逐一对齐**（见该文件的
+   * DEFAULT_BUDGET 与 defaultData()）：
+   * 卡片在绑定数据到位前会先按这里的初值渲染一帧，两边不一致的话
+   * 那一帧的数字和最终值不同，看起来就是「闪一下」。
    */
   @LocalStorageProp('intake') intake: number = 0;
   @LocalStorageProp('budget') budget: number = 2000;
@@ -67,19 +68,44 @@ struct CalorieCard {
     return r > 1 ? 1 : r;
   }
 
+  /**
+   * 今天是否还没有任何记录。
+   *
+   * 用来决定右侧显示三条营养素进度，还是显示「还没有记录」。
+   * 全 0 的三条进度条看起来和「数据没加载出来」一模一样，
+   * 换成一句文案才说明得清楚。
+   */
+  private isEmptyDay(): boolean {
+    return this.intake <= 0;
+  }
+
   build() {
     Column() {
       // ------------------------------------------------ 上半：环 + 三大营养素
       Row({ space: 10 }) {
         this.ring()
 
-        Column({ space: 9 }) {
-          this.macroBar('蛋白', this.protein, this.proteinTarget)
-          this.macroBar('脂肪', this.fat, this.fatTarget)
-          this.macroBar('碳水', this.carb, this.carbTarget)
+        if (this.isEmptyDay()) {
+          // 还没记录：右侧用一句文案代替三条空进度条
+          Column({ space: 6 }) {
+            Text('还没有记录')
+              .fontSize(12)
+              .fontColor(COLOR_TEXT_SUB)
+            Text('点下面拍一张')
+              .fontSize(10)
+              .fontColor(COLOR_TEXT_SUB)
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+        } else {
+          Column({ space: 9 }) {
+            this.macroBar('蛋白', this.protein, this.proteinTarget)
+            this.macroBar('脂肪', this.fat, this.fatTarget)
+            this.macroBar('碳水', this.carb, this.carbTarget)
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
         }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
       .layoutWeight(1)
