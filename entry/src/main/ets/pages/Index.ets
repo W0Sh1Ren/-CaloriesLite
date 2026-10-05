@@ -144,11 +144,12 @@ struct Index {
   @State modalOpen: boolean = false;
 
   /**
-   * 各餐次的展开透明度（展开动画 2.0）。
+   * 各餐次的展开透明度（展开动画 3.0）。
    *
-   * 明细区的**高度**由 MealFold 组件自己持有 @State —— 它必须按实例隔离，
-   * 放在这里用 Map<meal, number> 存时 onAreaChange 的归属不可靠，
-   * 会出现「箭头显示展开、内容却是空的」。
+   * 明细**高度**不再需要状态：由条数按固定单条高度算出来
+   *（见 components/MealFold.ets 的 mealDetailHeight），
+   * 所以不存在「量不到高度」的问题，记录增删也会自动跟着变。
+   *
    * 透明度留在这里，是因为它要在 toggleMeal 的 animateTo 里和展开状态
    * 同一帧改变，动效才同步。
    *
@@ -956,15 +957,17 @@ struct Index {
       }
 
       /*
-       * 明细区：交给 MealFold 自己量高度、自己做展开动画。
+       * 明细区：高度由**条数算出来**（展开动画 3.0），不做测量。
        *
-       * 高度状态必须由子组件各自持有：放在这里用 Map<meal, h> 存时，
-       * onAreaChange 报的是哪一张不可靠，会出现「箭头显示展开、内容是空的」。
-       * 组件实例天然隔离，不需要 key。
+       * count 传这一餐的记录条数，MealFold 直接用
+       * 「内边距 + 条数×单条高度 + 间距」算出高度，
+       * 所以第一次展开就是正确长度，不会先占位再撑开地闪一下。
+       * 记录增删后 count 变化，高度自动跟着变 —— 不需要额外维护。
        */
       MealFold({
         expanded: this.isExpanded(meal),
         alpha: this.mealAlphaOf(meal),
+        count: DailyService.recordsOf(this.data.records, meal).length,
         content: () => {
           this.mealDetail(meal);
         }

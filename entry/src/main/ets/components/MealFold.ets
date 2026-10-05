@@ -1,34 +1,64 @@
 /**
- * 餐次卡片的明细区（可折叠内容）。「展开动画 2.0」的容器实现。
+ * 餐次卡片的明细区（可折叠内容）。「展开动画 3.0」的容器实现。
  *
- * ── 结构照抄已验证可用的 profileCard（「我的 → 个人情况」）
- * 明细用 `if (expanded)` **条件渲染**：展开那一刻才挂载，
- * onAreaChange 立刻量到它的自然高度，写进 measuredH 后进入动画阶段。
+ * ══════════════════════════════════════════════════════════════
+ * 【核心：高度用算术算出来，不做任何测量】
+ * ══════════════════════════════════════════════════════════════
+ * 每条记录卡片（RecordRow）的结构是固定的，所以高度是常量；
+ * 明细区高度 = 上下内边距 + 条数 × 单条高度 + (条数-1) × 间距。
+ * 见 mealDetailHeight()。
  *
- * 为什么不能「内容一直挂着」：外层高度是 0，内层在高度 0 的容器里
- * 量不到自然高度，展开后就是一片空白（踩过）。
+ * 这样就不存在「先渲染再量、量到才撑开」那一步 ——
+ * 高度在渲染之前就已经确定，**第一次展开也不会闪**。
  *
- * ── 与 profileCard 的差别：高度状态在这里，而不是父页面
- * 父页面有四个餐次共用一份状态时，会出现
- * 「折叠 B 把 A 也裁了」「展开长度由最后量的那张决定」等问题。
- * 组件实例天然隔离，不需要 key，也不会互相污染。
+ * 为什么之前一直失败：一直在想办法「测量」内容高度，
+ * 而在这个结构下（收起态外层高度 0 + clip）根本量不到，
+ * 试过 visibility / opacity / 不裁切 / 父页面存高度，全部行不通。
+ * 换成算术之后问题消失 —— 因为压根不需要测量。
+ *
+ * ⚠️ 代价：RECORD_ROW_H 等常量必须与 RecordRow.ets 的实际尺寸保持一致。
+ *    改 RecordRow 的字体或内边距时要同步改（文件顶部有说明）。
  *
  * ── 动效
  * 高度即时变化 + 透明度用 animateTo 插值，动效来自透明度。
- * 不用高度动画（.height() 从占位值跳到实测值那一帧不可插值，没有中间帧），
+ * 不用高度动画（.height() 从无到有那一帧不可插值，没有中间帧），
  * 也不用 transition（挂在会卸载的节点上会与下方控件重叠）。
- * 详见 docs/展开动画2.0.md。
  */
 
 /**
- * 未量到高度之前的占位值（vp）。
+ * 单条记录卡片的高度（vp）。
  *
- * 必须足够大：它是第一帧渲染明细时用的高度，测量就在这个高度下发生，
- * 给小了会把内容截断，量到的偏小值写回去长度就永远不够
- *（早期用 400，表现是超过 5 道菜只显示 5 道、第 5 道还被裁）。
- * 给大只会多渲染一帧空白（内容被 clip 住，看不到），没有副作用。
+ * 组成（见 components/RecordRow.ets）：
+ *   内边距 10 + 10
+ *   名称   16sp 行高约 22
+ *   间距   3
+ *   元信息 12sp 行高约 17
+ *   间距   3
+ *   营养素 11sp 行高约 15   （三项全 0 时不显示，此时卡片更矮，这里按最坏算）
+ *   ⇒ 20 + 22 + 3 + 17 + 3 + 15 = 80，+2 作为阴影呼吸
  */
-const MEASURE_PLACEHOLDER_H: number = 2000;
+const RECORD_ROW_H: number = 82;
+
+/** 明细区上下内边距（须与 mealDetail 的 padding 一致） */
+const DETAIL_PAD_V: number = 12;
+
+/** 明细区相邻记录之间的间距（须与 mealDetail 的 Column space 一致） */
+const DETAIL_GAP: number = 8;
+
+/** 「还没有记录」提示行的高度（fontSize 13 + 上下 padding 14） */
+const EMPTY_HINT_H: number = 46;
+
+/**
+ * 算出一餐明细区应有的高度（vp）。
+ *
+ * 纯算术，不测量。详见文件头说明。
+ */
+export function mealDetailHeight(count: number): number {
+  if (count <= 0) {
+    return DETAIL_PAD_V * 2 + EMPTY_HINT_H;
+  }
+  return DETAIL_PAD_V * 2 + count * RECORD_ROW_H + (count - 1) * DETAIL_GAP;
+}
 
 @Component
 export struct MealFold {
@@ -45,28 +75,11 @@ export struct MealFold {
   /** 展开时的透明度目标，由父组件在同一个 animateTo 里一起设，动效才同步。只读。 */
   @Prop alpha: number = 0;
 
+  /** 这一餐的记录条数：高度由它直接算出来 */
+  @Prop count: number = 0;
+
   /** 明细内容 */
   @BuilderParam content: () => void;
-
-  /** 实测的明细高度（vp） */
-  @State measuredH: number = MEASURE_PLACEHOLDER_H;
-
-  /** 是否已量到过高度；量到前不加 clip，避免把测量的内容裁掉 */
-  @State measured: boolean = false;
-
-  /**
-   * 容器当前应有的高度。
-   *
-   * **始终返回数字**，不返回 undefined：
-   * 高度从「未设置」跳到某个值的那一帧没有可插值的起点，不会有动画。
-   */
-  private targetH(): number {
-    if (!this.measured) {
-      // 还没量到：展开时先给占位高度把内容渲染出来（外面不裁切，看不到）
-      return this.expanded ? MEASURE_PLACEHOLDER_H : 0;
-    }
-    return this.expanded ? this.measuredH : 0;
-  }
 
   build() {
     Column() {
@@ -75,24 +88,12 @@ export struct MealFold {
           this.content()
         }
         .width('100%')
-        // 展开时量一次自然高度，供收起动画用
-        .onAreaChange((oldValue: Area, newValue: Area) => {
-          const h: number = Number.parseFloat(`${newValue.height}`);
-          if (Number.isNaN(h) || h <= 0.5) {
-            return;
-          }
-          if (this.measured && Math.abs(h - this.measuredH) < 0.5) {
-            return;
-          }
-          this.measuredH = h;
-          this.measured = true;
-        })
       }
     }
     .width('100%')
-    .height(this.targetH())
-    // 量到之后才裁切：测量那一帧不裁，否则内容会被占位高度之外的裁切吃掉
-    .clip(this.measured)
+    // 高度是算出来的：展开 = 算术高度，收起 = 0。两端都是数字，可插值。
+    .height(this.expanded ? mealDetailHeight(this.count) : 0)
+    .clip(true)
     .opacity(this.expanded ? this.alpha : 0)
   }
 }
