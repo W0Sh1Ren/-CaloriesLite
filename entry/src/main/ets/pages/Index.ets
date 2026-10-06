@@ -11,6 +11,8 @@
  */
 import { router, curves } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
+// uiMaterial：系统材质（沉浸光感）。底部页签的悬浮样式靠它开材质。
+import { uiMaterial } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -267,7 +269,17 @@ struct Index {
     this.bottomInset = AppState.bottomInset;
   }
 
-  /** 三个主页面并排渲染，靠平移切换 */
+  /**
+   * ⚠️ 已废弃，不再被调用。
+   *
+   * 原来这里是「Swiper 三页并排 + 平移切换」。换成 Tabs 之后，
+   * 三个视图直接作为 TabContent 的子节点（见 build()），
+   * Tabs 内置的分页几何与滑动替代了这段 Swiper 逻辑。
+   *
+   * 保留在文件里是因为它记录了一个踩过的坑（百分比宽度按父容器解析、
+   * 手写平移会对不上），删掉就丢了这段教训。确认新方案稳定后可以整段删除
+   *（连同 swiperController 与顶部那几行注释）。
+   */
   @Builder
   contentView() {
     Stack({ alignContent: Alignment.Top }) {
@@ -542,7 +554,15 @@ struct Index {
     }
   }
 
-  /** 切换视图：改下标并刷新数据 */
+  /**
+   * 点顶部页签时的切换请求。
+   *
+   * 只改 `activeTab`，**不在这里刷新数据** —— Tabs 的 `index` 参数是双向的，
+   * 改了这个 state 之后 Tabs 会切页并回调 `onChange`，
+   * 而 `onTabIndexChanged` 才是「切换后刷新」的唯一入口。
+   *
+   * 两处都写刷新会重读两遍数据（本项目在 refreshTick 上踩过同类坑）。
+   */
   private switchTo(index: number): void {
     if (index === this.activeTab) {
       // 已经在这一页：仍然刷新一次，避免「点了没反应但数据其实变了」的情况
@@ -552,19 +572,23 @@ struct Index {
       }
       return;
     }
-    // 「我的」页可能刚改过档案，清掉脏标记；
-    // 实际重算由下面 index === 0 分支的自增信号统一触发
     if (AppState.profileDirty) {
       AppState.profileDirty = false;
     }
-    /*
-     * 只提交下标（顶栏标题、页码高亮等随之更新），
-     * 视觉上的平移**交给 Swiper 的 changeIndex 播**——
-     * 它会按 .curve() / .duration() 平滑滑过去，
-     * 从第 0 页到第 2 页还会连续经过第 1 页。
-     */
+    // 只提交下标：Tabs 会据此切页（带它自己的平移动画），并回调 onChange
     this.activeTab = index;
-    this.swiperController.changeIndex(index, true);
+  }
+
+  /**
+   * 页签下标变化的**唯一处理入口**（Tabs 的 onChange）。
+   *
+   * 为什么必须走这里而不是只在 switchTo 里刷新：
+   * 官方 Tabs 自带左右滑动切页，用户可以**直接滑**而不点页签 ——
+   * 那条路径不经过 switchTo。把刷新挂在 onChange 上，
+   * 点页签与滑页签才会走同一套逻辑。
+   */
+  private onTabIndexChanged(index: number): void {
+    this.activeTab = index;
     // 回到首页时重读，保证刚记录的餐次立刻出现
     if (index === 0) {
       this.setDayKey(this.homeDayForReturn());
@@ -663,52 +687,113 @@ struct Index {
           colors: [[this.glow.from, 0.0], [this.glow.to, 0.42], [COLOR_BG, 1.0]]
         })
 
-      // ---------------------------------------------------- 2. 内容层
-      // 只渲染当前视图，靠入场动画完成切换。
-      //
-      // 之前试过让三个视图常驻 Stack、用 opacity 切换，结果未激活视图
-      // 虽然透明但仍参与命中测试，把下面的按钮点击全吃掉了
-      // （实测拍照按钮和餐次折叠都点不动）。条件渲染没有这个问题。
-      //
-      // 这里不再加 topInset 内边距：毛玻璃顶栏是覆盖在内容之上的，
-      // 由顶栏自己避让状态栏，内容则用 topReserve() 在滚动区内部留白。
-      Column() {
-        this.contentView()
+      // ---------------------------------------------------- 2. 内容层 + 底部页签
+      /*
+       * ══════════════ 用 Tabs 替换原来的 Swiper + 自绘 FloatingNav ══════════════
+       *
+       * 为什么换：**官方沉浸光感（系统材质）只在这两个位置生效** ——
+       * Navigation/NavDestination 标题栏，或「横向 Tabs 中 barPosition 为
+       * BarPosition.End 的底部 TabBar」。自绘的 Row 容器设 systemMaterial()
+       * **完全不生效**（官方原文，且把「在标题栏生效范围外为整页背景设置材质」
+       * 列为反例）。
+       *
+       * 换了之后拿到的东西：
+       *   · 真实系统材质（THIN 档），随设备算力与用户「沉浸光感强弱」设置自适应
+       *   · interactive: true  → 交互形变（按压时的弹性形变）
+       *   · lightEffect        → 点光源/流光交互反馈
+       *   · adaptToHandedness  → 按左右手习惯适配
+       * 代价：丢掉自绘的 Canvas 跟手光斑（FloatingNav 不再使用）
+       *
+       * ⚠️ 悬浮样式生效的三个条件（官方明确要求**同时满足**）：
+       *      barOverlap(true) + vertical 为 false（默认即是）+
+       *      barPosition 为 BarPosition.End
+       *   缺一个 systemMaterial 就不生效。
+       *
+       * ⚠️ 设了悬浮材质后**不能再设** barBackgroundColor / barBackgroundBlurStyle，
+       *    否则会遮挡材质。所以这里一个都不设。
+       */
+      Tabs({ barPosition: BarPosition.End, index: this.activeTab }) {
+        TabContent() {
+          Column() {
+            this.todayView()
+          }
+          .width('100%')
+          .height('100%')
+        }
+        .tabBar('首页')
+
+        TabContent() {
+          Column() {
+            HistoryTab({ dayKey: this.dayKey, refreshTick: this.refreshTick })
+          }
+          .width('100%')
+          .height('100%')
+        }
+        .tabBar('记录')
+
+        TabContent() {
+          Column() {
+            ProfileTab({ refreshTick: this.refreshTick })
+          }
+          .width('100%')
+          .height('100%')
+        }
+        .tabBar('我的')
       }
+      /*
+       * 页签栏本身的高度。
+       *
+       * 不设的话系统给的是默认高度（偏高的标准 TabBar），
+       * 与我们原来那条 70vp 的胶囊对不上。这里按原来的视觉高度收紧。
+       */
+      .barHeight(56)
+      /*
+       * 悬浮页签栏 —— 沉浸光感的入口。
+       *
+       * 🌟 systemMaterial 必须显式写在这里。官方说明：
+       *    「应用级 ENABLE 模式下底部页签**不会**默认开启沉浸光感；
+       *      设置 barFloatingStyle 并生效悬浮样式时，底部页签默认开启」
+       *    但实测把材质对象显式传进去最稳（也才能自定义 interactive /
+       *    lightEffect 这两项）。
+       */
+      .barFloatingStyle({
+        // 左右留白：与内容区的 PAGE_PAD 对齐，不然页签栏比卡片宽一圈
+        barSideMargin: PAGE_PAD,
+        // 抬离屏幕底部，让出手势条 + 留一点视觉呼吸
+        barBottomMargin: this.bottomInset + 30,
+        adaptToHandedness: true,
+        systemMaterial: new uiMaterial.ImmersiveMaterial({
+          // THIN：胶囊背景要透出内容才像玻璃；ULTRA_THIN 在浅色页面上几乎看不见
+          style: uiMaterial.ImmersiveStyle.THIN,
+          applyShadow: true,
+          // 交互形变：按压时的弹性形变（就是别家导航栏那种「果冻」感）
+          interactive: true,
+          // 点光源/流光：手指触摸时的光感反馈
+          lightEffect: { color: Color.White }
+        })
+      })
+      /*
+       * ⚠️ 这三个是悬浮样式的**前置条件**，不是可选修饰。
+       */
+      .barOverlap(true)
+      .vertical(false)
+      /*
+       * 底部页签自带的滑动切换：原来靠 Swiper 做「连续经过中间页」的平移，
+       * Tabs 内置的分页几何等价，而且与页签栏是同一套动效语言，不用自己接。
+       */
+      .animationDuration(420)
+      /*
+       * 页签切换的唯一入口。
+       *
+       * 官方 Tabs 自带左右滑动，用户可能直接滑而不是点页签，
+       * 所以「切换后要刷新数据」不能只挂在自己的 switchTo 上 ——
+       * 必须让 onChange 成为唯一入口，否则滑动切页不会重读数据。
+       */
+      .onChange((index: number) => {
+        this.onTabIndexChanged(index);
+      })
       .width('100%')
       .height('100%')
-      .clip(true)
-
-      // ---------------------------------------------------- 3. 悬浮导航栏
-      // 关键：bottom 里必须加上 bottomInset。
-      // 底部手势条区域会吃掉点击，导航栏压在上面就会「点了没反应」。
-      //
-      // 「我的」页弹出数值面板时整体隐藏：面板是模态的，
-      // 遮罩下不该还能点导航；而且导航栏在最上层，会把面板下半部分
-      //（体重输入框）压住。用 visibility 而不是 if，避免每次开关都重建整条导航。
-      Column() {
-        FloatingNav({
-          items: NAV_ITEMS,
-          activeIndex: this.activeTab,
-          barWidth: this.navWidth,
-          onSelect: (index: number) => {
-            this.switchTo(index);
-          }
-        })
-          .onAreaChange((oldValue: Area, newValue: Area) => {
-            this.navWidth = Number.parseFloat(`${newValue.width}`);
-          })
-      }
-      .width('92%')
-      .height('100%')
-      // 底部让出手势条：导航栏整体抬到 bottomInset 之上，
-      // 否则手势条区域会吃掉点击（实测「点了没反应」的成因）。
-      // 再留 30vp 的视觉外边距，让它像浮在内容之上的一颗气泡。
-      .padding({ bottom: this.bottomInset + 30 })
-      .justifyContent(FlexAlign.End)
-      .visibility(this.modalOpen ? Visibility.Hidden : Visibility.Visible)
-      // 整层只是定位容器：自己不响应点击，也不拦截，事件留给下面的导航栏与内容
-      .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')
     .height('100%')
