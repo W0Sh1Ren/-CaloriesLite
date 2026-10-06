@@ -829,6 +829,20 @@ struct Index {
         .layoutWeight(1)
         .scrollBar(BarState.Off)
         .align(Alignment.Top)
+        /*
+         * 滑到顶/底后继续滑会拉出空白并回弹 —— 用系统内置的弹簧效果。
+         *
+         * 曾经自己实现过一版（用 onScrollFrameBegin 拦下增量、按阻尼公式平移
+         * 内容、松手再动画收回），目标是做「超出越多越拉不动」的非线性阻尼。
+         * **失败了**，两个问题：
+         *   1. 把 onScrollFrameBegin 的返回值设成 0 会把正常滚动一起吃掉 ——
+         *      页面直接滑不动（实测）
+         *   2. 回弹时机对不上：onScrollStop 在内层 fling 结束才触发，
+         *      表现是「拉出去了，但不弹回来」
+         * 内置 Spring 虽然没有可自定义的阻尼曲线，但它可靠、手感也够用。
+         * 结论：跟滚动物理耦合的东西，优先交给系统。
+         */
+        .edgeEffect(EdgeEffect.Spring)
       }
       .width('100%')
       .height('100%')

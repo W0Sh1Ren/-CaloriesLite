@@ -11,7 +11,7 @@
  */
 import {
   COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT,
-  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, CARD_SHADOW, RADIUS
+  COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, CARD_SHADOW, DUR_NORMAL, RADIUS
 } from '../common/Theme';
 
 /** 单个格子的展示数据 */
@@ -211,29 +211,66 @@ export struct CalendarHeatmap {
               Column() {
                 if (this.cellAt(rowIndex * 7 + colIndex).inMonth) {
                   Stack() {
-                    // 选中/今天底色：圆形而非方块，更接近 Apple 的日历
+                    /*
+                     * 选中/今天底色：圆形而非方块，更接近 Apple 的日历。
+                     *
+                     * .animation() 的作用与下面那个状态点同理：换月或滑动切换日期时
+                     * 整块日历会被重建，`cellBg` 的值是在**同一次构建内**直接跳到
+                     * 新值的 —— 不加动画就看不到「选中圈」的移动，
+                     * 只是「这一格突然绿了、那一格突然白了」。
+                     *
+                     * 有了它，切换日期时旧格的圆圈淡出、新格的圆圈淡入，
+                     * 视觉上就是那个绿色圆点跟着日期滑过去。
+                     *
+                     * 与状态点用同一档时长(DUR_NORMAL)：两者是同一件事的两半，
+                     * 节奏不一致会显得脱节。
+                     */
                     Row()
                       .width(32)
                       .height(32)
                       .backgroundColor(this.cellBg(this.cellAt(rowIndex * 7 + colIndex)))
                       .borderRadius(16)
+                      .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut })
 
+                    /*
+                     * 日号：字色与字重也跟着一起过渡。
+                     *
+                     * fontColor 会在选中时变白、字重变 Medium ——
+                     * 如果只给底色加动画、字色瞬间跳变，会看到
+                     * 「白字浮在还没变绿的底上」那一帧，很刺眼。
+                     */
                     Text(`${this.cellAt(rowIndex * 7 + colIndex).day}`)
                       .fontSize(15)
                       .fontWeight(this.isEmphasized(rowIndex * 7 + colIndex)
                         ? FontWeight.Medium : FontWeight.Normal)
                       .fontColor(this.cellTextColor(this.cellAt(rowIndex * 7 + colIndex)))
+                      .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut })
                   }
                   .width(32)
                   .height(32)
 
-                  // 状态点：有记录才画，没记录留空占位保持行高一致
+                  /*
+                   * 状态点：有记录才画，没记录留空占位保持行高一致。
+                   *
+                   * @Watch 换月时整块日历会被重建，格子里的值是在**同一次构建内**
+                   * 直接跳到新值的 —— 所以点的颜色变化本身不会产生过渡，
+                   * 看上去就是「唰一下全变了」。
+                   *
+                   * 加 .animation() 后，ArkUI 会为 backgroundColor 的**值变化**
+                   * 补间：切换日期时，原本选中那格的点淡出（变透明）、
+                   * 新选中那格的点淡入（显出它自己的状态色），
+                   * 于是「点在日历上跟着日期走」这件事变得看得见。
+                   *
+                   * 时长用 DUR_NORMAL 而不是更快的 DUR_FAST：
+                   * 点只有 5vp，过渡太快（<150ms）眼睛抓不到，等于没加。
+                   */
                   Row()
                     .width(5)
                     .height(5)
                     .backgroundColor(this.dotBg(rowIndex * 7 + colIndex))
                     .borderRadius(3)
                     .margin({ top: 2 })
+                    .animation({ duration: DUR_NORMAL, curve: Curve.EaseOut })
                 }
               }
               .layoutWeight(1)

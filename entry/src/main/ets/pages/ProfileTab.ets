@@ -274,6 +274,8 @@ export struct ProfileTab {
       .backgroundColor(Color.Transparent)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
+      // 滑到顶/底后继续滑会拉出空白并回弹 —— 与首页同一套手感
+      .edgeEffect(EdgeEffect.Spring)
 
       if (this.sheetShown) {
         // 半透明遮罩：点它也能关掉面板

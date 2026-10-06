@@ -179,7 +179,43 @@ export struct HistoryTab {
     return out;
   }
 
-  /** 换月 */
+  /**
+   * 换月的**唯一入口**：切到指定月份并播换月动画。
+   *
+   * 两个调用方（点箭头换月、滑动天数跨月）都要走这里，
+   * 否则就会出现「一种方式有动画、另一种没有」的不一致
+   *（这正是滑动跨月没动画的原因：它以前自己改了 viewYear/viewMonth0，
+   *  却没动 monthAnimKey，@Watch 收不到信号）。
+   *
+   * 方向由**新旧月份的先后**决定，不能由 delta 的正负决定：
+   * 滑动天数时 delta 恒为 ±1（那表示日期的前后），
+   * 跨月时真正的月份方向要比较年月才知道 ——
+   * 从 10 月 31 日往后滑到 11 月 1 日，delta 是 +1（下一天），
+   * 月份也是往后，这时 delta 恰好可用；但从 10 月 1 日往前滑到
+   * 9 月 30 日，delta 是 -1 而月份也是往前，也恰好可用。
+   * 问题在于「delta = 0」或未来日期被拦下等边界情况下 delta 不可靠，
+   * 所以统一用年月比较，语义最直接。
+   */
+  private applyMonth(year: number, month0: number): void {
+    const before: number = this.viewYear * 12 + this.viewMonth0;
+    const after: number = year * 12 + month0;
+    if (before === after) {
+      // 月份没变（例如滑动天数但仍在同一个月）：只重算数据，不播换月动画
+      this.rebuild();
+      return;
+    }
+    this.viewYear = year;
+    this.viewMonth0 = month0;
+    this.rebuild();
+    /*
+     * 换月动画：方向编码进触发键（n = 下个月 / p = 上个月），
+     * 一个 Prop 同时携带「要播动画」和「往哪边」两条信息。
+     */
+    this.monthSeq++;
+    this.monthAnimKey = `${after > before ? 'n' : 'p'}${this.monthSeq}`;
+  }
+
+  /** 换月（点顶部的箭头，或左右滑日历） */
   private shiftMonth(delta: number): void {
     let y: number = this.viewYear;
     let m: number = this.viewMonth0 + delta;
@@ -190,19 +226,7 @@ export struct HistoryTab {
       m = 0;
       y++;
     }
-    this.viewYear = y;
-    this.viewMonth0 = m;
-    /*
-     * 走 rebuild() 而不是只重算 cells：换月后「本月缺口」要跟着换，
-     * 而那个数字只在 rebuild() 里更新（它也顺带重算了 cells）。
-     */
-    this.rebuild();
-    /*
-     * 换月动画：方向编码进触发键（n = 下个月 / p = 上个月），
-     * 一个 Prop 同时携带「要播动画」和「往哪边」两条信息。
-     */
-    this.monthSeq++;
-    this.monthAnimKey = `${delta >= 0 ? 'n' : 'p'}${this.monthSeq}`;
+    this.applyMonth(y, m);
   }
 
   /** 保存体重：同一天覆盖 */
@@ -366,6 +390,8 @@ export struct HistoryTab {
     .backgroundColor(Color.Transparent)
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
+    // 滑到顶/底后继续滑会拉出空白并回弹 —— 与首页同一套手感
+    .edgeEffect(EdgeEffect.Spring)
   }
 
   @Builder

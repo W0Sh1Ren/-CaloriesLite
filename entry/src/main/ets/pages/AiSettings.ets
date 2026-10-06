@@ -316,6 +316,8 @@ struct AiSettings {
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
+      // 滑到顶/底后继续滑会拉出空白并回弹 —— 与首页同一套手感
+      .edgeEffect(EdgeEffect.Spring)
 
       // 底部操作
       Row({ space: 12 }) {

@@ -204,6 +204,8 @@ struct ManualAdd {
       .width('100%')
       .padding({ left: PAGE_PAD, right: PAGE_PAD })
       .scrollBar(BarState.Off)
+      // 滑到顶/底后继续滑会拉出空白并回弹 —— 与首页同一套手感
+      .edgeEffect(EdgeEffect.Spring)
 
       // 底部：已选食物 + 份量 + 保存
       if (this.selected !== null) {
