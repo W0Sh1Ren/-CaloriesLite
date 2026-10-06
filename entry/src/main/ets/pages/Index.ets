@@ -26,7 +26,7 @@ import { uiMaterial, SymbolGlyphModifier } from '@kit.ArkUI';
  *   拿不到沉浸光感；HDS 的 `getSystemMaterialTypes()` 却包含 IMMERSIVE。
  *   实测两套 API 给出相反结论，HDS 这套在本机可用。
  */
-import { HdsTabs, HdsTabsController, hdsMaterial, HdsBarStyle } from '@kit.UIDesignKit';
+import { HdsTabs, HdsTabsController, hdsMaterial, HdsBarStyle, HdsTabsBarChangeMode } from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -40,7 +40,7 @@ import { ImageService } from '../service/ImageService';
 import { AppState } from '../common/AppState';
 import {
   COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN,
-  CARD_SHADOW, CURVE_BOUNCE, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_HEIGHT, NAV_MARGIN,
+  CARD_SHADOW, CURVE_BOUNCE, DUR_FAST, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_HEIGHT, NAV_MARGIN,
   NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
 import { CalorieRing } from '../components/CalorieRing';
@@ -172,6 +172,21 @@ struct Index {
    */
   @State shootExpanded: boolean = false;
 
+  /**
+   * 拍照粒子是否被按住 —— 驱动按压反馈（底色变实、描边变亮）。
+   *
+   * 必须是 @State：@Builder 里要读它来决定颜色，普通字段不会重建。
+   *
+   * 为什么自己实现而不用系统的交互光效：
+   *   HdsTabsFloatingStyle 的 10 个字段里只有 lightColor 与光有关
+   *   （实测确认没有「交互光效开关」）。系统那套光效是材质自带的反馈，
+   *   开不了也调不了强度；而 miniBar 里放了带 onClick 的自定义内容后，
+   *   触摸事件被自己的节点消费，系统反馈不一定还落在这一格上。
+   *   所以这一格的可感知反馈由我们自己给。
+   */
+  @State pressed: boolean = false;
+
+
 
   /**
    * 首页滚动容器的句柄，交给 HdsTabsController.bindScroller 绑定。
@@ -298,18 +313,18 @@ struct Index {
     this.refreshTick++;
 
     /*
-     * 从拍照页返回时把拍照粒子收回折叠态。
+     * 回到首页时把拍照粒子收回折叠态。
      *
      * 否则它会停在"展开成一条胶囊"的样子：用户拍完回到首页，
      * 底部一直挂着一条写着「拍照识别热量」的宽栏，既占地方，
      * 又让人以为还在某个操作流程里。
      *
-     * 放在 onPageShow 是因为这条路径只有一种走法（进拍照页 → 返回），
-     * 不必区分是从相机还是相册进来的。
+     * ⚠️ 这里**不判** shootExpanded，直接调：
+     *    applyMiniBarStyle(COLLAPSE) 在已经折叠时是无害的（幂等），
+     *    而加判断反而会引入依赖 —— 若 shootExpanded 那一刻不准，
+     *    就漏掉收回了。少一个条件就少一处可能错位的地方。
      */
-    if (this.shootExpanded) {
-      this.collapseShootBall();
-    }
+    this.collapseShootBall();
   }
   // 注意：这里不要改用 @StorageLink('dataStamp')。
   // 该装饰器在绑定那一刻就要求 AppStorage 里已存在同名键，
@@ -528,18 +543,65 @@ struct Index {
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
     /*
-     * 形状提示：极淡的浅色圆底 + 一圈细描边。
+     * ══════════ 为什么这里不用 systemMaterial() ══════════
      *
-     * 为什么要它：miniBar 继承的是页签栏那块**长方形**玻璃，
-     * 直接看是一块裸图标浮在栏中央、读不出「这里可以点」。
-     * 补一个圆底才像一颗可点的球。
+     * 试过了，**不生效**，已回退。原因是两套材质 API 的设备支持不同：
      *
-     * 用 8% 白而不是实色：既能勾出圆形，又不会挡住继承来的材质与光效。
+     *   systemMaterial(material: SystemUiMaterial)
+     *     └─ SystemUiMaterial = uiMaterial.Material
+     *        → 这台设备 uiMaterial.isImmersiveMaterialSupported() = **false**
+     *
+     *   页签栏的 systemMaterialEffect: SystemMaterialParams
+     *     └─ 用的是 hdsMaterial.MaterialType
+     *        → getSystemMaterialTypes() **含 IMMERSIVE(101)**，生效
+     *
+     * 日志可以印证：只有 HDS 那套会打印
+     *   HDS_EFFECT: MaterialModel::UpdateMaterial ...
+     * 走 uiMaterial 的调用没有对应输出。
+     *
+     * 所以「让球和页签栏有一样的材质」在当前 API 下做不到：
+     * 通用的 systemMaterial 属性挂在设备不支持的那套材质上。
+     * 真要一致，只有把球也放进 HDS 组件内部（但那样就失去自绘的
+     * 点击/动画自由度了）。
+     *
+     * ⚠️ 另一个坑：设了 systemMaterial 就**不能**再设
+     *    backgroundColor / borderColor / borderWidth / shadow
+     *   （文档明确要求，会被材质接管/盖掉）。所以那个方案即使能用，
+     *    也会丢掉这里的形状控制。
+     *
+     * ── 所以形状提示仍由自己给 ──
+     * 用**半透明的浅色圆底 + 一圈细描边**：miniBar 继承的是页签栏那块
+     * 长方形玻璃，直接看是一块裸图标浮在栏中央、读不出「这里可以点」。
+     *
+     * 用 8% 白而不是实色：既能勾出圆形，又不会挡住继承来的材质。
      * 圆角取 999 → 折叠时是圆、展开时是胶囊，两种形态自动成立。
      */
-    .backgroundColor('#14FFFFFF')
+    .backgroundColor(this.pressed ? '#33FFFFFF' : '#14FFFFFF')
     .borderRadius(999)
-    .border({ width: 0.5, color: '#33FFFFFF' })
+    .border({ width: 0.5, color: this.pressed ? '#66FFFFFF' : '#33FFFFFF' })
+    /*
+     * ── 跟手按压 + Q 弹 ──
+     *
+     * 术语澄清（官方文档里「跟手」指别的东西）：
+     *   adaptToHandedness = 左右手跟手（栏贴左还是贴右）
+     *   分割线 FOLLOW_SCROLL = 跟手渐变（滚动时分割线的显隐）
+     * 都不是「元素随手指变形」。这里做的是**触摸反馈**：
+     * 按住变实（底色/描边加深，0 过渡——触摸反馈必须即时），
+     * 同时轻微缩小，用回弹曲线给出 Q 弹感。
+     *
+     * 用 onTouch 而不是 onHover/onFocus：触摸设备上按住即反馈；
+     * Up 和 Cancel 都要复位 —— 手指滑出控件时只发 Cancel，
+     * 漏了它球会卡在缩小状态。
+     */
+    .scale({ x: this.pressed ? 0.92 : 1, y: this.pressed ? 0.92 : 1 })
+    .animation({ duration: DUR_FAST, curve: CURVE_BOUNCE })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.pressed = true;
+      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.pressed = false;
+      }
+    })
     .onClick(() => {
       this.onShootBallTap();
     })
@@ -556,17 +618,22 @@ struct Index {
    * 而且用户没有"确认要拍照"的机会。先摊开成一条写着「拍照识别热量」
    * 的胶囊，语义明确，再点才执行 —— 与系统里「展开型操作按钮」一致。
    *
+   * ⚠️ 状态判据必须读 this.shootExpanded，而它由**系统的回调**回写
+   *   （见 miniBar.onBarStyleChange），不能只在 applyMiniBarStyle 时自己改。
+   *   曾经就是自己记的，结果：点开迷你栏 → 再点导航栏（迷你栏被系统收回）
+   *   → 这个标志还停在 true → 下次点球直接跳拍照，用户看到的是
+   *   "明明收成球了，一点却进了拍照页"。
+   *
    * ⚠️ 只做「折叠 → 展开」，不做「展开 → 折叠」：
    *    否则用户想拍照时点到一下会先缩回去，得点第三次，很别扭。
-   *    收起的时机交给别处（如从拍照页返回时还原），不占用手势。
+   *    收起交给别的路径（点导航栏、从拍照页返回），不占用手势。
    */
   private onShootBallTap(): void {
     if (this.shootExpanded) {
-      // 已经展开了 → 这一次是"确认拍照"
+      // 已经展开（系统回调确认过）→ 这一次是"确认拍照"
       this.goCamera();
       return;
     }
-    this.shootExpanded = true;
     /*
      * 让页签栏折叠、迷你栏展开。
      *
@@ -578,6 +645,9 @@ struct Index {
      *
      * ⚠️ 别用 applyHide/ShowAnimation：那两个的语义是「隐藏/显示整个组件」，
      *    实测会把整条栏往下滑走而且不回来。
+     *
+     * 这里**不设** shootExpanded：交给 onBarStyleChange 回调统一回写，
+     * 免得出现「我记的状态」和「系统真实状态」两份不一致。
      */
     try {
       this.hdsTabsController.applyMiniBarStyle(HdsBarStyle.EXPAND);
@@ -589,7 +659,6 @@ struct Index {
 
   /** 把页签栏还原成展开、迷你栏折叠（默认态） */
   private collapseShootBall(): void {
-    this.shootExpanded = false;
     try {
       this.hdsTabsController.applyMiniBarStyle(HdsBarStyle.COLLAPSE);
     } catch (err) {
@@ -1062,7 +1131,27 @@ struct Index {
             this.shootBall();
           },
           // 迷你栏背景跟随页签栏（共用同一块沉浸材质玻璃）
-          enableMiniBarBackground: true
+          enableMiniBarBackground: true,
+          /*
+           * 迷你栏样式变化的**唯一状态来源**。
+           *
+           * 为什么必须接这个回调：miniBar 的展开/折叠不只由我们触发 ——
+           * 用户点一下页签栏，系统就会把迷你栏收回去（这是 HDS 内置的
+           * 互斥行为，见官方「设置页签栏的悬浮样式」的说明）。
+           * 如果只在 applyMiniBarStyle 时自己记一个标志，那条路径不会更新它，
+           * 于是出现「球已经收回来了，点一下却直接进拍照页」的错位。
+           *
+           * 所以：状态只认系统给的 miniBarStyle，不维护第二份。
+           *   HdsBarStyle.EXPAND(1)   → 迷你栏展开（页签栏折叠）
+           *   HdsBarStyle.COLLAPSE(0) → 迷你栏折叠（页签栏展开）
+           */
+          onBarStyleChange: (miniBarStyle: HdsBarStyle, tabBarStyle: HdsBarStyle,
+            miniBarWidth: number, tabBarWidth: number, mode: HdsTabsBarChangeMode): void => {
+            const expanded: boolean = miniBarStyle === HdsBarStyle.EXPAND;
+            if (this.shootExpanded !== expanded) {
+              this.shootExpanded = expanded;
+            }
+          }
         }
       })
       /*
