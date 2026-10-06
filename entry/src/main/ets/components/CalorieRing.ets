@@ -12,7 +12,7 @@
  * 而同一份数据用基本类型传的 MacroBar 却是正常的。
  * 另外数字也不要经 @Builder 参数传（@Builder 的参数只求值一次），直接内联。
  */
-import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, DUR_SLOW, GAP, RADIUS, deficitColor, deficitLabel, deficitLabelColor } from '../common/Theme';
 import { RollingNumber } from './RollingNumber';
 
 @Component
@@ -22,6 +22,15 @@ export struct CalorieRing {
   @Prop @Watch('onDataChange') budget: number = 0;
   @Prop @Watch('onDataChange') exerciseKcal: number = 0;
   @Prop @Watch('onDataChange') deficit: number = 0;
+  /**
+   * 计划缺口 = TDEE − 每日目标。
+   *
+   * 用于给缺口分三档（达标 / 未达标 / 超出）。**必须由父组件传入**，
+   * 不在这里拿 tdee − budget 现算：那样要再引一个 prop，
+   * 而且这段判定逻辑桌面卡片也要用（见 Theme.deficitColor），
+   * 集中在一处才不会两边跑偏。
+   */
+  @Prop deficitPlanned: number = 0;
   /**
    * 外部刷新键：父组件每次重读数据都换一个新值。
    *
@@ -107,9 +116,15 @@ export struct CalorieRing {
     return Math.min(1, Math.max(0, r));
   }
 
-  /** 超标时进度弧变红 */
+  /**
+   * 进度弧的颜色，三档（判定逻辑见 Theme.deficitColor，与桌面卡片共用）：
+   *   绿 达标 / 黄 未达标 / 红 超出
+   *
+   * 只用「弧色 + 中心数字色」表达状态，不加边框或背景块 ——
+   * 环本身就是最强的视觉元素，再加装饰会抢掉它。
+   */
   private arcColor(): string {
-    return this.deficit < 0 ? COLOR_WARN : COLOR_PRIMARY;
+    return deficitColor(this.deficit, this.deficitPlanned);
   }
 
   /** 按当前数据重绘 */
@@ -165,9 +180,17 @@ export struct CalorieRing {
           })
         // 环心数字
         Column({ space: 2 }) {
-          Text(this.deficit < 0 ? '超出' : '热量缺口')
+          /*
+           * 标题文案跟着档位走：超出 →「超出」，未达标 →「未达标」，
+           * 达标 →「热量缺口」。
+           *
+           * 用 deficitLabel 与卡片共用同一套措辞，避免出现
+           * 「首页说达标、卡片说未达标」这种自相矛盾。
+           */
+          Text(deficitLabel(this.deficit, this.deficitPlanned))
             .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+            // 文案色也走共享逻辑：达标用中性灰，异常档才上彩色
+            .fontColor(deficitLabelColor(this.deficit, this.deficitPlanned))
 
           // 数值变化时滚上去，而不是瞬间跳变
           RollingNumber({
@@ -175,7 +198,12 @@ export struct CalorieRing {
             refreshKey: this.refreshKey,
             fontSize: 48,
             fontWeight: FontWeight.Bold,
-            textColor: this.deficit < 0 ? COLOR_WARN : COLOR_TEXT,
+            /*
+             * 达标时用深色正文色而不是绿色：绿色已经给了弧线，
+             * 数字再上绿色会让「数值」和「状态」两个信息互相稀释。
+             * 未达标/超出才给彩色，让异常状态自己跳出来。
+             */
+            textColor: this.deficit < this.deficitPlanned ? this.arcColor() : COLOR_TEXT,
             duration: DUR_SLOW
           })
 

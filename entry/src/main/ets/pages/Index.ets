@@ -117,6 +117,18 @@ struct Index {
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
   /**
+   * 悬浮拍照按钮是否处于「展开」状态。
+   *
+   * 它是 `dayKey === todayKey()` 的**动画化替身**：两者语义相同，
+   * 但这个可以被 animateTo 平滑推到 0/1，而布尔条件渲染没有中间帧
+   *（`if` 只会让节点整体出现或消失，观感是硬切）。
+   *
+   * 单独用一个 state 而不是每次现算 `this.dayKey === todayKey()`：
+   * 现算的话，动画与数据更新会在同一帧里竞争，收缩到一半就被新值打断。
+   * 这里由各处**显式**同步，更新时间点可控。
+   */
+  @State cameraBarOn: boolean = true;
+  /**
    * 页面切换用的曲线。
    *
    * Swiper 的 .curve() 接受 ICurve。选 springMotion(0.86, 1.0)：
@@ -177,7 +189,7 @@ struct Index {
     // （onRefreshTick 走的是 refreshTick 那条线，通知不到这里。）
     AppState.setDataListener(() => {
       this.modalOpen = AppState.modalOpen;
-      this.dayKey = todayKey();
+      this.setDayKey(todayKey());
       this.reload();
       this.consumeCardRoute();
     });
@@ -207,12 +219,29 @@ struct Index {
        * 原来这里写死 todayKey()，于是补记完回来看到的是今天，
        * 用户会以为记错了地方（实际数据是记对了的）。
        */
-      this.dayKey = AppState.effectiveTargetDay();
+      this.setDayKey(AppState.effectiveTargetDay());
       this.switchTo(0);
     }
     // 这里只自增信号、不直接调 reload()：onRefreshTick 会重读数据。
     // 两条路都写会重读两遍，而且容易忘了 reload 里不能再动 refreshTick。
     this.refreshTick++;
+
+    /*
+     * 回到首页时让拍照按钮重新展开。
+     *
+     * 点按钮跳去拍照页时把它设成了 false（收缩），回来必须还原，
+     * 否则按钮会一直停在被压扁的状态。
+     *
+     * ⚠️ 这里用 setTimeout 延后一帧多，不是在跟动画抢时间，而是为了
+     *    让「展开」从页面可见之后才开始：onPageShow 是在返回转场**期间**
+     *    触发的，若同一帧就展开，撑开的过程会被转场画面盖掉一多半。
+     *    等 260ms（约 DUR_NORMAL）让转场收尾，展开才看得完整。
+     *
+     * 只在「今天」展开：从历史日期回来时按钮本来就该是收起的。
+     */
+    setTimeout(() => {
+      this.cameraBarOn = this.dayKey === todayKey();
+    }, 260);
   }
   // 注意：这里不要改用 @StorageLink('dataStamp')。
   // 该装饰器在绑定那一刻就要求 AppStorage 里已存在同名键，
@@ -494,12 +523,31 @@ struct Index {
     }, 300);
   }
 
+  /**
+   * 设置当前查看的日期，并同步拍照按钮的显隐。
+   *
+   * 为什么要有这个函数：`dayKey` 和 `cameraBarOn` 必须**永远一致**
+   *（一个是数据，一个是它的动画化表现），但 `dayKey` 有三四个写入点。
+   * 之前每处各写一行 `this.dayKey = ...`，加 `cameraBarOn` 时就要改好几处，
+   * 漏一个就会出现「历史日期上还浮着拍照按钮」。
+   * 现在所有写入点都走这里，只改一个地方。
+   */
+  private setDayKey(day: string): void {
+    this.dayKey = day;
+    // 箭头函数体里不能有语句，所以这里写成普通判断
+    if (day === todayKey()) {
+      this.cameraBarOn = true;
+    } else {
+      this.cameraBarOn = false;
+    }
+  }
+
   /** 切换视图：改下标并刷新数据 */
   private switchTo(index: number): void {
     if (index === this.activeTab) {
       // 已经在这一页：仍然刷新一次，避免「点了没反应但数据其实变了」的情况
       if (index === 0) {
-        this.dayKey = this.homeDayForReturn();
+        this.setDayKey(this.homeDayForReturn());
         this.refreshTick++;
       }
       return;
@@ -519,7 +567,7 @@ struct Index {
     this.swiperController.changeIndex(index, true);
     // 回到首页时重读，保证刚记录的餐次立刻出现
     if (index === 0) {
-      this.dayKey = this.homeDayForReturn();
+      this.setDayKey(this.homeDayForReturn());
       this.refreshTick++;
     }
   }
@@ -592,7 +640,7 @@ struct Index {
       }
       return;
     }
-    this.dayKey = next;
+    this.setDayKey(next);
     this.reload();
   }
 
@@ -692,6 +740,8 @@ struct Index {
               budget: this.data.summary.budget,
               exerciseKcal: this.data.summary.exerciseKcal,
               deficit: this.data.summary.deficit,
+              // 计划缺口（TDEE − 每日目标）：环用它把缺口分三档（达标/未达标/超出）
+              deficitPlanned: this.data.summary.plannedDeficit,
               refreshKey: this.dataVersion
             })
 
@@ -790,10 +840,12 @@ struct Index {
        * 翻到历史某天时，这个按钮的语义是「现在拍一张」——那必然记到今天，
        * 与当前正在看的日期不一致，容易误操作。
        * 历史日期要补记，走「记录」页的补记入口（那里会把日期带上）。
+       *
+       * ⚠️ 这里**常挂载**，用 scaleX 收缩来「消失」，不用 `if` 条件渲染：
+       *    `if` 只让节点整体出现/消失，没有任何中间帧，观感是硬切。
+       *    改成缩放后，收起时从两端向中间压扁、展开时反向撑开，才有动作。
        */
-      if (this.dayKey === todayKey()) {
-        this.cameraBar()
-      }
+      this.cameraBar()
     }
     .width('100%')
     .height('100%')
@@ -973,6 +1025,8 @@ struct Index {
       AppState.targetMeal = guessMealType(hourOf(Date.now()));
       // 卡片是「回首页看看」的入口，先把视图切回今天那一页
       this.switchTo(0);
+      // 与首页那个悬浮按钮一致：跳走前先收起（回来时由 onPageShow 展开）
+      this.cameraBarOn = false;
       try {
         router.pushUrl({ url: 'pages/Camera' });
       } catch (err) {
@@ -1232,6 +1286,14 @@ struct Index {
       // 与导航栏同一套「浮起」语言：深色投影拉开层次
       .shadow({ radius: 20, color: 'rgba(16, 24, 36, 0.18)', offsetX: 0, offsetY: 8 })
       .onClick(() => {
+        /*
+         * 先收起、再跳转：让「收缩」这一拍在页面切走之前就开始，
+         * 用户看到的是「按下去 → 按钮收起来 → 进拍照页」。
+         * 反过来（先跳转）的话，收缩动画会被页面转场盖掉，等于没有。
+         *
+         * 回来时由 onPageShow 设回 true 重新展开，见那边说明。
+         */
+        this.cameraBarOn = false;
         try {
           router.pushUrl({ url: 'pages/Camera' });
         } catch (err) {
@@ -1249,5 +1311,40 @@ struct Index {
      * 这样按钮不压导航栏、导航栏也不压按钮，两者像一叠气泡。
      */
     .padding({ left: PAGE_PAD, right: PAGE_PAD, bottom: cameraFloatBottom(this.bottomInset) })
+    /*
+     * ══════════ 收起 / 展开动画 ══════════
+     *
+     * ── 为什么用 scaleX 而不是宽度
+     * 改 `.width()` 会**重新排版**整棵子树（按钮内部文字要重新居中、
+     * 底下的滚动内容要重算高度），每帧一次，廉价设备上会掉帧。
+     * `.scale()` 不参与布局，只在合成阶段把已画好的图形横向压扁，
+     * 代价几乎为零，而且效果正是「从两端向中间收缩」。
+     *
+     * ── 为什么不用 `.clip(true)` 包一层来切断
+     * 收缩到接近 0 时图形本身已经细成一条线，视觉上等同于消失，
+     * 不需要额外裁切；而多一层容器会多一次合成。
+     *
+     * ── 曲线的选择（Q 弹的来源）
+     * 用 cubicBezier 的**回弹曲线** (0.34, 1.56, 0.64, 1)：
+     * 第二控制点的 y = 1.56 > 1，也就是它会**冲过目标值再回落**。
+     * 展开时冲到略大于 1（按钮「弹」一下），收起时冲到略小于 0
+     *（压过头再回一点点），这就是 Q 弹的来源。
+     * 时长的 380ms 比应用的通用时长(DUR_NORMAL=260)长一些 ——
+     * 回弹需要时间让人看清「冲过头」和「弹回来」两拍，
+     * 太快会退化成普通缓动、弹感消失。
+     *
+     * ⚠️ 回弹曲线会让 scaleX 短暂变成负值。负值在渲染上等同于
+     *    镜像到 0，配合 scaleY=0 不会出现残影，但**别去掉 scaleY**：
+     *    只缩 X 不缩 Y，按钮会变成一根竖线。
+     */
+    .scale({ x: this.cameraBarOn ? 1 : 0, y: this.cameraBarOn ? 1 : 0 })
+    .opacity(this.cameraBarOn ? 1 : 0)
+    .animation({ duration: 600, curve: curves.cubicBezierCurve(0.34, 1.56, 0.64, 1) })
+    /*
+     * 收起后必须彻底让出点击：scaleX=0 时它仍占着那条横带，
+     * 不处理的话历史日期上会出现「点空白处却跳去拍照」。
+     */
+    .enabled(this.cameraBarOn)
+    .hitTestBehavior(this.cameraBarOn ? HitTestMode.Default : HitTestMode.None)
   }
 }

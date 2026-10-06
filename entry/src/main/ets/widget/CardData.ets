@@ -23,11 +23,18 @@
  */
 import { DailySummary } from '../model/Types';
 import { MacroTarget } from '../model/Enums';
+// ⚠️ 只从 DeficitStyle 取，**不要从 Theme 取** ——
+// Theme 依赖 @kit.ArkUI，会把 UI 依赖带进卡片服务进程。
+import { deficitColor, deficitLabel, deficitLabelColor } from '../common/DeficitStyle';
 
 /** 三大营养素的配色，与主应用 Theme.ets 保持一致 */
 const COLOR_PROTEIN = '#22C55E';
 const COLOR_FAT = '#F5C142';
 const COLOR_CARB = '#4C8DFF';
+/** 中性灰：档位文案在「达标」时用它，状态已由环色表达 */
+const COLOR_TEXT_SUB = '#8A8F99';
+/** 主色（环的默认色），与 Theme.COLOR_PRIMARY 一致 */
+const COLOR_PRIMARY = '#22C55E';
 
 /**
  * 卡片的扁平数据结构。
@@ -43,6 +50,33 @@ export class CardData {
   kcalRingPct: string = '0%';
   /** 环下方的一行小字，例如「还可以吃 1250」 */
   remainText: string = '';
+  /**
+   * 环的颜色，三档：绿 达标 / 黄 未达标 / 红 超出。
+   *
+   * **必须在这里算好**：卡片侧若写 `deficit < 0 ? 红 : 绿` 就是派生，
+   * FormKit 的响应式追踪不认（见文件头说明），会永远显示初值。
+   */
+  ringColor: string = COLOR_PRIMARY;
+
+  /**
+   * **实际**热量缺口 = TDEE + 运动 − 摄入（由 DailySummary 给）。
+   *
+   * 注意它不是「预算 − 摄入」：预算里含了「计划要减的部分」，
+   * 拿它算缺口会把计划当成消耗（见 DailySummary 的类注释）。
+   */
+  deficit: number = 0;
+  /** **计划**缺口 = TDEE − 每日目标；实际缺口拿它比大小来分档 */
+  plannedDeficit: number = 0;
+
+  /**
+   * 环心的档位文案：「缺口」/「未达标」/「超出」。
+   *
+   * 与首页环心文案共用 DeficitStyle.deficitLabel，保证两处措辞一致 ——
+   * 卡片和首页对同一天给出不同判断会很莫名其妙。
+   */
+  deficitLabel: string = '缺口';
+  /** 档位文案的颜色：达标用中性灰，异常档才上彩色 */
+  deficitLabelColor: string = COLOR_TEXT_SUB;
 
   /** 三条营养素：克数、目标、进度百分比、配色、显示文案 */
   protein: number = 0;
@@ -154,6 +188,11 @@ export class CardData {
     d.fat = Math.round(summary.fat);
     d.carb = Math.round(summary.carb);
 
+    // 实际缺口与计划缺口都由 summary 给（那边已按 TDEE 算好）。
+    // 计划缺口用于分档：实际 ≥ 计划 → 达标。
+    d.deficit = Math.round(summary.deficit);
+    d.plannedDeficit = Math.round(summary.plannedDeficit);
+
     const useGiven: boolean = budget > 0;
     d.proteinTarget = useGiven ? target.protein : CardData.DEFAULT_PROTEIN_TARGET;
     d.fatTarget = useGiven ? target.fat : CardData.DEFAULT_FAT_TARGET;
@@ -173,6 +212,19 @@ export class CardData {
     d.kcalRingPct = CardData.pct(d.intake, d.budget);
     const remain: number = Math.round(d.budget - d.intake);
     d.remainText = remain >= 0 ? `还可以吃 ${remain}` : `已超出 ${-remain}`;
+
+    /*
+     * 环的配色与环心文案：三档（达标绿 / 未达标黄 / 超出红）。
+     *
+     * 判定用 DeficitStyle —— 和首页环**共用同一份逻辑**，
+     * 这样不会出现「首页说达标、卡片说未达标」。
+     *
+     * 卡片侧只读现成的 ringColor / deficitLabel 字符串，不做任何比较。
+     */
+    const planned: number = d.plannedDeficit;
+    d.ringColor = deficitColor(d.deficit, planned);
+    d.deficitLabel = deficitLabel(d.deficit, planned);
+    d.deficitLabelColor = deficitLabelColor(d.deficit, planned);
 
     d.proteinPct = CardData.pct(d.protein, d.proteinTarget);
     d.proteinText = CardData.gramsText(d.protein, d.proteinTarget);
@@ -207,6 +259,10 @@ export class CardData {
     p['budget'] = this.budget;
     p['kcalRingPct'] = this.kcalRingPct;
     p['remainText'] = this.remainText;
+    p['ringColor'] = this.ringColor;
+    p['deficit'] = this.deficit;
+    p['deficitLabel'] = this.deficitLabel;
+    p['deficitLabelColor'] = this.deficitLabelColor;
 
     p['protein'] = this.protein;
     p['proteinTarget'] = this.proteinTarget;

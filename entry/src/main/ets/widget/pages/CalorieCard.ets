@@ -121,6 +121,14 @@ struct CalorieCard {
   @LocalStorageProp('budget') budget: number = 2000;
   @LocalStorageProp('kcalRingPct') kcalRingPct: string = '0%';
   @LocalStorageProp('remainText') remainText: string = '还可以吃 2000';
+  /*
+   * 环色与环心内容，全部由后端算好（见 CardData.fillDerived）。
+   * 初值取「达标」那一档，与 CardData.fallback() 的结果一致。
+   */
+  @LocalStorageProp('ringColor') ringColor: string = '#22C55E';
+  @LocalStorageProp('deficit') deficit: number = 0;
+  @LocalStorageProp('deficitLabel') deficitLabel: string = '缺口';
+  @LocalStorageProp('deficitLabelColor') deficitLabelColor: string = '#8A8F99';
 
   @LocalStorageProp('proteinPct') proteinPct: string = '0%';
   @LocalStorageProp('proteinText') proteinText: string = '0 / 188 g';
@@ -331,19 +339,21 @@ struct CalorieCard {
   }
 
   /**
-   * 左侧热量环：环形进度 + 中心数字。
+   * 左侧热量环：环形进度 + 环心「标签 / 缺口 / 千卡」。
+   *
+   * ⚠️ 显示的是**热量缺口**，不是已摄入 —— 与首页环心一致。
+   *   环的进度条画的是「已摄入 / 每日目标」（已吃掉的占比），
+   *   环心的数字是「还差多少缺口」。这两个是同一件事的两面：
+   *   吃得越多，进度条越满、缺口越小，方向相反但互相印证。
    *
    * 想调：
    *   · 环的大小 → Progress 与 Stack 的 .width/.height（**两处必须一起改**，
    *                只改一个会让圆和中间的数字错位）
    *                还要 ≤ 左列容器的 .width(68)，超了会被裁掉
-   *   · 环的粗细 → .style({ strokeWidth: 7 })
-   *   · 数字字号 → 上面那个 Text 的 .fontSize(15)
-   *   · 分母字号 → 下面那个 Text 的 .fontSize(9)
+   *   · 环的粗细 → .style({ strokeWidth: 6 })
+   *   · 三行字号 → 下面三个 Text 的 .fontSize（数字太大时圆里会挤）
    *
-   * Progress 的 value/total 直接用 intake/budget 两个原始数字 ——
-   * Progress 需要的是「值 + 总量」而不是百分比字符串，这属于贴值。
-   * 真正的百分比字符串 kcalRingPct 也由后端算好了，但这里用不上。
+   * 环色与三行文案全部由后端给，这里只贴值、不做任何判断（零派生）。
    */
   @Builder
   kcalRing() {
@@ -351,23 +361,53 @@ struct CalorieCard {
       Progress({ value: this.intake, total: this.budget > 0 ? this.budget : 1, type: ProgressType.Ring })
         .width(60)
         .height(60)
-        .color(COLOR_PRIMARY)
+        /*
+         * 环色由后端给（ringColor），三档：绿 达标 / 黄 未达标 / 红 超出。
+         *
+         * 这里**不能**写 `this.deficit < 0 ? 红 : 绿` —— 那是派生，
+         * 卡片进程的响应式追踪不认（见 CardData 文件头），会永远显示初值。
+         */
+        .color(this.ringColor)
         // 底环用浅灰，未完成部分才看得出刻度感
         .backgroundColor(COLOR_TRACK)
         .style({ strokeWidth: 6 })
 
+      /*
+       * 环心三行，与首页环心同一套结构。
+       *
+       * 间距 0 且三行都紧贴：60vp 的圆里要塞下三行，任何多余留白
+       * 都会把数字挤小。数字取绝对值 —— 缺口为负时标签已经变成「超出」，
+       * 再显示负号会读成「超出 -500」。
+       */
       Column({ space: 0 }) {
-        Text(`${this.intake}`)
-          .fontSize(15)
+        Text(this.deficitLabel)
+          .fontSize(9)
+          .fontColor(this.deficitLabelColor)
+        Text(`${this.deficitAbs()}`)
+          .fontSize(17)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLOR_TEXT)
-        Text(`/ ${this.budget}`)
+        Text('千卡')
           .fontSize(9)
           .fontColor(COLOR_TEXT_SUB)
       }
     }
     .width(60)
     .height(60)
+  }
+
+  /**
+   * 缺口的绝对值。
+   *
+   * ⚠️ 这是一个**方法调用**，看起来违反了「卡片零派生」——但它不读任何
+   * @LocalStorageProp 之外的响应式来源，只把已绑定的 deficit 取绝对值，
+   * 属于「贴值前的格式化」而不是「派生」。首页环心用 Math.abs() 也是同理。
+   *
+   * 之所以不把绝对值也放后端：那会多一个字段，而且两个字段可能不同步
+   *（改了 deficit 忘了改 abs），一个数值一个来源更稳。
+   */
+  private deficitAbs(): number {
+    return this.deficit < 0 ? -this.deficit : this.deficit;
   }
 
   /**

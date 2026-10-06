@@ -76,10 +76,17 @@ export default class CalorieCardAbility extends FormExtensionAbility {
        * 诊断日志：把「读到了什么」和「要推什么」都打出来。
        * 点刷新没反应时，靠这两行区分是【读到的数据就是旧的】
        * 还是【推出去了但卡片没重绘】。
+       *
+       * 后面四项是缺口分档的输入与结果：卡片的环色/档位文案完全由它们决定，
+       * 而卡片 UI 跑在系统进程里看不到节点 —— 排查「卡片没变红」时
+       * 只能靠这几行确认是算错了还是没渲染出来。
        */
       hilog.info(DOMAIN, 'CalorieLite',
         'card build: storeReady=%{public}s records=%{public}d intake=%{public}d -> push intake=%{public}d',
         `${Store.isReady()}`, home.records.length, Math.round(home.summary.intake), data.intake);
+      hilog.info(DOMAIN, 'CalorieLite',
+        'card deficit: actual=%{public}d planned=%{public}d -> %{public}s ringColor=%{public}s',
+        data.deficit, data.plannedDeficit, data.deficitLabel, data.ringColor);
       return data.toPayload();
     } catch (err) {
       hilog.error(DOMAIN, 'CalorieLite', 'card data build failed: %{public}s', JSON.stringify(err));

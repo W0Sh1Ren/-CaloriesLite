@@ -157,6 +157,16 @@ export const INPUT_PLACEHOLDER: string = COLOR_TEXT_SUB;
 /** 换算：1 公斤脂肪约等于多少千卡 */
 export const KCAL_PER_KG_FAT: number = 7700;
 
+/**
+ * 缺口分档与配色 —— 实现在 common/DeficitStyle.ets。
+ *
+ * 这里只做**转发**，让页面继续从 Theme 取（少改调用点）。
+ * 为什么实现不放本文件：Theme 依赖 @kit.ArkUI（动画曲线），
+ * 而桌面卡片的 Ability 侧不能把 UI 依赖带进卡片进程 ——
+ * DeficitStyle 是纯净的，卡片可以直接引用同一份实现。
+ */
+export { DeficitState, deficitState, deficitColor, deficitLabel, deficitLabelColor } from './DeficitStyle';
+
 /** 悬浮导航栏高度。取 70 是为了让 borderRadius 正好是高度的一半（35），capsule 才对称 */
 export const NAV_HEIGHT: number = 70;
 /** 悬浮导航栏圆角：固定为高度的一半，形成完整胶囊 */

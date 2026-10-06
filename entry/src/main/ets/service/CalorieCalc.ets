@@ -6,12 +6,15 @@
  *        男性：BMR = 10×体重(kg) + 6.25×身高(cm) − 5×年龄 + 5
  *        女性：BMR = 10×体重(kg) + 6.25×身高(cm) − 5×年龄 − 161
  *   2. TDEE（每日总消耗）= BMR × 活动系数
- *   3. 每日热量预算 = TDEE + 目标调整量（减脂为负、增重为正）
+ *   3. 每日热量目标 = TDEE + 目标调整量（减脂为负、增重为正），但不低于 BMR
  *
- * 热量缺口 = 每日预算 + 运动消耗 − 当日摄入
+ * 热量缺口 = TDEE + 运动消耗 − 当日摄入
+ *   ⚠️ 用 TDEE 而不是「每日目标」：目标是计划（已含想减的部分），
+ *      缺口是实际发生的能量亏空，两者不能混（详见 DailySummary 的类注释）。
  */
 import { activityFactor, goalAdjust } from '../model/Enums';
 import { Gender, UserProfile } from '../model/Types';
+import { KCAL_PER_KG_FAT } from '../common/Theme';
 
 /** 安全下限，避免用户瞎填导致预算为负或离谱 */
 const MIN_WEIGHT_KG = 25;
@@ -79,19 +82,38 @@ export function calcDailyBudget(profile: UserProfile): number {
   return Math.round(Math.max(adjusted, floor));
 }
 
-/** 按当前体重与目标体重，估算达到目标需要多少天（按每公斤脂肪约 7700 千卡） */
+/**
+ * 按当前体重与目标体重，估算达到目标需要多少天。
+ *
+ * 系数走 KCAL_PER_KG_FAT（Theme），不在这里写死：
+ * 同一个物理量只应有一处定义，否则调系数时容易只改一处。
+ *
+ * ⚠️ 这个估算是**线性**的，偏乐观：它假设 TDEE 恒定，但实际上
+ *    TDEE 随体重下降而下降（BMR 里带体重项），缺口会自己缩小。
+ *    实测差距约 10~20%，真实情况还会再慢一些（代谢适应）。
+ */
 export function estimateDaysToGoal(profile: UserProfile, targetWeightKg: number): number {
   const budget: number = calcDailyBudget(profile);
   const tdee: number = calcTdee(profile);
   const dailyGap: number = tdee - budget;
   if (dailyGap <= 0) {
-    return -1; // 当前目标不是减脂，或预算未形成缺口
+    return -1; // 当前目标不是减脂，或目标未形成缺口
   }
   const deltaKg: number = profile.weightKg - targetWeightKg;
   if (deltaKg <= 0) {
     return 0; // 已经达标
   }
-  return Math.ceil(deltaKg * 7700 / dailyGap);
+  return Math.ceil(deltaKg * KCAL_PER_KG_FAT / dailyGap);
+}
+
+/**
+ * 把热量换算成**脂肪克数**（供界面做直观对比）。
+ *
+ * 用 KCAL_PER_KG_FAT / 1000 得到「每克脂肪的大卡」（7700 / 1000 = 7.7）。
+ * 输入为负（能量盈余）时返回负数，界面据此显示「相当于 +xx g 脂肪」之类。
+ */
+export function kcalToFatGrams(kcal: number): number {
+  return Math.round(kcal / (KCAL_PER_KG_FAT / 1000));
 }
 
 /** 按体重算出 BMI */

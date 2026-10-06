@@ -17,7 +17,7 @@ import { DailyService } from '../service/DailyService';
 import { FoodRepo } from '../service/FoodRepo';
 import { BodyRepo } from '../service/BodyRepo';
 import { ExerciseRepo } from '../service/ExerciseRepo';
-import { calcExerciseKcal, MET_TABLE, MetItem } from '../service/CalorieCalc';
+import { calcExerciseKcal, MET_TABLE, MetItem, kcalToFatGrams } from '../service/CalorieCalc';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
   COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
@@ -284,15 +284,26 @@ export struct HistoryTab {
            * 数字走 state 缓存（monthDeficitKcal），不在这里现算 ——
            * 那个方法要逐天读记录，放 build 里每次重建都会重跑。
            *
-           * 用 layoutWeight(1) 吃掉剩余空间并右对齐，紧贴翻月按钮，
-           * 不会随月份文字长短（10月 vs 11月）左右晃动。
+           * 两行：主数字 + 折算成脂肪克数。
+           * 「克数」是给人一个直观锚点（千卡这个单位本身没有体感），
+           * 所以放小字、不抢主数字。系数走 KCAL_PER_KG_FAT，不写死。
+           *
+           * 用 Column + layoutWeight(1) 吃掉剩余空间并右对齐：
+           * 权重必须给这个 Column（而不是里面的 Text），否则两行会各自
+           * 挤在中间、彼此不对齐。
            */
-          Text(`本月缺口 ${this.monthDeficitKcal} 千卡`)
-            .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
-            .layoutWeight(1)
-            .textAlign(TextAlign.End)
-            .margin({ right: 4 })
+          Column({ space: 1 }) {
+            Text(`本月缺口 ${this.monthDeficitKcal} 千卡`)
+              .fontSize(12)
+              .fontColor(COLOR_TEXT_SUB)
+            Text(`相当于 ${kcalToFatGrams(this.monthDeficitKcal)} g 脂肪`)
+              .fontSize(11)
+              .fontColor(COLOR_TEXT_SUB)
+              .opacity(0.75)
+          }
+          .alignItems(HorizontalAlign.End)
+          .layoutWeight(1)
+          .margin({ right: 4 })
 
           Button({ type: ButtonType.Circle }) {
             Text('‹').fontSize(18).fontColor(COLOR_TEXT)
