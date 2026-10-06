@@ -12,7 +12,21 @@
 import { router, curves } from '@kit.ArkUI';
 import { promptAction } from '@kit.ArkUI';
 // uiMaterial：系统材质（沉浸光感）。底部页签的悬浮样式靠它开材质。
-import { uiMaterial } from '@kit.ArkUI';
+// SymbolGlyphModifier：构造页签图标的系统符号（BottomTabBarStyle 需要）。
+import { uiMaterial, SymbolGlyphModifier } from '@kit.ArkUI';
+/*
+ * HDS（HMS SDK 的 UIDesignKit）—— 官方导航/页签组件。
+ *
+ * ⚠️ 它在 `sdk/default/hms` 而不是 `sdk/default/openharmony`，
+ *    这是本项目一度误判「没有 HDS」的原因（只搜了 openharmony）。
+ *
+ * 为什么用 HdsTabs 而不是内置 Tabs：
+ *   内置 Tabs 的 barFloatingStyle 走的是 uiMaterial，
+ *   而本机 `isImmersiveMaterialSupported() = false`（低算力档），
+ *   拿不到沉浸光感；HDS 的 `getSystemMaterialTypes()` 却包含 IMMERSIVE。
+ *   实测两套 API 给出相反结论，HDS 这套在本机可用。
+ */
+import { HdsTabs, HdsTabsController, hdsMaterial, HdsBarStyle } from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -64,13 +78,28 @@ const CAMERA_BAR_HEIGHT: number = 50;
 const DATE_SWIPE_MIN_VP: number = 40;
 
 /**
+ * 悬浮页签栏（Tabs 的 barFloatingStyle）用的两个尺寸。
+ *
+ * 换 Tabs 后，底部那条栏不再是自己画的胶囊，而是 Tabs 的悬浮页签栏，
+ * 它的高度与外边距由这两个常量驱动 —— 内容留白与拍照按钮的位置
+ * 都必须跟着它们算，否则会出现「按钮压住页签栏」或「内容被栏压住」。
+ */
+const TAB_BAR_HEIGHT: number = 56;
+/** 页签栏底边距屏幕底（还要再加上底部安全区） */
+const TAB_BAR_BOTTOM_MARGIN: number = 30;
+
+/**
  * 悬浮按钮底边距屏幕底的高度。
  *
- * 组成：底部安全区 + 导航栏外边距(30) + 导航栏高度 + 两条之间的呼吸(NAV_MARGIN)。
- * 这样按钮正好落在导航栏**正上方**，两者不重叠、也不贴在一起。
+ * 组成：底部安全区 + 页签栏底边距(30) + 页签栏高度 + 两条之间的呼吸(NAV_MARGIN)。
+ * 这样按钮正好落在页签栏**正上方**，两者不重叠、也不贴在一起。
+ *
+ * ⚠️ 换成 Tabs 后这里必须用 TAB_BAR_HEIGHT 而不是 NAV_HEIGHT：
+ *    NAV_HEIGHT 是自绘胶囊的高度（70），页签栏只有 56，继续用 70
+ *    会把按钮顶高一截，与页签栏之间空出一条明显的缝。
  */
 function cameraFloatBottom(bottomInset: number): number {
-  return bottomInset + 30 + NAV_HEIGHT + NAV_MARGIN;
+  return bottomInset + TAB_BAR_BOTTOM_MARGIN + TAB_BAR_HEIGHT + NAV_MARGIN;
 }
 
 /** 三个导航项 */
@@ -118,18 +147,43 @@ struct Index {
   @State bottomInset: number = 0;
   /** 已展开明细的餐次。默认为空即全部收起 */
   @State expandedMeals: MealType[] = [];
+
   /**
-   * 悬浮拍照按钮是否处于「展开」状态。
+   * HDS 页签控制器 —— 收缩/展开动画的**唯一驱动**。
    *
-   * 它是 `dayKey === todayKey()` 的**动画化替身**：两者语义相同，
-   * 但这个可以被 animateTo 平滑推到 0/1，而布尔条件渲染没有中间帧
-   *（`if` 只会让节点整体出现或消失，观感是硬切）。
-   *
-   * 单独用一个 state 而不是每次现算 `this.dayKey === todayKey()`：
-   * 现算的话，动画与数据更新会在同一帧里竞争，收缩到一半就被新值打断。
-   * 这里由各处**显式**同步，更新时间点可控。
+   * 关键认知：HdsTabsMiniBar **不会**自己随滚动收缩。
+   * `miniBarStyle: COLLAPSE` 只是声明「收缩态长什么样」，
+   * 真正的收起/展开要通过 controller 主动调：
+   *   applyHideAnimation(mode)  → 收起，只剩圆球
+   *   applyShowAnimation(mode)  → 展开，变回完整页签栏
+   * mode 用 SCROLL_ANIMATION 表示「这是滚动触发的」，
+   * 系统会据此选相应的动画时长与曲线（别自己写 animateTo）。
    */
-  @State cameraBarOn: boolean = true;
+  private hdsTabsController: HdsTabsController = new HdsTabsController();
+
+  /**
+   * 拍照粒子是否处于**展开**态（页签栏折叠 + 迷你栏展开）。
+   *
+   * 必须是 @State：@Builder 内部要读它来决定画不画「拍照识别热量」文字，
+   * 普通字段不会触发重建。
+   *
+   * 初值 false = 迷你栏折叠（一颗球）+ 页签栏展开。这也是 HdsTabs 的默认态：
+   * 实测启动日志为 `mini=0 tab=1`（迷你栏折叠、页签栏展开）。
+   */
+  @State shootExpanded: boolean = false;
+
+
+  /**
+   * 首页滚动容器的句柄，交给 HdsTabsController.bindScroller 绑定。
+   *
+   * 绑上去之后系统才知道「这一页的滚动」该驱动哪个页签栏的收放，
+   * 从而在正确的时机播动画。不绑的话 controller 的调用没有上下文，
+   * 收缩动画不会跟着内容走。
+   */
+  private todayScroller: Scroller = new Scroller();
+
+  /** 页签栏当前是否处于收起态（避免重复调同一个动画） */
+  private barCollapsed: boolean = false;
   /**
    * 页面切换用的曲线。
    *
@@ -197,6 +251,21 @@ struct Index {
     });
     this.modalOpen = AppState.modalOpen;
     this.reload();
+
+    /*
+     * 把首页的滚动容器绑到页签控制器上。
+     *
+     * 这是收缩动画能「跟着内容走」的前提：控制器需要知道
+     * 「哪一页的滚动」驱动「哪条页签栏」，才能选对时机播动画。
+     * 不绑的话 applyHide/ShowAnimation 缺少上下文，
+     * 表现就是「球是出来了，但和完整栏并排、谁也没让位」。
+     */
+    try {
+      this.hdsTabsController.bindScroller(0, this.todayScroller);
+    } catch (err) {
+      const e: BusinessError = err as BusinessError;
+      hilog.error(DOMAIN, 'CalorieLite', 'bindScroller failed: %{public}s', e.message);
+    }
   }
 
   aboutToDisappear(): void {
@@ -229,21 +298,18 @@ struct Index {
     this.refreshTick++;
 
     /*
-     * 回到首页时让拍照按钮重新展开。
+     * 从拍照页返回时把拍照粒子收回折叠态。
      *
-     * 点按钮跳去拍照页时把它设成了 false（收缩），回来必须还原，
-     * 否则按钮会一直停在被压扁的状态。
+     * 否则它会停在"展开成一条胶囊"的样子：用户拍完回到首页，
+     * 底部一直挂着一条写着「拍照识别热量」的宽栏，既占地方，
+     * 又让人以为还在某个操作流程里。
      *
-     * ⚠️ 这里用 setTimeout 延后一帧多，不是在跟动画抢时间，而是为了
-     *    让「展开」从页面可见之后才开始：onPageShow 是在返回转场**期间**
-     *    触发的，若同一帧就展开，撑开的过程会被转场画面盖掉一多半。
-     *    等 260ms（约 DUR_NORMAL）让转场收尾，展开才看得完整。
-     *
-     * 只在「今天」展开：从历史日期回来时按钮本来就该是收起的。
+     * 放在 onPageShow 是因为这条路径只有一种走法（进拍照页 → 返回），
+     * 不必区分是从相机还是相册进来的。
      */
-    setTimeout(() => {
-      this.cameraBarOn = this.dayKey === todayKey();
-    }, 260);
+    if (this.shootExpanded) {
+      this.collapseShootBall();
+    }
   }
   // 注意：这里不要改用 @StorageLink('dataStamp')。
   // 该装饰器在绑定那一刻就要求 AppStorage 里已存在同名键，
@@ -374,6 +440,207 @@ struct Index {
     }
     .width('100%')
     .height('100%')
+  }
+
+  /** 首页已滚动的累计距离（px）。用来判「是否已经离开顶部」 */
+  private todayScrollTop: number = 0;
+  /** 连续同向滚动的累计量，用于滤掉抖动 */
+  private scrollDirAccum: number = 0;
+
+  /**
+   * 首页滚动位置追踪（当前**不驱动任何动画**）。
+   *
+   * 这里曾用来做「滚动时页签栏收缩/展开」，试过两版都失败，已放弃：
+   *   ① applyHideAnimation —— 语义是「隐藏整个组件」，实测整条栏往下滑走
+   *      而且**不回来**（滚到底部后底栏整个消失）。
+   *   ② 加 miniBar —— 圆球与完整栏**并排同时出现**（barLayoutMode 默认
+   *      HORIZONTAL），点圆球没反应、点完整栏反而会伸展。
+   *
+   * 结论（重要，别再试同一条路）：
+   *   **HdsTabsMiniBar 是「追加在页签栏那一行里的一个附加块」，
+   *   它不能替代页签栏**。`barLayoutMode` 只控制它和页签栏「并排」还是
+   *   「分两行」，没有「隐藏页签栏、只留 miniBar」这个选项。
+   *   所以华为音乐那种「左栏右球互换形态」用 HDS 原生组件做不到，
+   *   要做只能底部整体自绘（那时也拿不到官方材质了）。
+   *
+   * 方法保留是因为累计位置以后可能还有用（比如做半透明的渐变顶栏），
+   * 但**不要再往里加 applyHide/ShowAnimation**。
+   */
+  private onTodayScroll(offset: number): void {
+    this.todayScrollTop += offset;
+    if (this.todayScrollTop < 0) {
+      this.todayScrollTop = 0;
+    }
+  }
+
+  /**
+   * 与页签栏同一行的**拍照入口**（挂在 miniBar 上）。
+   *
+   * 它是整个应用唯一的拍照入口：点它 = 拍一张记到今天。
+   * 因为处在浮动页签栏那一行里，它天然继承沉浸光感的材质背景，
+   * 看起来就是页签栏旁边的一颗粒子。
+   *
+   * ⚠️ 之前怀疑「miniBar 里的 onClick 不生效」——那是因为当时
+   *    我把整个 miniBar 当成了收缩态来用（配合 applyHideAnimation 误用），
+   *    回调链路是坏的。现在只把它当一个普通容器用，点击走正常的
+   *    onClick。若实测仍不触发，就是 HdsTabs 吞了手势，需要改自绘。
+   *
+   * 只放相机图标、不放文字：这一行的高度与页签栏相同，
+   * 写「拍照识别热量」会挤掉页签栏的宽度。
+   *
+   * ── 沉浸材质与光效（用户要求：跟随页签栏，不自己设）
+   * 两者都**继承**，不在这个 builder 里配置：
+   *   · 材质 —— `enableMiniBarBackground: true`（见 barFloatingStyle），
+   *     语义是「mini bar background follow tab bar」，即共用页签栏那块玻璃。
+   *     HdsTabsMiniBar 里**没有** systemMaterialEffect 字段，想自己设也设不了。
+   *   · 光效 —— 走页签栏的 `lightColor`（品牌绿）。HdsTabsMiniBar 里
+   *     同样没有 lightColor 字段。
+   *
+   * ⚠️ 所以这里**不要**给容器设 backgroundColor 实色：
+   *    miniBar 的材质是「跟随页签栏」的，实色底会把它整块盖掉
+   *   （与官方文档里「设了悬浮材质后不要再设 barBackgroundColor」同理）。
+   *    下面用的是**半透明**的浅色，只做形状提示、不挡材质。
+   *
+   * ── 两种形态（由 shootExpanded 决定）
+   *   折叠：只有相机图标 → 一颗球
+   *   展开：相机图标 + 「拍照识别热量」→ 一条胶囊
+   *
+   * ⚠️ 读 this.shootExpanded 而**不通过参数传**：@Builder 的入参只求值一次，
+   *    之后状态变了不会重建（本项目在顶栏标题、热量环上都踩过这个坑）。
+   */
+  @Builder
+  shootBall() {
+    Row({ space: 8 }) {
+      SymbolGlyph($r('sys.symbol.camera_fill'))
+        .fontSize(22)
+        .fontColor([COLOR_PRIMARY])
+      // 只有在展开态才显示文字；折叠态是一颗球，宽度放不下
+      if (this.shootExpanded) {
+        Text('拍照识别热量')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(COLOR_PRIMARY)
+          .maxLines(1)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    /*
+     * 形状提示：极淡的浅色圆底 + 一圈细描边。
+     *
+     * 为什么要它：miniBar 继承的是页签栏那块**长方形**玻璃，
+     * 直接看是一块裸图标浮在栏中央、读不出「这里可以点」。
+     * 补一个圆底才像一颗可点的球。
+     *
+     * 用 8% 白而不是实色：既能勾出圆形，又不会挡住继承来的材质与光效。
+     * 圆角取 999 → 折叠时是圆、展开时是胶囊，两种形态自动成立。
+     */
+    .backgroundColor('#14FFFFFF')
+    .borderRadius(999)
+    .border({ width: 0.5, color: '#33FFFFFF' })
+    .onClick(() => {
+      this.onShootBallTap();
+    })
+  }
+
+  /**
+   * 拍照粒子的**两步式**点击。
+   *
+   * 用户定的交互：
+   *   第 1 次点（折叠态）→ 展开迷你栏 + 页签栏缩成球，**不跳转**
+   *   第 2 次点（展开态）→ 才进拍照页
+   *
+   * 为什么要有第一步：折叠态只是一颗小图标，直接跳走太突然，
+   * 而且用户没有"确认要拍照"的机会。先摊开成一条写着「拍照识别热量」
+   * 的胶囊，语义明确，再点才执行 —— 与系统里「展开型操作按钮」一致。
+   *
+   * ⚠️ 只做「折叠 → 展开」，不做「展开 → 折叠」：
+   *    否则用户想拍照时点到一下会先缩回去，得点第三次，很别扭。
+   *    收起的时机交给别处（如从拍照页返回时还原），不占用手势。
+   */
+  private onShootBallTap(): void {
+    if (this.shootExpanded) {
+      // 已经展开了 → 这一次是"确认拍照"
+      this.goCamera();
+      return;
+    }
+    this.shootExpanded = true;
+    /*
+     * 让页签栏折叠、迷你栏展开。
+     *
+     * ✅ 实测确认这条链路可用（日志 mode=2 即 APP_TRIGGER）：
+     *    applyMiniBarStyle(EXPAND) →
+     *      miniBarStyle=1（展开，宽 269.7）
+     *      tabBarStyle=0（折叠，宽 56）
+     *    两个动画同时启动，正是「左球右栏」的形态。
+     *
+     * ⚠️ 别用 applyHide/ShowAnimation：那两个的语义是「隐藏/显示整个组件」，
+     *    实测会把整条栏往下滑走而且不回来。
+     */
+    try {
+      this.hdsTabsController.applyMiniBarStyle(HdsBarStyle.EXPAND);
+    } catch (err) {
+      const e: BusinessError = err as BusinessError;
+      hilog.error(DOMAIN, 'CalorieLite', 'applyMiniBarStyle failed: %{public}s', e.message);
+    }
+  }
+
+  /** 把页签栏还原成展开、迷你栏折叠（默认态） */
+  private collapseShootBall(): void {
+    this.shootExpanded = false;
+    try {
+      this.hdsTabsController.applyMiniBarStyle(HdsBarStyle.COLLAPSE);
+    } catch (err) {
+      const e: BusinessError = err as BusinessError;
+      hilog.error(DOMAIN, 'CalorieLite', 'applyMiniBarStyle failed: %{public}s', e.message);
+    }
+  }
+
+  /**
+   * 进拍照页。
+   *
+   * 抽出成方法是因为有两个入口（导航栏的拍照粒子、桌面卡片带来的路由），
+   * 原来两处各写一份 pushUrl + try/catch，改一处容易漏另一处。
+   */
+  private goCamera(): void {
+    /*
+     * 显式把目标日期设成**今天**。
+     *
+     * 不设的话会沿用 AppState.targetDay 里残留的值：用户可能刚在
+     * 记录页翻到 10 月 3 日补记过（那个日期会留在 targetDay 里），
+     * 之后点拍照入口，记录会落到 10 月 3 日而不是今天。
+     */
+    AppState.targetDay = todayKey();
+    AppState.targetMeal = guessMealType(hourOf(Date.now()));
+    try {
+      router.pushUrl({ url: 'pages/Camera' });
+    } catch (err) {
+      const e: BusinessError = err as BusinessError;
+      hilog.error(DOMAIN, 'CalorieLite', 'goCamera failed: %{public}s', e.message);
+    }
+  }
+
+  /**
+   * 构造一个底部页签的样式：图标 + 文字。
+   *
+   * 图标用**系统符号**（`sys.symbol.*`）而不是自备图片资源：
+   * 系统符号随主题自动适配（深浅色、加粗、选中态），
+   * 而且不用往 resources 里塞 png。名字来自官方符号表，
+   * **拼错不会报错、只会不显示**，所以改了名字一定要真机看一眼。
+   *
+   * normal / selected 用「线框 + 实心」这一对，
+   * 这也是系统自带应用（设置、文件管理）底部页签的通行做法。
+   */
+  private navTab(text: string, normalSym: string, selectedSym: string): BottomTabBarStyle {
+    return new BottomTabBarStyle(
+      {
+        normal: new SymbolGlyphModifier($r(normalSym)),
+        selected: new SymbolGlyphModifier($r(selectedSym))
+      } as TabBarSymbol,
+      text
+    );
   }
 
   /** 顶栏主标题 */
@@ -536,22 +803,17 @@ struct Index {
   }
 
   /**
-   * 设置当前查看的日期，并同步拍照按钮的显隐。
+   * 设置当前查看的日期。
    *
-   * 为什么要有这个函数：`dayKey` 和 `cameraBarOn` 必须**永远一致**
-   *（一个是数据，一个是它的动画化表现），但 `dayKey` 有三四个写入点。
-   * 之前每处各写一行 `this.dayKey = ...`，加 `cameraBarOn` 时就要改好几处，
-   * 漏一个就会出现「历史日期上还浮着拍照按钮」。
-   * 现在所有写入点都走这里，只改一个地方。
+   * 为什么要有这个函数：`dayKey` 有三四个写入点（顶栏箭头、左右滑动、
+   * 卡片路由、补记返回），散着写容易漏。
+   *
+   * 历史上这里还负责同步 `cameraBarOn`（悬浮拍照按钮的显隐）——
+   * 那个按钮已经删掉，改成导航栏那一行里的拍照粒子（常显、恒记今天），
+   * 所以这个同步逻辑不再需要。
    */
   private setDayKey(day: string): void {
     this.dayKey = day;
-    // 箭头函数体里不能有语句，所以这里写成普通判断
-    if (day === todayKey()) {
-      this.cameraBarOn = true;
-    } else {
-      this.cameraBarOn = false;
-    }
   }
 
   /**
@@ -712,7 +974,15 @@ struct Index {
        * ⚠️ 设了悬浮材质后**不能再设** barBackgroundColor / barBackgroundBlurStyle，
        *    否则会遮挡材质。所以这里一个都不设。
        */
-      Tabs({ barPosition: BarPosition.End, index: this.activeTab }) {
+      /*
+       * ⚠️ 用 HdsTabs 而不是内置 Tabs。
+       *
+       * 两者外形相似，但材质通道不同：
+       *   内置 Tabs  → uiMaterial.IsImmersiveMaterialSupported()（本机 false）
+       *   HdsTabs   → hdsMaterial.getSystemMaterialTypes()（本机含 IMMERSIVE）
+       * 实测两套 API 结论相反，而 HdsTabs 这套正是「很多应用长得一样」的来源。
+       */
+      HdsTabs({ barPosition: BarPosition.End, index: this.activeTab, controller: this.hdsTabsController }) {
         TabContent() {
           Column() {
             this.todayView()
@@ -720,7 +990,7 @@ struct Index {
           .width('100%')
           .height('100%')
         }
-        .tabBar('首页')
+        .tabBar(this.navTab('首页', 'sys.symbol.house', 'sys.symbol.house_fill'))
 
         TabContent() {
           Column() {
@@ -729,7 +999,7 @@ struct Index {
           .width('100%')
           .height('100%')
         }
-        .tabBar('记录')
+        .tabBar(this.navTab('记录', 'sys.symbol.calendar', 'sys.symbol.calendar_fill'))
 
         TabContent() {
           Column() {
@@ -738,42 +1008,66 @@ struct Index {
           .width('100%')
           .height('100%')
         }
-        .tabBar('我的')
+        .tabBar(this.navTab('我的', 'sys.symbol.person', 'sys.symbol.person_fill'))
       }
       /*
        * 页签栏本身的高度。
        *
        * 不设的话系统给的是默认高度（偏高的标准 TabBar），
-       * 与我们原来那条 70vp 的胶囊对不上。这里按原来的视觉高度收紧。
+       * 与页面其它控件的节奏不一致。56 接近原来那条胶囊的观感。
        */
-      .barHeight(56)
+      .barHeight(TAB_BAR_HEIGHT)
       /*
-       * 悬浮页签栏 —— 沉浸光感的入口。
+       * 悬浮页签栏 —— 沉浸光感的入口（HDS 版）。
        *
-       * 🌟 systemMaterial 必须显式写在这里。官方说明：
-       *    「应用级 ENABLE 模式下底部页签**不会**默认开启沉浸光感；
-       *      设置 barFloatingStyle 并生效悬浮样式时，底部页签默认开启」
-       *    但实测把材质对象显式传进去最稳（也才能自定义 interactive /
-       *    lightEffect 这两项）。
+       * 与内置 Tabs 的 barFloatingStyle 相比，HDS 这版**多给了一个
+       * `systemMaterialEffect`**，而且用的是 hdsMaterial 那一套枚举：
+       *   materialType   —— IMMERSIVE(101) 明确要沉浸材质；
+       *                     ADAPTIVE(100) 是「跟随系统策略」
+       *   materialLevel  —— ADAPTIVE(10) 让系统按设备算力自动选精细度，
+       *                     这也是官方推荐的写法（不必自己判档）
+       *
+       * lightColor 是**光效颜色**，可以直接给品牌绿 —— 这是内置 Tabs
+       * 那套做不到的（那边选中色被 SDK 硬编码成系统蓝）。
        */
       .barFloatingStyle({
         // 左右留白：与内容区的 PAGE_PAD 对齐，不然页签栏比卡片宽一圈
         barSideMargin: PAGE_PAD,
         // 抬离屏幕底部，让出手势条 + 留一点视觉呼吸
-        barBottomMargin: this.bottomInset + 30,
+        barBottomMargin: this.bottomInset + TAB_BAR_BOTTOM_MARGIN,
+        // 按左右手习惯自适应
         adaptToHandedness: true,
-        systemMaterial: new uiMaterial.ImmersiveMaterial({
-          // THIN：胶囊背景要透出内容才像玻璃；ULTRA_THIN 在浅色页面上几乎看不见
-          style: uiMaterial.ImmersiveStyle.THIN,
-          applyShadow: true,
-          // 交互形变：按压时的弹性形变（就是别家导航栏那种「果冻」感）
-          interactive: true,
-          // 点光源/流光：手指触摸时的光感反馈
-          lightEffect: { color: Color.White }
-        })
+        // 光效颜色：给品牌绿，和主色呼应
+        lightColor: COLOR_PRIMARY,
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        },
+        /*
+         * ── 与页签栏**同一行**的拍照入口 ──
+         *
+         * miniBar 与页签栏在**同一条 band**里横向并排，高度自动一致。
+         * 两者是**互斥**关系（官方文档「设置页签栏的悬浮样式」的说明）：
+         *   迷你栏折叠 + 页签栏展开  ← 默认态（启动日志 mini=0 tab=1）
+         *   迷你栏展开 + 页签栏折叠  ← 点拍照粒子后（mini=1 tab=0）
+         * 切换走 controller.applyMiniBarStyle()，见 onShootBallTap 的说明。
+         *
+         * ⚠️ `miniBarWidth` 管的是**横向宽度**（三档断点），不是高度。
+         *    早期误把它当高度填了 TAB_BAR_HEIGHT(56)，结果球被挤成窄条。
+         *    这里留给系统默认（实测展开宽度 269.7vp，正好放得下
+         *    「拍照识别热量」，与页签栏宽度一致）。
+         */
+        miniBar: {
+          miniBarBuilder: (): void => {
+            this.shootBall();
+          },
+          // 迷你栏背景跟随页签栏（共用同一块沉浸材质玻璃）
+          enableMiniBarBackground: true
+        }
       })
       /*
-       * ⚠️ 这三个是悬浮样式的**前置条件**，不是可选修饰。
+       * ⚠️ 悬浮样式的**前置条件**：barOverlap + 非竖向 + barPosition.End。
+       *    HDS 文档同样要求，缺一个材质就不生效。
        */
       .barOverlap(true)
       .vertical(false)
@@ -794,6 +1088,33 @@ struct Index {
       })
       .width('100%')
       .height('100%')
+
+      /*
+       * ---------------------------------------------------- 3. 毛玻璃顶栏
+       *
+       * ⚠️ 必须留在 Stack 的**顶层**并加 zIndex(1)：它是覆盖在内容之上的，
+       *    内容向上滚动时从它下面穿过去、被模糊掉。
+       *
+       * 换成 Tabs 时这段曾被漏掉（原来它长在 contentView() 里，
+       * 而 contentView 被废弃了），表现就是「顶部的 UI 没了」。
+       * 顶栏与页签栏是两件独立的事：页签栏交给 Tabs，
+       * 顶栏仍然自绘（官方材质要在 Navigation 标题栏里才生效，
+       * 那需要把整页改成 Navigation，见文件末尾的说明）。
+       */
+      GlassTopBar({
+        title: this.topTitle(),
+        subtitle: this.topSubtitle(),
+        leadingGlyph: '',
+        // 首页右上角放一对步进按钮用于切换日期
+        trailingGlyphs: this.activeTab === 0 ? ['‹', '›'] : [],
+        // 「今天」时不能再往后翻，把右箭头置灰
+        trailingEnabled: [true, this.dayKey !== todayKey()],
+        onTrailing: (index: number) => {
+          this.shiftDate(index === 0 ? -1 : 1);
+        }
+      })
+        .zIndex(1)
+        .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')
@@ -817,12 +1138,14 @@ struct Index {
      */
     Stack({ alignContent: Alignment.Bottom }) {
       Column() {
-        Scroll() {
+        Scroll(this.todayScroller) {
           // 顶部留出毛玻璃顶栏的高度，否则第一张卡片会被顶栏压住
           Column({ space: GAP }) {
             CalorieRing({
               intake: this.data.summary.intake,
               budget: this.data.summary.budget,
+              // 进度弧的分母用总消耗而不是每日目标（环满 = 吃到收支平衡点）
+              tdee: this.data.summary.tdee,
               exerciseKcal: this.data.summary.exerciseKcal,
               deficit: this.data.summary.deficit,
               // 计划缺口（TDEE − 每日目标）：环用它把缺口分三档（达标/未达标/超出）
@@ -928,23 +1251,19 @@ struct Index {
          * 结论：跟滚动物理耦合的东西，优先交给系统。
          */
         .edgeEffect(EdgeEffect.Spring)
+        /*
+         * 滚动方向驱动页签栏收放（见 onTodayScroll 的说明）。
+         *
+         * onScroll 给的是**这一帧的位移增量**（往下滚为负、往上滚为正），
+         * 正好用来判方向 —— 不需要自己记上一次的 offset 再求差。
+         */
+        .onScroll((xOffset: number, yOffset: number) => {
+          this.onTodayScroll(yOffset);
+        })
       }
       .width('100%')
       .height('100%')
 
-      /*
-       * 悬浮主操作：拍照识别。
-       *
-       * **只在「今天」显示**（用户要求）：
-       * 翻到历史某天时，这个按钮的语义是「现在拍一张」——那必然记到今天，
-       * 与当前正在看的日期不一致，容易误操作。
-       * 历史日期要补记，走「记录」页的补记入口（那里会把日期带上）。
-       *
-       * ⚠️ 这里**常挂载**，用 scaleX 收缩来「消失」，不用 `if` 条件渲染：
-       *    `if` 只让节点整体出现/消失，没有任何中间帧，观感是硬切。
-       *    改成缩放后，收起时从两端向中间压扁、展开时反向撑开，才有动作。
-       */
-      this.cameraBar()
     }
     .width('100%')
     .height('100%')
@@ -1112,26 +1431,18 @@ struct Index {
     }
     AppState.cardRoute = '';
     if (route === 'camera') {
-      /*
-       * 点卡片按钮记的是**今天**，所以这里必须显式把目标日期设成今天。
-       *
-       * 不设的话会沿用 AppState.targetDay 里残留的值：用户可能刚在
-       * 记录页翻到 10 月 3 日补记过（那个日期会留在 targetDay 里），
-       * 之后从桌面卡片点「拍照记录」，记录会落到 10 月 3 日而不是今天。
-       */
-      AppState.targetDay = todayKey();
-      // 餐次按当前时间猜，用户也可以在结果页改
-      AppState.targetMeal = guessMealType(hourOf(Date.now()));
       // 卡片是「回首页看看」的入口，先把视图切回今天那一页
       this.switchTo(0);
-      // 与首页那个悬浮按钮一致：跳走前先收起（回来时由 onPageShow 展开）
-      this.cameraBarOn = false;
-      try {
-        router.pushUrl({ url: 'pages/Camera' });
-      } catch (err) {
-        const e: BusinessError = err as BusinessError;
-        hilog.error(DOMAIN, 'CalorieLite', 'card route to camera failed: %{public}s', e.message);
-      }
+      /*
+       * 与导航栏那一行的拍照粒子走同一条链路。
+       *
+       * goCamera() 内部会做两件这里原本各写一份的事：
+       *   1. 显式把目标日期设成**今天** —— 不清的话会沿用
+       *      AppState.targetDay 里残留的值（用户可能刚给别的日期补记过），
+       *      记录会落到那一天而不是今天。
+       *   2. 统一处理 pushUrl 的异常。
+       */
+      this.goCamera();
     }
   }
 
@@ -1367,83 +1678,5 @@ struct Index {
       }
     }
     .width('100%')
-  }
-
-  /** 悬浮主操作：拍照识别。浮在底部导航栏正上方 */
-  @Builder
-  cameraBar() {
-    Row() {
-      Button({ type: ButtonType.Capsule }) {
-        Text('拍照识别热量')
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Color.White)
-      }
-      .width('100%')
-      .height(CAMERA_BAR_HEIGHT)
-      .backgroundColor(COLOR_PRIMARY)
-      // 与导航栏同一套「浮起」语言：深色投影拉开层次
-      .shadow({ radius: 20, color: 'rgba(16, 24, 36, 0.18)', offsetX: 0, offsetY: 8 })
-      .onClick(() => {
-        /*
-         * 先收起、再跳转：让「收缩」这一拍在页面切走之前就开始，
-         * 用户看到的是「按下去 → 按钮收起来 → 进拍照页」。
-         * 反过来（先跳转）的话，收缩动画会被页面转场盖掉，等于没有。
-         *
-         * 回来时由 onPageShow 设回 true 重新展开，见那边说明。
-         */
-        this.cameraBarOn = false;
-        try {
-          router.pushUrl({ url: 'pages/Camera' });
-        } catch (err) {
-          const e: BusinessError = err as BusinessError;
-          hilog.error(DOMAIN, 'CalorieLite', 'goCamera failed: %{public}s', e.message);
-        }
-      })
-    }
-    .width('100%')
-    /*
-     * 定位：底边刚好落在悬浮导航栏之上。
-     *
-     * 导航栏的占位 = bottomInset + 30(外边距) + NAV_HEIGHT，
-     * 再留 NAV_MARGIN 作为两条之间的呼吸。
-     * 这样按钮不压导航栏、导航栏也不压按钮，两者像一叠气泡。
-     */
-    .padding({ left: PAGE_PAD, right: PAGE_PAD, bottom: cameraFloatBottom(this.bottomInset) })
-    /*
-     * ══════════ 收起 / 展开动画 ══════════
-     *
-     * ── 为什么用 scaleX 而不是宽度
-     * 改 `.width()` 会**重新排版**整棵子树（按钮内部文字要重新居中、
-     * 底下的滚动内容要重算高度），每帧一次，廉价设备上会掉帧。
-     * `.scale()` 不参与布局，只在合成阶段把已画好的图形横向压扁，
-     * 代价几乎为零，而且效果正是「从两端向中间收缩」。
-     *
-     * ── 为什么不用 `.clip(true)` 包一层来切断
-     * 收缩到接近 0 时图形本身已经细成一条线，视觉上等同于消失，
-     * 不需要额外裁切；而多一层容器会多一次合成。
-     *
-     * ── 曲线的选择（Q 弹的来源）
-     * 用 cubicBezier 的**回弹曲线** (0.34, 1.56, 0.64, 1)：
-     * 第二控制点的 y = 1.56 > 1，也就是它会**冲过目标值再回落**。
-     * 展开时冲到略大于 1（按钮「弹」一下），收起时冲到略小于 0
-     *（压过头再回一点点），这就是 Q 弹的来源。
-     * 时长的 380ms 比应用的通用时长(DUR_NORMAL=260)长一些 ——
-     * 回弹需要时间让人看清「冲过头」和「弹回来」两拍，
-     * 太快会退化成普通缓动、弹感消失。
-     *
-     * ⚠️ 回弹曲线会让 scaleX 短暂变成负值。负值在渲染上等同于
-     *    镜像到 0，配合 scaleY=0 不会出现残影，但**别去掉 scaleY**：
-     *    只缩 X 不缩 Y，按钮会变成一根竖线。
-     */
-    .scale({ x: this.cameraBarOn ? 1 : 0, y: this.cameraBarOn ? 1 : 0 })
-    .opacity(this.cameraBarOn ? 1 : 0)
-    .animation({ duration: 600, curve: curves.cubicBezierCurve(0.34, 1.56, 0.64, 1) })
-    /*
-     * 收起后必须彻底让出点击：scaleX=0 时它仍占着那条横带，
-     * 不处理的话历史日期上会出现「点空白处却跳去拍照」。
-     */
-    .enabled(this.cameraBarOn)
-    .hitTestBehavior(this.cameraBarOn ? HitTestMode.Default : HitTestMode.None)
   }
 }

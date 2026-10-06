@@ -20,6 +20,14 @@ export struct CalorieRing {
   // ---- 当日数据，全部基本类型 ----
   @Prop @Watch('onDataChange') intake: number = 0;
   @Prop @Watch('onDataChange') budget: number = 0;
+  /**
+   * 当天总消耗 TDEE（维持体重所需）。
+   *
+   * 进度弧的分母用它而不是 budget：环要表达「吃进去的占身体实际消耗的多少」，
+   * 而 budget 是计划（已减掉要减的部分），拿它当分母会让「吃到目标」看起来
+   * 像「环画满了」。详见 ratio() 的说明。
+   */
+  @Prop @Watch('onDataChange') tdee: number = 0;
   @Prop @Watch('onDataChange') exerciseKcal: number = 0;
   @Prop @Watch('onDataChange') deficit: number = 0;
   /**
@@ -106,9 +114,22 @@ export struct CalorieRing {
     }, 16);
   }
 
-  /** 已摄入占「预算 + 运动」的比例（0-1），超出按 1 画满 */
+  /**
+   * 进度弧的填充比例（0-1），超出按 1 画满。
+   *
+   * ⚠️ 分母是「总消耗 TDEE + 运动」，**不是每日目标**。
+   *
+   * 为什么换成 TDEE：环要回答的问题是「我今天吃进去的，占身体实际消耗的多少」。
+   * 用每日目标当分母会把这个答案扭曲掉 —— 目标本身是**计划**（已经减掉
+   * 要减的那部分），所以「吃到目标」会显示成环刚好画满，看起来像
+   * 「今天吃够了/吃满了」，而实际只吃了总消耗的八成多。
+   * 换成 TDEE 后：环满 = 吃到收支平衡点，超出才变红，语义一致。
+   *
+   * 副作用（有意为之）：吃到每日目标时环停在约 85%（减脂场景），
+   * 剩下一小截就是「今天还没吃到收支平衡」的余量，和缺口数字互相印证。
+   */
   private ratio(): number {
-    const capacity: number = this.budget + this.exerciseKcal;
+    const capacity: number = this.tdee + this.exerciseKcal;
     if (capacity <= 0) {
       return 0;
     }

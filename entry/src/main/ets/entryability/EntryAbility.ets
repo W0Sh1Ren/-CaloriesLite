@@ -1,6 +1,10 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import uiMaterial from '@ohos.arkui.uiMaterial';
+// HDS（HMS SDK 的 UIDesignKit）：官方导航栏/页签组件与材质能力查询。
+// ⚠️ 它在 sdk/default/hms 而不是 openharmony —— 这是之前误判「没有 HDS」的原因。
+import { hdsMaterial } from '@kit.UIDesignKit';
 
 import { SafeArea } from '../common/SafeArea';
 import { Store } from '../common/Store';
@@ -12,6 +16,50 @@ const DOMAIN = 0x0000;
 export default class EntryAbility extends UIAbility {
   /** 持有主窗口，用于尺寸变化时重新测量安全区 */
   private mainWindow: window.Window | null = null;
+
+  /**
+   * 诊断：这台设备是否支持「沉浸光感」材质。
+   *
+   * 用 uiMaterial（API 26 起）的三个查询接口一次性打全：
+   *   · isImmersiveMaterialSupported —— 能不能用 ImmersiveMaterial
+   *   · getGlobalMaterialLevel        —— 设备的算力档（决定材质精细度）
+   *   · getMaterialInfo().state       —— 应用级沉浸材质当前开没开
+   *
+   * 之前试过沉浸材质但 getMaterialInfo().state 恒为 0，
+   * 这三行就是为了确认那到底是「设备不支持」还是「用法不对」。
+   */
+  private logMaterialSupport(): void {
+    try {
+      const supported: boolean = uiMaterial.isImmersiveMaterialSupported();
+      const level: number = uiMaterial.getGlobalMaterialLevel();
+      const info: uiMaterial.MaterialInfo = uiMaterial.getMaterialInfo();
+      hilog.info(DOMAIN, 'CalorieLite',
+        'material: supported=%{public}s level=%{public}d state=%{public}d type=%{public}d',
+        `${supported}`, level, info.state, info.type);
+    } catch (err) {
+      hilog.error(DOMAIN, 'CalorieLite', 'material probe failed: %{public}s', JSON.stringify(err));
+    }
+    /*
+     * HDS 侧的材质能力查询 —— 这才是那篇帖子里的 API。
+     *
+     * 与上面 uiMaterial 的区别：
+     *   uiMaterial  = OpenHarmony 自带（API 26 新增），给普通组件用
+     *   hdsMaterial = HMS 的 HDS 设计系统，HdsNavigation / HdsTabs 用它
+     *
+     * getSystemMaterialTypes() 返回设备支持的材质类型列表。
+     * 若包含 IMMERSIVE(101)，说明 HDS 组件能拿到完整沉浸光感
+     *（含交互形变、流光），帖子里的方案本机可用。
+     */
+    try {
+      const types: Array<hdsMaterial.MaterialType> = hdsMaterial.getSystemMaterialTypes();
+      const hasImmersive: boolean = types.indexOf(hdsMaterial.MaterialType.IMMERSIVE) >= 0;
+      hilog.info(DOMAIN, 'CalorieLite',
+        'hds material: count=%{public}d immersive=%{public}s',
+        types.length, `${hasImmersive}`);
+    } catch (err) {
+      hilog.error(DOMAIN, 'CalorieLite', 'hds material probe failed: %{public}s', JSON.stringify(err));
+    }
+  }
 
   /**
    * 来自桌面卡片的目标页。
@@ -43,6 +91,9 @@ export default class EntryAbility extends UIAbility {
 
     // 把 context 交给 AppState：页面里记完一笔要靠它刷新桌面卡片
     AppState.setAbilityContext(this.context);
+
+    // 诊断：摸清这台设备的沉浸材质能力（见该方法注释）
+    this.logMaterialSupport();
 
     hilog.info(DOMAIN, 'CalorieLite', '%{public}s', 'Ability onCreate');
   }

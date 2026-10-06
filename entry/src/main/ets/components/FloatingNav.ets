@@ -41,6 +41,48 @@ const POP_SCALE: number = 1.07;
 /** 回弹的复位延时（ms）。够让 .animation 起跑，又不至于看出来是两段 */
 const POP_RESET_MS: number = 190;
 
+/*
+ * ═══════════════ 果冻形变（跟手拉伸） ═══════════════
+ *
+ * 手指在导航栏上横向滑动时，整条胶囊**跟着拉伸**、圆角同时变小
+ * （被拉长的胶囊圆角自然变扁，这是形变可信的关键）。松手或停住后
+ * 弹性收回。
+ *
+ * ⚠️ 为什么手工做、而不是用系统的沉浸材质
+ *   API 26 有 `uiMaterial.ImmersiveMaterial({ interactive: true })`，
+ *   它的参数说明正是「设置交互形变效果」—— 很多鸿蒙应用那种一模一样的
+ *   导航栏形变就是它。但本机实测不支持：
+ *       isImmersiveMaterialSupported() = false   （低算力档 level=2 SMOOTH）
+ *   文档明确写「为 false 时设了 systemMaterial 也不生效」，
+ *   所以只能自己算。参数留在下面，将来换到支持的设备可以直接切过去。
+ */
+
+/**
+ * 横向拉伸强度（每 vp/ms 的手指横向速度，拉伸比例）。
+ *
+ * 手感标定：一次正常滑动的手指速度约 0.5~1.5 vp/ms（约 6~16vp / 16ms 帧），
+ * 乘 0.055 得 2.7%~8% 的拉伸 —— 轻微但看得见。
+ * 调大更「弹」，超过 0.1 会像橡皮糖、显得廉价。
+ */
+const STRETCH_K: number = 0.055;
+/**
+ * 纵向压缩比例。
+ *
+ * 拉伸时纵向必须**反向压缩一点点**（体积守恒的直觉），
+ * 否则整条栏一起变大，看起来是「放大」而不是「拉长」。
+ * 0.35 表示纵向压缩量是横向拉伸量的 35%。
+ */
+const STRETCH_Y_RATIO: number = 0.35;
+/** 单次形变的上限。防止抛滑（fling）时一瞬间拉成一条线 */
+const STRETCH_MAX: number = 0.12;
+/**
+ * 每帧的衰减系数。
+ *
+ * 手指停住时靠它把形变收回：每 16ms 乘 0.88，
+ * 约 6 帧（100ms）衰减到 45%，手感上是「惯性慢慢弹回去」。
+ */
+const STRETCH_DECAY: number = 0.88;
+
 /**
  * 玻璃边缘的对比度描边。
  *
@@ -88,6 +130,16 @@ export struct FloatingNav {
   @State glowFrac: number = 0.5;
   /** 光效强度 0~1：按下淡入、抬起淡出 */
   @State glowOn: number = 0;
+  /**
+   * 当前的横向拉伸量（0 = 无形变）。
+   *
+   * 由手指横向速度驱动，停住后靠 ticker 衰减回 0。
+   * 只有它一个量：纵向压缩与圆角变化都从它派生，
+   * 多存几个状态容易出现「一个回去了另一个还留着」的不同步。
+   */
+  @State stretch: number = 0;
+  /** 衰减 ticker 的句柄，-1 表示没在跑 */
+  private stretchTimer: number = -1;
   /**
    * 正在「回弹」的那一项；-1 表示没有。
    *
@@ -242,6 +294,51 @@ export struct FloatingNav {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * 施加一次横向速度带来的形变。
+   *
+   * dx 是这一帧手指移动的 vp 数（带符号，向右为正）。
+   * 取绝对值：形变不关心方向，向左滑和向右滑都该「拉长」。
+   */
+  private applyStretch(dx: number): void {
+    // 直接用这一帧的位移当速度。帧间隔基本固定 16ms，
+    // 不必再除以时间；除以时间反而会在掉帧时把形变放大得离谱。
+    const v: number = Math.abs(dx) * STRETCH_K;
+    const next: number = Math.min(STRETCH_MAX, v);
+    // 只增不减：横向滑动是连续的，每帧都重算会把形变压回去、看着发抖
+    if (next > this.stretch) {
+      this.stretch = next;
+    }
+    this.ensureStretchDecay();
+  }
+
+  /** 确保衰减 ticker 在跑（重复调用是安全的） */
+  private ensureStretchDecay(): void {
+    if (this.stretchTimer !== -1) {
+      return;
+    }
+    this.stretchTimer = setInterval(() => {
+      const next: number = this.stretch * STRETCH_DECAY;
+      if (next < 0.002) {
+        // 收到足够小就直接归零并停机，避免无限跑着极小值
+        this.stretch = 0;
+        clearInterval(this.stretchTimer);
+        this.stretchTimer = -1;
+        return;
+      }
+      this.stretch = next;
+    }, 16);
+  }
+
+  /** 立刻收回形变（抬手/取消时用），比等衰减更干脆 */
+  private clearStretch(): void {
+    if (this.stretchTimer !== -1) {
+      clearInterval(this.stretchTimer);
+      this.stretchTimer = -1;
+    }
+    this.stretch = 0;
   }
 
   /**
@@ -423,8 +520,38 @@ export struct FloatingNav {
     .width('100%')
     .height(NAV_HEIGHT)
     .clip(true)
-    // 大圆角：正好是高度的一半，形成完整胶囊
-    .borderRadius(NAV_RADIUS)
+    /*
+     * ══════════ 果冻形变 ══════════
+     *
+     * 横向拉伸 + 纵向轻微压缩 + 圆角跟着变扁 —— 三者由同一个 stretch 派生，
+     * 所以永远同步（多存几个状态就会不同步）。
+     *
+     * 圆角为什么也要变：被拉长的胶囊，两端自然变扁。
+     * 圆柱的圆角恒为高度一半，横向拉长后若圆角不变，
+     * 看上去是「一张圆角矩形被拉宽」而不是「一根胶囊被拉长」。
+     *
+     * 纵向压缩量只有横向的 35%（STRETCH_Y_RATIO）：
+     * 完全等量会让整条栏显得在「放大缩小」而不是「被拉长」。
+     *
+     * ⚠️ 用 scale 而不是 width：改 width 会重新排版整棵子树
+     *（三项要重新等分、文字重新居中），每帧一次会掉帧；
+     * scale 只在合成阶段变形，代价几乎为零。
+     *
+     * ⚠️ .animation() 作用于**它前面**的属性，所以必须写在最后 ——
+     * 放在 .borderRadius() 之前的话，圆角就不受这段动画管辖了。
+     */
+    .scale({
+      x: 1 + this.stretch,
+      y: 1 - this.stretch * STRETCH_Y_RATIO
+    })
+    // 大圆角：静止时正好是高度的一半，形成完整胶囊；拉伸时变扁
+    .borderRadius(NAV_RADIUS * (1 - this.stretch * 1.6))
+    /*
+     * 时长刻意极短（60ms）：这个形变是**逐帧跟手**的，
+     * 每帧都写新值，动画只负责把两帧之间抹平。
+     * 时长一长就会「追不上手指」，变成滞后的橡皮筋。
+     */
+    .animation({ duration: 60, curve: Curve.Linear })
     /*
      * 液态玻璃（折射感加强版）。
      *
@@ -483,6 +610,14 @@ export struct FloatingNav {
         this.glowFrac = this.pressFrac(x);
         this.animateGlow(1);
       } else if (event.type === TouchType.Move) {
+        /*
+         * 果冻形变：用**这一帧相对上一帧的位移**当速度。
+         *
+         * 必须在覆盖 pressX 之前算，否则位移恒为 0。
+         * 用位移而不是「离按下点的总距离」：后者会随滑动越来越长、
+         * 形变一路变大不回收；逐帧位移才是「速度」，停住就归零。
+         */
+        this.applyStretch(x - this.pressX);
         this.pressX = x;
         this.hoverIndex = this.indexAt(x);
         // 位置直接跟手（不加缓动，否则会有拖拽的黏滞感）
@@ -493,6 +628,8 @@ export struct FloatingNav {
         const target: number = this.indexAt(x);
         // 抬起后光效就地淡出，不移动位置——移开反而像「光跑了」
         this.animateGlow(0);
+        // 抬手：形变干脆收回，不等衰减（衰减是给「手指停住」用的）
+        this.clearStretch();
         if (target >= 0 && target !== this.activeIndex) {
           /*
            * 选中回弹：交给 playPop 去收尾（它负责清 pressing / hoverIndex）。
@@ -510,6 +647,7 @@ export struct FloatingNav {
         this.pressing = false;
         this.hoverIndex = -1;
         this.animateGlow(0);
+        this.clearStretch();
       }
     })
   }
@@ -519,6 +657,10 @@ export struct FloatingNav {
     if (this.glowTimer !== -1) {
       clearInterval(this.glowTimer);
       this.glowTimer = -1;
+    }
+    if (this.stretchTimer !== -1) {
+      clearInterval(this.stretchTimer);
+      this.stretchTimer = -1;
     }
     this.clearPopTimers();
   }

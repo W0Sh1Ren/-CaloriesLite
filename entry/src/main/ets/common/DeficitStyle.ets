@@ -17,6 +17,7 @@
  * 两边拿到的是**同一份实现**，不会出现「首页说达标、卡片说未达标」。
  */
 
+
 /** 达标（实际缺口 ≥ 计划缺口） */
 export const DEFICIT_COLOR_ON_TRACK: string = '#22C55E';
 /** 未达标（0 ≤ 实际 < 计划） */
@@ -73,15 +74,24 @@ export function deficitColor(deficit: number, plannedDeficit: number): string {
 /**
  * 档位对应的极短文案。
  *
- * 保持两三个字：卡片一行只放得下约 20 个字符，长了会被截断成省略号。
+ * 只有两个词：**「缺口」和「超出」**。
+ *
+ * 为什么「未达标」也写「缺口」：那一档**客观上确实有缺口**
+ * （摄入还没到总消耗），只是没达到计划要减的量而已。
+ * 写成「未达标」是在说「你没完成目标」，读起来像责备；
+ * 而事实是「有缺口，只是小一点」——用**颜色**（黄）提醒就够了，
+ * 不必再用措辞去强调。
+ *
+ * 所以三档的信息分工是：
+ *   措辞 —— 有没有缺口、有没有超出（客观事实）
+ *   颜色 —— 缺口够不够大（达没达到计划）
  */
 export function deficitLabel(deficit: number, plannedDeficit: number): string {
   switch (deficitState(deficit, plannedDeficit)) {
     case DeficitState.OVER:
       return '超出';
-    case DeficitState.BELOW:
-      return '未达标';
     default:
+      // 达标与未达标都是「有缺口」，措辞一致
       return '缺口';
   }
 }

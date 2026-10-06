@@ -120,6 +120,14 @@ struct CalorieCard {
   @LocalStorageProp('intake') intake: number = 0;
   @LocalStorageProp('budget') budget: number = 2000;
   @LocalStorageProp('kcalRingPct') kcalRingPct: string = '0%';
+  /**
+   * 环的分母：当天总消耗 TDEE。
+   *
+   * 不用 budget 当分母 —— 那是计划（已减掉要减的部分），
+   * 拿它当分母会让「吃到目标」把环画满，语义变成「今天吃够了」。
+   * 与主应用 CalorieRing 同一口径。
+   */
+  @LocalStorageProp('tdee') tdee: number = 2000;
   @LocalStorageProp('remainText') remainText: string = '还可以吃 2000';
   /*
    * 环色与环心内容，全部由后端算好（见 CardData.fillDerived）。
@@ -358,7 +366,7 @@ struct CalorieCard {
   @Builder
   kcalRing() {
     Stack() {
-      Progress({ value: this.intake, total: this.budget > 0 ? this.budget : 1, type: ProgressType.Ring })
+      Progress({ value: this.intake, total: this.tdee > 0 ? this.tdee : 1, type: ProgressType.Ring })
         .width(60)
         .height(60)
         /*

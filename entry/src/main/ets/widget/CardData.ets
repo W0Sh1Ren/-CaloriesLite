@@ -65,7 +65,16 @@ export class CardData {
    * 拿它算缺口会把计划当成消耗（见 DailySummary 的类注释）。
    */
   deficit: number = 0;
-  /** **计划**缺口 = TDEE − 每日目标；实际缺口拿它比大小来分档 */
+  /**
+   * 当天总消耗 TDEE —— 热量环进度条的**分母**。
+   *
+   * 为什么分母不是 budget：环表达「吃进去的占身体实际消耗的多少」，
+   * 而 budget 是计划（已减掉要减的部分）。用 budget 当分母时
+   * 「吃到目标」会把环画满，看起来像「今天吃够了」，语义是错的。
+   * 与主应用 CalorieRing.ratio() 保持同一口径。
+   */
+  tdee: number = 2000;
+  /** 计划缺口 = TDEE − 每日目标；实际缺口拿它比大小来分档 */
   plannedDeficit: number = 0;
 
   /**
@@ -192,6 +201,9 @@ export class CardData {
     // 计划缺口用于分档：实际 ≥ 计划 → 达标。
     d.deficit = Math.round(summary.deficit);
     d.plannedDeficit = Math.round(summary.plannedDeficit);
+    // 环的分母：总消耗。读不到（还没建档）就退回兜底值，别让环显示成 0/0
+    const tdee: number = Math.round(summary.tdee);
+    d.tdee = tdee > 0 ? tdee : CardData.DEFAULT_BUDGET;
 
     const useGiven: boolean = budget > 0;
     d.proteinTarget = useGiven ? target.protein : CardData.DEFAULT_PROTEIN_TARGET;
@@ -209,7 +221,7 @@ export class CardData {
    *（那会让卡片在数据到位前显示 0% 的条，到位后突然跳变）。
    */
   private static fillDerived(d: CardData): void {
-    d.kcalRingPct = CardData.pct(d.intake, d.budget);
+    d.kcalRingPct = CardData.pct(d.intake, d.tdee);
     const remain: number = Math.round(d.budget - d.intake);
     d.remainText = remain >= 0 ? `还可以吃 ${remain}` : `已超出 ${-remain}`;
 
@@ -258,6 +270,7 @@ export class CardData {
     p['intake'] = this.intake;
     p['budget'] = this.budget;
     p['kcalRingPct'] = this.kcalRingPct;
+    p['tdee'] = this.tdee;
     p['remainText'] = this.remainText;
     p['ringColor'] = this.ringColor;
     p['deficit'] = this.deficit;
