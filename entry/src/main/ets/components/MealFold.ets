@@ -4,8 +4,8 @@
  * ══════════════════════════════════════════════════════════════
  * 【核心：高度用算术算出来，不做任何测量】
  * ══════════════════════════════════════════════════════════════
- * 每条记录卡片（RecordRow）的结构是固定的，所以高度是常量；
- * 明细区高度 = 上下内边距 + 条数 × 单条高度 + (条数-1) × 间距。
+ * 每条记录卡片（RecordRow）的高度是**定值**（那边显式钉死了），
+ * 所以明细区高度 = 上下内边距 + 条数 × 单条高度 + (条数-1) × 间距。
  * 见 mealDetailHeight()。
  *
  * 这样就不存在「先渲染再量、量到才撑开」那一步 ——
@@ -16,8 +16,11 @@
  * 试过 visibility / opacity / 不裁切 / 父页面存高度，全部行不通。
  * 换成算术之后问题消失 —— 因为压根不需要测量。
  *
- * ⚠️ 代价：RECORD_ROW_H 等常量必须与 RecordRow.ets 的实际尺寸保持一致。
- *    改 RecordRow 的字体或内边距时要同步改（文件顶部有说明）。
+ * ⚠️ 明细区高度依赖三个常量，它们必须与实际渲染一致：
+ *    · RECORD_ROW_H  —— **从 RecordRow 导入**（那边把卡片高度钉死了），
+ *                       所以它不再是「两处各写一个数字」的隐患
+ *    · DETAIL_PAD_V  —— 须与 Index.ets 的 mealDetail() padding 一致
+ *    · DETAIL_GAP    —— 须与 Index.ets 的 mealDetail() Column space 一致
  *
  * ── 动效
  * 高度即时变化 + 透明度用 animateTo 插值，动效来自透明度。
@@ -26,21 +29,16 @@
  */
 
 /**
- * 单条记录卡片的高度（vp）。
+ * 单条记录卡片的高度（vp）—— **从 RecordRow 导入，不在这里重复声明**。
  *
- * **这个值是实测出来的，不是按字体行高估算的。**
- * 真机 dump 边界（density 3.5）：
- *   6 条午餐记录 → 每张卡片 251px = 71.7vp，六张完全一致。
+ * RecordRow 已经把卡片高度显式钉成了定值（见那边的 RECORD_ROW_FIXED_H），
+ * 于是这个高度是**代码保证的**，不再是「实测出来、可能漂移」的观测值。
  *
- * 估算为什么靠不住：我按「内边距 + 16sp行高 + 12sp行高 + 11sp行高 + 间距」
- * 算出 80，但 ArkUI 的实际行高系数与字体度量都不是简单相加，
- * 差 8vp/条 —— 6 条就多出 50vp 空白，表现是「菜越多底部空白越厚」。
- *
- * ⚠️ 改动 RecordRow 的字体、内边距或行数后，必须重新实测并改这里：
- *    临时把它改成 0 与 200 各跑一次，用 dump 的 bounds 差值倒推，
- *    或直接把单条卡片放进一个不裁切的容器里读 onAreaChange。
+ * 历史：这个值以前是本文件里的 `const RECORD_ROW_H = 72`，与 RecordRow
+ * 的实际高度只是「碰巧相等」。一旦同一餐里混入不带营养素行的记录
+ *（那张卡片天然矮约 14vp），乘法就不成立，展开高度会与实际对不上。
  */
-const RECORD_ROW_H: number = 72;
+import { RECORD_ROW_FIXED_H as RECORD_ROW_H } from './RecordRow';
 
 /** 明细区上下内边距（须与 mealDetail 的 padding 一致） */
 const DETAIL_PAD_V: number = 12;
@@ -49,7 +47,7 @@ const DETAIL_PAD_V: number = 12;
 const DETAIL_GAP: number = 8;
 
 /** 「还没有记录」提示行的高度（fontSize 13 + 上下 padding 14） */
-const EMPTY_HINT_H: number = 46;
+const EMPTY_HINT_H: number = 43;
 
 /**
  * 算出一餐明细区应有的高度（vp）。

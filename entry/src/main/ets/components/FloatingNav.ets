@@ -28,6 +28,20 @@ const GLOW_RGBA: string = 'rgba(34, 197, 94, 0.75)';
 const GLOW_RADIUS: number = 120;
 
 /**
+ * 顶缘高光带的厚度（vp）。
+ *
+ * 8vp：太窄（2~3）只在边缘留一条硬白线，读起来像描边而不是厚度；
+ * 太宽（>14）会糊到图标区域，把文字对比度压下去。
+ * 8 是试出来的平衡点，也是整条栏高（70）的约 1/9。
+ */
+const BEVEL_BAND: number = 8;
+
+/** 选中回弹：先放大一点点再落回，像被按了一下 */
+const POP_SCALE: number = 1.07;
+/** 回弹的复位延时（ms）。够让 .animation 起跑，又不至于看出来是两段 */
+const POP_RESET_MS: number = 190;
+
+/**
  * 玻璃边缘的对比度描边。
  *
  * 底色只有 22% 白，用纯白细边与它形成明显的明度台阶，
@@ -74,6 +88,19 @@ export struct FloatingNav {
   @State glowFrac: number = 0.5;
   /** 光效强度 0~1：按下淡入、抬起淡出 */
   @State glowOn: number = 0;
+  /**
+   * 正在「回弹」的那一项；-1 表示没有。
+   *
+   * 抬起手指时把它设成落点项，隔一帧再复位，让 .scale 的 .animation 起跑：
+   * 0.94（按下态）→ 1.07（越冲）→ 1（落定）。
+   * 用「两段同一动画」而不是 keyframe，是因为 ArkUI 的属性动画天然支持
+   * 这种「先设 A、再设 B」的写法，不需要额外的动画 API。
+   */
+  @State popIndex: number = -1;
+  /** 复位用的定时器 */
+  private popTimer: number = -1;
+  /** 隔帧启动用的定时器，与 popTimer 分开，避免互相 clear */
+  private popKickTimer: number = -1;
 
   private glowSettings: RenderingContextSettings = new RenderingContextSettings(true);
   private glowCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.glowSettings);
@@ -147,6 +174,36 @@ export struct FloatingNav {
   }
 
   /**
+   * 画「玻璃厚度」的边缘高光带。
+   *
+   * 为什么画在画布上而不是再加一层组件：画布已经存在，多画一条水平渐变
+   * 不增加任何图层/DOM，代价几乎为零；而多加一个带 linearGradient 的
+   * Row 会多一次合成。
+   *
+   * 光怎么分布才对：真实玻璃被光斜照时，**上缘**接光最多、
+   * 下缘因为厚度衰减而偏暗。所以这里只在顶部画一条 0→8vp 的
+   * 白色渐隐带（而不是上下对称各一条 —— 对称看起来像描边，不像厚度）。
+   *
+   * 与已有那些层的分工（不要重复）：
+   *   · 外层的 .border()      → 贴边的硬轮廓（整圈）
+   *   · GLASS_INNER_GRADIENT  → 整块的大范围明暗（很淡）
+   *   · 本方法                → 顶缘那一道窄的亮线（厚度感来源）
+   */
+  private drawBevel(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    const band: number = BEVEL_BAND;
+    const g: CanvasGradient = ctx.createLinearGradient(0, 0, 0, band);
+    g.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    g.addColorStop(0.45, 'rgba(255, 255, 255, 0.30)');
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.beginPath();
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, band);
+  }
+
+  /**
    * 画跟手光斑。
    *
    * Canvas 内容不是声明式的，每次位置/强度变化都要显式重画。
@@ -159,11 +216,14 @@ export struct FloatingNav {
     const h: number = ctx.height;
     ctx.clearRect(0, 0, w, h);
 
+    // 顶缘高光常驻：它表达的是「玻璃有厚度」，与手指在不在无关
+    this.drawBevel(ctx, w, h);
+
     // 调试：钉住光斑，方便截图确认光效确实画出来了
     const frac: number = FloatingNav.DEBUG_PIN_GLOW ? 0.5 : this.glowFrac;
     const alpha: number = FloatingNav.DEBUG_PIN_GLOW ? 1 : this.glowOn;
     if (w <= 0 || h <= 0 || alpha <= 0.01) {
-      // 强度归零就什么都不画，避免残留一个极淡的圆
+      // 强度归零就只留高光带，不画光斑，避免残留一个极淡的圆
       return;
     }
 
@@ -207,6 +267,63 @@ export struct FloatingNav {
       this.glowOn = this.glowOn + diff * 0.28;
       this.drawGlow();
     }, 16);
+  }
+
+  /**
+   * 一项的缩放。
+   *
+   * 三种状态叠加，优先级从高到低：
+   *   1. 手指正按着这一格  → 0.94（被按下去的塌陷感）
+   *   2. 这一格刚被选中    → POP_SCALE（越冲，随后自动落回 1）
+   *   3. 其它              → 1
+   *
+   * 为什么选中也要缩放：只变颜色的话，切换显得「平」；
+   * 加一个 7% 的短促越冲，动作就有了「按下去弹起来」的物理感。
+   * 幅度刻意很小 —— 这是一个导航栏，不是按钮，不能晃。
+   */
+  private itemScale(index: number): number {
+    if (this.pressing && this.hoverIndex === index) {
+      return 0.94;
+    }
+    if (this.popIndex === index) {
+      return POP_SCALE;
+    }
+    return 1;
+  }
+
+  /**
+   * 触发选中回弹。
+   *
+   * 分两步：先把 popIndex 设成该项（此时 scale 还停在按下态的 0.94），
+   * 隔一帧清掉 pressing，scale 就会从 0.94 弹到 1.07；
+   * 再等 POP_RESET_MS 把 popIndex 复位，1.07 落回 1。
+   */
+  private playPop(index: number): void {
+    this.clearPopTimers();
+    this.popIndex = index;
+    // 第 0 步：保持 pressing 不变（scale 仍是 0.94），只记录目标项
+    this.popKickTimer = setTimeout(() => {
+      this.popKickTimer = -1;
+      // 第 1 步：松开按下态 → scale 从 0.94 动画到 1.07
+      this.pressing = false;
+      this.hoverIndex = -1;
+      this.popTimer = setTimeout(() => {
+        this.popTimer = -1;
+        // 第 2 步：复位 → scale 从 1.07 动画回 1
+        this.popIndex = -1;
+      }, POP_RESET_MS);
+    }, 16);
+  }
+
+  private clearPopTimers(): void {
+    if (this.popTimer !== -1) {
+      clearTimeout(this.popTimer);
+      this.popTimer = -1;
+    }
+    if (this.popKickTimer !== -1) {
+      clearTimeout(this.popKickTimer);
+      this.popKickTimer = -1;
+    }
   }
 
   build() {
@@ -278,11 +395,16 @@ export struct FloatingNav {
           .height(NAV_HEIGHT)
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
-          // 按下时只有当前指到的那一格轻微回弹，其余保持不动
-          .scale({
-            x: this.pressing && this.hoverIndex === index ? 0.92 : 1,
-            y: this.pressing && this.hoverIndex === index ? 0.92 : 1
-          })
+          /*
+           * 缩放 + 动画。
+           *
+           * .scale 与 .animation 相邻放置：.animation 作用于**它前面**的属性，
+           * 所以缩放变化会按这里的时长和曲线补间。
+           *
+           * 时长用 DUR_FAST(180)：按下反馈要「立刻」，太慢会像卡顿。
+           * 曲线 EaseOut：起步快、收尾缓，符合「被按下去」的物理直觉。
+           */
+          .scale({ x: this.itemScale(index), y: this.itemScale(index) })
           .animation({ duration: DUR_FAST, curve: Curve.EaseOut })
         }, (item: NavItem, index: number) => `${index}-${item.label}`)
       }
@@ -369,12 +491,20 @@ export struct FloatingNav {
         this.drawGlow();
       } else if (event.type === TouchType.Up) {
         const target: number = this.indexAt(x);
-        this.pressing = false;
-        this.hoverIndex = -1;
         // 抬起后光效就地淡出，不移动位置——移开反而像「光跑了」
         this.animateGlow(0);
         if (target >= 0 && target !== this.activeIndex) {
+          /*
+           * 选中回弹：交给 playPop 去收尾（它负责清 pressing / hoverIndex）。
+           * 在「抬起」这一刻触发回弹，而不是等 activeIndex 回传后再动 ——
+           * 手指刚离开就有反馈，手感才跟得上；等父组件回传会有半拍延迟。
+           */
+          this.playPop(target);
           this.onSelect(target);
+        } else {
+          // 点的是当前项、或没落到格子上：只收掉按下态，不放回弹
+          this.pressing = false;
+          this.hoverIndex = -1;
         }
       } else if (event.type === TouchType.Cancel) {
         this.pressing = false;
@@ -390,5 +520,6 @@ export struct FloatingNav {
       clearInterval(this.glowTimer);
       this.glowTimer = -1;
     }
+    this.clearPopTimers();
   }
 }

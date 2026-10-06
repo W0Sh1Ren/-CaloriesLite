@@ -154,29 +154,18 @@ struct DayDetail {
     return seen;
   }
 
-  /**
-   * 页面推入/推出的过渡动画。
+  /*
+   * 这里本来有一个自定义的 pageTransition（新页从右滑入、旧页左移淡出）。
    *
-   * 新页面从右侧滑入，旧页面稍向左让位并淡出；返回时整体反向，
-   * 与系统返回手势的视觉方向一致。
+   * 已删除，改回**系统默认转场**：应用内所有页面都用同一套，
+   * 不再有个别页面「切换方式不一样」的问题。
+   *
+   * 注意：转场动画是由**源页面**定义的。之前这里写了、首页没写，
+   * 于是「点日历某天」和「点拍照识别」是两种切开方式。
+   * 现在两边都不写，统一走系统默认。
+   *
+   * 以后若要恢复自定义，**涉及的所有源页面都要一起加**，否则又会分叉。
    */
-  pageTransition(): void {
-    PageTransitionEnter({ type: RouteType.Push, duration: 300, curve: Curve.FastOutSlowIn })
-      .translate({ x: 80 })
-      .opacity(0)
-
-    PageTransitionExit({ type: RouteType.Push, duration: 300, curve: Curve.FastOutSlowIn })
-      .translate({ x: -40 })
-      .opacity(0)
-
-    PageTransitionEnter({ type: RouteType.Pop, duration: 300, curve: Curve.FastOutSlowIn })
-      .translate({ x: -40 })
-      .opacity(0)
-
-    PageTransitionExit({ type: RouteType.Pop, duration: 300, curve: Curve.FastOutSlowIn })
-      .translate({ x: 80 })
-      .opacity(0)
-  }
 
   build() {
     Column() {
