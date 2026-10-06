@@ -78,7 +78,7 @@ export struct HistoryTab {
   @State monthAnimKey: string = '';
   /** 触发键里的序号，保证每次换月的键都不同（同方向连点也能重播） */
   @State monthSeq: number = 0;
-  @State detail: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
+  @State detail: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0, 0);
   @State detailRecords: FoodRecord[] = [];
 
   /**

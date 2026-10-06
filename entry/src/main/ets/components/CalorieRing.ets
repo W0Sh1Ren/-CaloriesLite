@@ -220,7 +220,7 @@ export struct CalorieRing {
             textColor: COLOR_TEXT,
             duration: DUR_SLOW
           })
-          Text('基础预算')
+          Text('每日目标')
             .fontSize(12)
             .fontColor(COLOR_TEXT_SUB)
         }

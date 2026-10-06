@@ -38,7 +38,7 @@ const FRAME_HEIGHT: number = 190;
 @Component
 struct DayDetail {
   @State dayKey: string = todayKey();
-  @State summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
+  @State summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0, 0);
   @State records: FoodRecord[] = [];
   /** 防止同一张图被重复转存 */
   @State persisted: boolean = false;

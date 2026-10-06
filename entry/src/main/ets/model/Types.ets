@@ -252,34 +252,62 @@ export class ExerciseRecord {
 /**
  * 一天的热量结算结果。
  *
- * 热量缺口（deficit）的定义：
- *   缺口 = 每日预算（TDEE，已按目标调整） + 运动消耗 - 摄入
- * 正数表示还有余量（缺口），负数表示超标。
+ * ── 三个热量概念（不要混）
+ *
+ *   总消耗 TDEE      维持体重所需的能量（BMR × 活动系数）
+ *   每日目标 budget  想吃的量 = TDEE + 目标调整，但**不低于 BMR**
+ *   热量缺口 deficit **实际**产生的能量亏空 = TDEE + 运动 − 摄入
+ *
+ * 为什么缺口用 TDEE 而不是 budget：
+ *   「缺口」是物理量 —— 身体实际亏了多少能量，只取决于消耗与摄入。
+ *   而 budget 是**计划**（今天打算吃多少），它已经包含了「想减的那部分」。
+ *   如果缺口写成 budget + 运动 − 摄入，那吃到目标那天缺口就是 0，
+ *   等于把「按计划执行」误报成「没有产生缺口」。
+ *
+ * ⚠️ 特别注意 budget 会被 BMR 地板抬高（见 CalorieCalc.calcDailyBudget）。
+ *    当地板生效时 budget > TDEE + 目标调整，这时如果缺口拿 budget 来算，
+ *    会得出一个**比真实缺口更小**的数 —— 用户会以为减脂进度比实际慢。
  */
 export class DailySummary {
   /** 日期 YYYY-MM-DD */
   dayKey: string = '';
   /** 当天总摄入（千卡） */
   intake: number = 0;
-  /** 每天的基础热量预算（千卡）—— BMR 按活动系数与目标调整后的结果 */
+  /**
+   * 每日目标（千卡）—— TDEE 按目标调整后、并不低于 BMR 的结果。
+   * 这是「今天该吃多少」，也是超标判定的基准线。
+   */
   budget: number = 0;
+  /** 当天总消耗 TDEE（维持体重所需），缺口的计算基准 */
+  tdee: number = 0;
   /** 运动额外消耗（千卡） */
   exerciseKcal: number = 0;
-  /** 热量缺口 = budget + exerciseKcal - intake，正数为缺口 */
+  /** **实际**热量缺口 = tdee + exerciseKcal − intake，正数为缺口 */
   deficit: number = 0;
+  /**
+   * **计划**产生的缺口 = tdee − budget（按目标想减的量）。
+   *
+   * 正常情况是正数（目标低于 TDEE）；为 0 说明目标就是维持体重；
+   * 为负说明目标高于 TDEE（增重增肌），此时不但没有缺口还有盈余。
+   */
+  plannedDeficit: number = 0;
   protein: number = 0;
   fat: number = 0;
   carb: number = 0;
   /** 当天记录条数 */
   recordCount: number = 0;
 
-  constructor(dayKey: string, intake: number, budget: number, exerciseKcal: number,
+  constructor(dayKey: string, intake: number, budget: number, tdee: number, exerciseKcal: number,
     protein: number, fat: number, carb: number, recordCount: number) {
     this.dayKey = dayKey;
     this.intake = intake;
     this.budget = budget;
+    this.tdee = tdee;
     this.exerciseKcal = exerciseKcal;
-    this.deficit = budget + exerciseKcal - intake;
+    // 实际缺口：只看「消耗」与「摄入」，与计划无关
+    this.deficit = tdee + exerciseKcal - intake;
+    // 计划缺口：目标本身想造出多少
+    this.plannedDeficit = tdee - budget;
     this.protein = protein;
     this.fat = fat;
     this.carb = carb;

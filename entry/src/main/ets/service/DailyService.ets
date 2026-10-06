@@ -6,7 +6,7 @@
 import { MealType, ExerciseRecord, FoodRecord, DailySummary, UserProfile, WeightRecord } from '../model/Types';
 import { mealTypeLabel } from '../model/Enums';
 import { todayKey, shiftDay, fromDayKey, toDayKey } from '../common/DateUtil';
-import { calcDailyBudget, calcTdee, calcBmr } from './CalorieCalc';
+import { calcDailyBudget, calcTdee, calcBmr, isBudgetFloored, requestedBudget } from './CalorieCalc';
 import { ExerciseRepo } from './ExerciseRepo';
 import { FoodRepo } from './FoodRepo';
 import { BodyRepo } from './BodyRepo';
@@ -14,7 +14,7 @@ import { SettingsRepo } from './SettingsRepo';
 
 /** 首页需要的全部数据，一次算完交给 UI */
 export class HomeData {
-  summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0);
+  summary: DailySummary = new DailySummary('', 0, 0, 0, 0, 0, 0, 0, 0);
   records: FoodRecord[] = [];
   exercises: ExerciseRecord[] = [];
   /** 连续「达标」天数：从今天往回数，每天缺口 >= 0 才算达标 */
@@ -25,6 +25,21 @@ export class HomeData {
   weekDays: string[] = [];
   bmr: number = 0;
   tdee: number = 0;
+  /**
+   * BMR 安全地板是否抬高了每日目标。
+   *
+   * 当「TDEE + 目标调整」低于 BMR 时会触发（`calcDailyBudget`）。
+   * 触发意味着**用户选的目标没能生效**，界面上必须说明，
+   * 否则用户会以为自己在按 −500 执行，实际不是。
+   */
+  floorApplied: boolean = false;
+  /**
+   * 没有被地板修正时，用户目标本来会得到的每日目标。
+   *
+   * 仅用于在地板生效时告诉用户「你原本要的是多少、现在被定成了多少」。
+   * 地板未生效时它等于 budget。
+   */
+  requestedBudget: number = 0;
 }
 
 export class DailyService {
@@ -62,6 +77,9 @@ export class DailyService {
   static summaryOf(dayKey: string): DailySummary {
     const profile: UserProfile = DailyService.effectiveProfile();
     const budget: number = calcDailyBudget(profile);
+    // 缺口要用 TDEE 而不是 budget 来算（budget 可能被 BMR 地板抬高）。
+    // 理由见 DailySummary 的类注释。
+    const tdee: number = Math.round(calcTdee(profile));
     const records: FoodRecord[] = FoodRepo.loadDay(dayKey);
 
     let intake: number = 0;
@@ -81,6 +99,7 @@ export class DailyService {
       dayKey,
       Math.round(intake),
       budget,
+      tdee,
       exerciseKcal,
       Math.round(protein * 10) / 10,
       Math.round(fat * 10) / 10,
@@ -100,6 +119,10 @@ export class DailyService {
     data.bmr = Math.round(calcBmr(profile));
     data.tdee = Math.round(calcTdee(profile));
     data.streak = DailyService.calcStreak();
+
+    // 地板是否把用户选的目标顶掉了（首页需要据此提示）
+    data.floorApplied = isBudgetFloored(profile);
+    data.requestedBudget = requestedBudget(profile);
 
     const days: string[] = [];
     const deficits: number[] = [];
@@ -157,6 +180,12 @@ export class DailyService {
 
   /**
    * 某个月的热量缺口合计（供记录页的「本月缺口」使用）。
+   *
+   * 累加的是**实际缺口**（`DailySummary.deficit` = TDEE + 运动 − 摄入），
+   * 不是「相对每日目标的余量」。两者的差别：
+   *   每日目标本身已经含了「计划要减的那部分」（例如 TDEE − 500），
+   *   所以「相对目标的余量」在按计划吃的那天会显示 0，
+   *   而实际缺口应该是 500 —— 那才是身体真正亏掉的能量。
    *
    * **只统计有记录的天数**（用户要求）：没记录的那天不算 0 缺口，
    * 而是直接跳过 —— 否则会把「没吃也没记」误算成「刚好达标」，

@@ -23,7 +23,7 @@ import { FoodRepo } from '../service/FoodRepo';
 import { ImageService } from '../service/ImageService';
 import { AppState } from '../common/AppState';
 import {
-  COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB,
+  COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN,
   CARD_SHADOW, CURVE_BOUNCE, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, DUR_VIEW_SWITCH, GAP, GlowPalette, NAV_HEIGHT, NAV_MARGIN,
   NAV_RESERVE, PAGE_PAD, RADIUS, VIEW_INACTIVE_SCALE, VIEW_SLIDE_X, glowForHour
 } from '../common/Theme';
@@ -704,6 +704,33 @@ struct Index {
             }
             .width('100%')
             .padding({ left: 4, right: 4 })
+
+            /*
+             * 目标被 BMR 地板顶掉时的提示。
+             *
+             * 触发条件：用户选的「目标调整」会把每日目标压到 BMR 以下，
+             * calcDailyBudget 便把它抬回 BMR —— **用户选的目标没生效**。
+             *
+             * 为什么必须显式提示：不提示的话，用户以为自己在按 −500 减脂，
+             * 实际每日目标比预期高，「缺口」也会比预期小，
+             * 而界面上一切正常，用户只会觉得「怎么减得这么慢」。
+             */
+            if (this.data.floorApplied) {
+              Row({ space: 6 }) {
+                Text('⚠️')
+                  .fontSize(12)
+                Text(`所选目标会使每日目标低于基础代谢（${this.data.bmr} 千卡），已按基础代谢计。`
+                    + `原本 ${this.data.requestedBudget} → 现为 ${this.data.summary.budget} 千卡`)
+                  .fontSize(12)
+                  .fontColor(COLOR_WARN)
+                  .layoutWeight(1)
+              }
+              .width('100%')
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .backgroundColor('#1AE5533D')
+              .borderRadius(10)
+              .margin({ left: 4, right: 4 })
+            }
 
             Row({ space: 14 }) {
               if (this.data.streak > 0) {

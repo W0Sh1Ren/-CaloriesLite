@@ -37,6 +37,37 @@ export function calcTdee(profile: UserProfile): number {
 }
 
 /**
+ * 每日热量目标的**安全地板**（千卡）。
+ *
+ * 减脂时目标不会低于 BMR —— 避免用户把目标设得比基础代谢还低。
+ * 这是医学上的常见建议，但**它会让用户选的目标失效**，
+ * 所以界面上必须能看出「地板生效了」（见 isBudgetFloored）。
+ */
+export function budgetFloor(profile: UserProfile): number {
+  return calcBmr(profile) * FLOOR_BMR_RATIO;
+}
+
+/**
+ * 按目标调整后、**尚未受地板限制**的每日目标（千卡）。
+ *
+ * 即 `TDEE + 目标调整`。增重时为正、快速减脂时为负调整。
+ * 单独暴露出来是为了在界面上对比「用户想要的」与「实际生效的」。
+ */
+export function requestedBudget(profile: UserProfile): number {
+  return Math.round(calcTdee(profile) + goalAdjust(profile.goal));
+}
+
+/**
+ * 每日热量目标是否被 BMR 地板抬高了。
+ *
+ * 为 true 表示：用户选的目标（如快速减脂 −500）**没有生效**，
+ * 实际目标被定在了 BMR。界面应当提示，否则用户以为自己在按目标执行。
+ */
+export function isBudgetFloored(profile: UserProfile): boolean {
+  return requestedBudget(profile) < Math.round(budgetFloor(profile));
+}
+
+/**
  * 每日热量预算。
  *
  * 减脂时不会低于 BMR，避免用户把预算设得比基础代谢还低。
