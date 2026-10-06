@@ -7,7 +7,6 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { DayCell, CalendarHeatmap } from '../components/CalendarHeatmap';
 import { WeightChart } from '../components/WeightChart';
 import { RollingNumber } from '../components/RollingNumber';
-import { topReserve } from '../components/GlassTopBar';
 import { MealType, FoodRecord, WeightRecord, ExerciseRecord, DailySummary } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
 import { buildMonthGrid, friendlyDate, fromDayKey, shiftDay, todayKey, timeLabel } from '../common/DateUtil';
@@ -391,7 +390,7 @@ export struct HistoryTab {
       }
       .width('100%')
       // 顶部留出毛玻璃顶栏的高度，避免月份行被压住
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset })
     }
     .width('100%')
     .height('100%')

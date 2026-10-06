@@ -5,6 +5,7 @@
  * 避免 AI 估错直接污染当天数据。
  */
 import { router, promptAction, KeyboardAvoidMode } from '@kit.ArkUI';
+import { HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { inputMethod } from '@kit.IMEKit';
 
@@ -17,7 +18,7 @@ import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { VisionService, VisionResult } from '../service/VisionService';
 import { AppState, PendingResult } from '../common/AppState';
-import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS  } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -508,34 +509,8 @@ struct ResultConfirm {
   }
 
   build() {
+    HdsNavigation() {
     Column() {
-      // 顶部栏
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Text('‹').fontSize(22).fontColor(COLOR_TEXT)
-        }
-        .width(36).height(36).backgroundColor(COLOR_CARD)
-        .onClick(() => {
-          AppState.clearPending();
-          // 点返回也是退回上一步（拍照页）——用户是要改照片/重新拍，
-          // 与「确认记录后回首页」是两件事，所以这里仍然只退一层。
-          router.back();
-        })
-
-        Text('确认识别结果')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Row().width(36).height(36)
-      }
-      .width('100%')
-      // 顶部安全距离，口径与其它页面一致：普通页的窗口仍延伸到状态栏区域，
-      // 只留 8vp 会让顶栏压在系统时间上（见 AppState.topInset）
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
-
       Scroll() {
         Column({ space: GAP }) {
           // 送出去识别的原图（可能多张）+ 模型信息
@@ -638,7 +613,7 @@ struct ResultConfirm {
           Row().height(80)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 16 })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset, bottom: 16 })
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)
@@ -678,6 +653,39 @@ struct ResultConfirm {
     .width('100%')
     .height('100%')
     .backgroundColor(COLOR_BG)
+    }
+    .titleBar({
+      content: {
+        title: { mainTitle: '确认识别结果' },
+        backIcon: {
+          icon: $r('sys.symbol.chevron_backward'),
+          label: '返回',
+          action: () => {
+            AppState.clearPending();
+            // 点返回也是退回上一步（拍照页）——用户是要改照片/重新拍，
+            // 与「确认记录后回首页」是两件事，所以这里仍然只退一层。
+            router.back();
+          }
+        }
+      },
+      style: {
+        scrollEffectOpts: {
+          // 关掉「随滚动动态生效」，让标题栏恒定透明（与首页口径一致）
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false
+    })
+    .hideBackButton(false)
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .width('100%')
+    .height('100%')
   }
 
   @Builder

@@ -4,6 +4,7 @@
  * 两条路：从内置食物表里挑一条（数值精确），或者自己填名字和热量（兜底）。
  */
 import { router, promptAction } from '@kit.ArkUI';
+import { HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
 
 import { FoodDraft, FoodItem, FoodRecord, FoodSource, MealType } from '../model/Types';
 import { MEAL_ORDER, mealTypeLabel } from '../model/Enums';
@@ -14,7 +15,7 @@ import { makeId } from '../common/JsonUtil';
 import { FoodRepo } from '../service/FoodRepo';
 import { AppState } from '../common/AppState';
 import { DailyService } from '../service/DailyService';
-import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
+import { COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS  } from '../common/Theme';
 
 @Entry
 @Component
@@ -81,30 +82,8 @@ struct ManualAdd {
   }
 
   build() {
+    HdsNavigation() {
     Column() {
-      // 顶部栏
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Text('‹').fontSize(22).fontColor(COLOR_TEXT)
-        }
-        .width(36).height(36).backgroundColor(COLOR_CARD)
-        .onClick(() => {
-          router.back();
-        })
-
-        Text('手动添加')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Row().width(36).height(36)
-      }
-      .width('100%')
-      // 顶部安全距离，口径与其它页面一致（见 ResultConfirm 的说明）
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
-
       // 搜索
       Row({ space: 10 }) {
         TextInput({ text: this.keyword, placeholder: '搜索食物，如「米饭」「鸡胸肉」' })
@@ -121,7 +100,15 @@ struct ManualAdd {
           })
       }
       .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, bottom: 8 })
+      /*
+       * 顶部留出标题栏高度。
+       *
+       * HdsNavigation 的 titleBar 是**悬浮在内容之上**的，
+       * 不像之前的自绘顶栏那样占布局位置，所以内容必须自己让出来，
+       * 否则第一行（搜索框）会被标题栏压住。
+       * topInset 是状态栏高度，TOP_BAR_RESERVE 是标题栏本体高度。
+       */
+      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset, bottom: 8 })
 
       // 分类筛选
       Scroll() {
@@ -292,5 +279,35 @@ struct ManualAdd {
     .width('100%')
     .height('100%')
     .backgroundColor(COLOR_BG)
+    }
+    .titleBar({
+      content: {
+        title: { mainTitle: '手动添加' },
+        backIcon: {
+          icon: $r('sys.symbol.chevron_backward'),
+          label: '返回',
+          action: () => {
+            router.back();
+          }
+        }
+      },
+      style: {
+        scrollEffectOpts: {
+          // 关掉「随滚动动态生效」，让标题栏恒定透明（与首页口径一致）
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false
+    })
+    .hideBackButton(false)
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .width('100%')
+    .height('100%')
   }
 }

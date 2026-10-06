@@ -6,13 +6,14 @@
  */
 import { router, promptAction } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { HdsNavigation, HdsNavigationTitleMode, hdsMaterial, ScrollEffectType } from '@kit.UIDesignKit';
 
 import { AiConfig, AiProvider } from '../model/Types';
 import { AI_BASE_URL, AI_MODEL, PRESETS, ProviderPreset } from '../model/Enums';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { AppState } from '../common/AppState';
 import { VisionService, VisionError } from '../service/VisionService';
-import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS  } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -83,30 +84,8 @@ struct AiSettings {
   }
 
   build() {
+    HdsNavigation() {
     Column() {
-      // 顶部栏
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Text('‹').fontSize(22).fontColor(COLOR_TEXT)
-        }
-        .width(36).height(36).backgroundColor(COLOR_CARD)
-        .onClick(() => {
-          router.back();
-        })
-
-        Text('AI 识别配置')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Row().width(36).height(36)
-      }
-      .width('100%')
-      // 顶部安全距离，口径与其它页面一致（见 ResultConfirm 的说明）
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
-
       Scroll() {
         Column({ space: GAP }) {
           // 说明
@@ -311,7 +290,7 @@ struct AiSettings {
           Row().height(80)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 16 })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset, bottom: 16 })
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)
@@ -359,6 +338,45 @@ struct AiSettings {
     .width('100%')
     .height('100%')
     .backgroundColor(COLOR_BG)
+    }
+    .titleBar({
+      content: {
+        title: { mainTitle: 'AI 识别配置' },
+        backIcon: {
+          icon: $r('sys.symbol.chevron_backward'),
+          label: '返回',
+          action: () => {
+            router.back();
+          }
+        }
+      },
+      style: {
+        scrollEffectOpts: {
+          /*
+           * 关掉「随滚动动态生效」。
+           *
+           * 官方默认是**开**的：滚到顶部标题栏透明、向下滚动后加一层底
+           *（本意是内容滚上去时不糊住标题）。
+           * 但本机算力档 = 2 (SMOOTH，最低档)，那层底不渲染成模糊玻璃，
+           * 而是一块不透明的白 —— 观感很差。
+           *
+           * 所以关掉它，让标题栏恒定透明，与首页口径一致（用户选定）。
+           */
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false
+    })
+    .hideBackButton(false)
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .width('100%')
+    .height('100%')
   }
 
   /** 统一的单行输入项 */

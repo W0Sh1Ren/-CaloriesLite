@@ -11,7 +11,6 @@ import { calcBmi, calcBmr, calcDailyBudget, calcTdee, bmiLabel, estimateDaysToGo
 import { DailyService } from '../service/DailyService';
 import { SettingsRepo } from '../service/SettingsRepo';
 import { AppState } from '../common/AppState';
-import { topReserve } from '../components/GlassTopBar';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT,
   COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_MEAL_EXPAND, DUR_NORMAL, DUR_SLOW, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, NAV_RESERVE, PAGE_PAD, RADIUS
@@ -271,7 +270,7 @@ export struct ProfileTab {
         }
         .width('100%')
         // 顶部留出毛玻璃顶栏的高度
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset })
       }
       .width('100%')
       .height('100%')

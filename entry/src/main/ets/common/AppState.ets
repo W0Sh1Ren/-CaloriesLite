@@ -9,6 +9,7 @@
  */
 import { DailySummary, FoodDraft, MealType } from '../model/Types';
 import { todayKey } from './DateUtil';
+import { TOP_BAR_RESERVE } from './Theme';
 import { common } from '@kit.AbilityKit';
 import { formProvider } from '@kit.FormKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -118,6 +119,30 @@ export class AppState {
    * 窗口设为全屏布局后，状态栏会盖在内容上，页面顶部需要留出这个高度。
    */
   static topInset: number = 0;
+
+  /**
+   * 页面内容顶部要为**官方标题栏**让出的总高度（状态栏 + 标题栏本体）。
+   *
+   * ══════════════════════════════════════════════════════════════
+   * 这是全应用**唯一**的「内容从哪开始」的口径。
+   * ══════════════════════════════════════════════════════════════
+   * 首页与 5 个二级页面的顶栏现在都是同一套官方组件
+   *（HdsNavigation 的 titleBar），高度一致，所以口径也应该只有一个 ——
+   * 以后调间距只改这里，或者只改 TOP_BAR_RESERVE 那一个数。
+   *
+   * 用法：
+   *     .padding({ top: AppState.contentTopOffset() })
+   *
+   * ⚠️ 为什么用 getter 而不是 static 字段：
+   *    topInset 是 EntryAbility 启动后用 window.getAvoidArea **异步**量出来的
+   *    （模块加载时还是 0）。若写成 static contentTopOffset: number = ...，
+   *    它会在模块加载那一刻固化成 0 + 56 = 56，之后再也不会更新，
+   *    页面顶部就会少让出整个状态栏的高度。
+   *    getter 每次读取都重新算，永远拿到最新的 topInset。
+   */
+  static get contentTopOffset(): number {
+    return AppState.topInset + TOP_BAR_RESERVE;
+  }
 
   /**
    * 底部安全区高度（vp）。

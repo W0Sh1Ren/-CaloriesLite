@@ -5,6 +5,7 @@
  * 全程在本地压缩后才上传，图片不会以原图尺寸发出去。
  */
 import { router, promptAction, KeyboardAvoidMode } from '@kit.ArkUI';
+import { HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -16,7 +17,7 @@ import { ImageService, PreparedImage, ImageError } from '../service/ImageService
 import { VisionService, VisionResult, VisionError } from '../service/VisionService';
 import { PermissionUtil } from '../common/PermissionUtil';
 import { AppState, PendingResult } from '../common/AppState';
-import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_MEAL_EXPAND, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS } from '../common/Theme';
+import { CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, DUR_MEAL_EXPAND, GAP, INPUT_PLACEHOLDER, INPUT_TEXT, PAGE_PAD, RADIUS  } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -292,36 +293,8 @@ struct CameraPage {
   }
 
   build() {
+    HdsNavigation() {
     Column() {
-      // 顶部栏
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Text('‹').fontSize(22).fontColor(COLOR_TEXT)
-        }
-        .width(36).height(36).backgroundColor(COLOR_CARD)
-        .onClick(() => {
-          router.back();
-        })
-
-        Text('拍照识别')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        // 占位，保持标题居中
-        Row().width(36).height(36)
-      }
-      .width('100%')
-      /*
-       * 顶部安全距离，口径与其它页面一致（DayDetail / 主界面）：
-       * 用 AppState.topInset（EntryAbility 实测的 avoid area 高度）。
-       * 这一页是普通页，窗口仍会延伸到状态栏区域，
-       * 只留 8vp 的话顶栏会压在系统时间上（实测反馈）。
-       */
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
-
       Scroll() {
         Column({ space: GAP }) {
           // ------------------------------------------------ 图片区
@@ -583,7 +556,7 @@ struct CameraPage {
           Row().height(16)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 8, bottom: 16 })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset, bottom: 16 })
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)
@@ -594,5 +567,35 @@ struct CameraPage {
     .width('100%')
     .height('100%')
     .backgroundColor(COLOR_BG)
+    }
+    .titleBar({
+      content: {
+        title: { mainTitle: '拍照识别' },
+        backIcon: {
+          icon: $r('sys.symbol.chevron_backward'),
+          label: '返回',
+          action: () => {
+            router.back();
+          }
+        }
+      },
+      style: {
+        scrollEffectOpts: {
+          // 关掉「随滚动动态生效」，让标题栏恒定透明（与首页口径一致）
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false
+    })
+    .hideBackButton(false)
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .width('100%')
+    .height('100%')
   }
 }

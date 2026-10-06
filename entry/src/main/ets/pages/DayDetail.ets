@@ -12,6 +12,7 @@
  * 数据按需现读：路由只传日期字符串，进来再查存储
  * （路由参数是无类型 Object，ArkTS 里传复杂结构容易踩坑）。
  */
+import { HdsNavigation, HdsNavigationTitleMode, ScrollEffectType, hdsMaterial } from '@kit.UIDesignKit';
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -28,7 +29,7 @@ import { MealGallery } from '../components/MealGallery';
 import {
   CARD_SHADOW, COLOR_BG, COLOR_CARD, COLOR_DIVIDER, COLOR_OK, COLOR_PRIMARY,
   COLOR_TEXT, COLOR_TEXT_SUB, COLOR_WARN, GAP, PAGE_PAD, RADIUS
-} from '../common/Theme';
+ } from '../common/Theme';
 
 const DOMAIN = 0x0000;
 /** 餐次预览框高度 */
@@ -168,39 +169,8 @@ struct DayDetail {
    */
 
   build() {
+    HdsNavigation() {
     Column() {
-      // ------------------------------------------------ 顶栏
-      /*
-       * 顶部安全距离从一开始就补上。
-       *
-       * 这一页是普通页（没有调 setWindowLayoutFullScreen），
-       * 但窗口仍会延伸到状态栏区域，原先只留了 8vp，
-       * 结果顶栏压在系统时间上。口径与主界面一致：
-       * 用 AppState.topInset（EntryAbility 实测的 avoid area 高度）。
-       */
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Text('‹').fontSize(22).fontColor(COLOR_TEXT)
-        }
-        .width(36).height(36)
-        .backgroundColor(COLOR_CARD)
-        .shadow(CARD_SHADOW)
-        .onClick(() => {
-          router.back();
-        })
-
-        Text(friendlyDate(this.dayKey))
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Row().width(36).height(36)
-      }
-      .width('100%')
-      .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.topInset + 8, bottom: 8 })
-
       Scroll() {
         Column({ space: GAP }) {
           this.summaryCard()
@@ -218,7 +188,7 @@ struct DayDetail {
           Row().height(40)
         }
         .width('100%')
-        .padding({ left: PAGE_PAD, right: PAGE_PAD })
+        .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset })
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)
@@ -229,6 +199,45 @@ struct DayDetail {
     .width('100%')
     .height('100%')
     .backgroundColor(COLOR_BG)
+    }
+    .titleBar({
+      content: {
+        title: { mainTitle: friendlyDate(this.dayKey) },
+        backIcon: {
+          icon: $r('sys.symbol.chevron_backward'),
+          label: '返回',
+          action: () => {
+            router.back();
+          }
+        }
+      },
+      style: {
+        scrollEffectOpts: {
+          /*
+           * 关掉「随滚动动态生效」。
+           *
+           * 官方默认是**开**的：滚到顶部标题栏透明、向下滚动后加一层底
+           *（本意是内容滚上去时不糊住标题）。
+           * 但本机算力档 = 2 (SMOOTH，最低档)，那层底不渲染成模糊玻璃，
+           * 而是一块不透明的白 —— 观感很差。
+           *
+           * 所以关掉它，让标题栏恒定透明，与首页口径一致（用户选定）。
+           */
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      },
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false
+    })
+    .hideBackButton(false)
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .width('100%')
+    .height('100%')
   }
 
   /** 顶部汇总：总摄入 + 缺口徽标 + 三大营养素 */

@@ -49,7 +49,7 @@ import {
 import { CalorieRing } from '../components/CalorieRing';
 import { MacroBar } from '../components/MacroBar';
 import { RollingNumber } from '../components/RollingNumber';
-import { GlassTopBar, topReserve } from '../components/GlassTopBar';
+import { GlassTopBar } from '../components/GlassTopBar';
 import { RecordRow } from '../components/RecordRow';
 import { MealFold } from '../components/MealFold';
 import { FloatingNav, NavItem } from '../components/FloatingNav';
@@ -1384,7 +1384,16 @@ struct Index {
             Row().height(cameraFloatBottom(this.bottomInset) + CAMERA_BAR_HEIGHT + 120)
           }
           .width('100%')
-          .padding({ left: PAGE_PAD, right: PAGE_PAD, top: topReserve() + 4 })
+          /*
+           * 顶部让出官方标题栏。
+           *
+           * 用 AppState.contentTopOffset —— 全应用唯一的「内容从哪开始」口径，
+           * 首页与 5 个二级页面共用同一个值（顶栏现在是同一套官方组件）。
+           *
+           * 早先这里写的是 topReserve()（自绘顶栏时代的函数），
+           * 那个口径已经不准，已统一过来。
+           */
+          .padding({ left: PAGE_PAD, right: PAGE_PAD, top: AppState.contentTopOffset })
         }
         .layoutWeight(1)
         .scrollBar(BarState.Off)

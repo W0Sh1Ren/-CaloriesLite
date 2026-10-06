@@ -181,6 +181,19 @@ export const NAV_MARGIN: number = 18;
  */
 export const NAV_RESERVE: number = NAV_HEIGHT + NAV_MARGIN * 2 + 6;
 
+/**
+ * 官方标题栏（HdsNavigation titleBar）**本体**的高度（vp）。
+ *
+ * ⚠️ 一般不要直接用这个常量，用 AppState.contentTopOffset（见下）。
+ *
+ * 为什么需要留位：titleBar 是**悬浮在内容之上**的，不像早先的自绘顶栏
+ * 那样占布局位置。所以每个页面的内容都得自己让出来，否则第一行会被压住。
+ *
+ * 数值来源：用户真机校准。起初按标题栏文本区推算为 56，
+ * 但 70 的观感更合适（内容与标题栏之间留出更自然的呼吸）。
+ */
+export const TOP_BAR_RESERVE: number = 70;
+
 /** 动效时长（毫秒）。任何状态变化都要有过渡，时长统一在这里取 */
 export const DUR_FAST: number = 180;
 export const DUR_NORMAL: number = 260;
