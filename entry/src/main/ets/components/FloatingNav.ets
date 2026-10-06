@@ -35,7 +35,7 @@ const GLOW_RADIUS: number = 120;
  * 宽度比 GLASS_HAIRLINE 略粗（0.75），因为太细的高光在浅底上会被糊掉。
  */
 const GLASS_EDGE_WIDTH: number = 0.75;
-const COLOR_GLASS_EDGE: string = 'rgba(255, 255, 255, 1.0)';
+const COLOR_GLASS_EDGE: string = 'rgba(220, 240, 224, 0.95)';
 
 /** 一个导航项 */
 export class NavItem {
@@ -243,7 +243,7 @@ export struct FloatingNav {
       Column()
         .width('100%')
         .height('100%')
-        .linearGradient({ angle: 180, colors: GLASS_INNER_GRADIENT })
+        .linearGradient({ angle: 90, colors: GLASS_INNER_GRADIENT })
         .hitTestBehavior(HitTestMode.None)
 
       /*
@@ -322,7 +322,7 @@ export struct FloatingNav {
      * 所以模糊要足够重到把内容化成色块。
      */
     .backgroundColor('#4DB2DFDB')
-    .backdropBlur(9)
+    .backdropBlur(8)
     /*
      * 玻璃的「折射四件套」：
      *   1. 0.5vp 亮白描边   —— 玻璃厚度；边缘的折射最直观

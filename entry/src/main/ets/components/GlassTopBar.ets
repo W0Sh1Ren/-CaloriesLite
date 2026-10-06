@@ -104,7 +104,7 @@ export struct GlassTopBar {
               }
               .width(32)
               .height(32)
-              .backgroundColor('#F2FFFFFF')
+              .backgroundColor('#61A5D6C8')
               .enabled(this.isTrailingEnabled(index))
               .onClick(() => {
                 this.onTrailing(index);
@@ -128,8 +128,8 @@ export struct GlassTopBar {
      * （实测顶栏和底部导航都因此发灰）。backdropBlur 只做背景模糊，
      * 亮度完全由底色决定，这里给 70% 白 → 干净通透的磨砂白。
      */
-    .backgroundColor('#B3FFFFFF')
-    .backdropBlur(24)
+    .backgroundColor('#4DB2DFDB')
+    .backdropBlur(9)
     // 底缘极淡的投影：顶栏紧贴内容，只求「分开」不求「浮起」，
     // 所以用比悬浮件更轻的 TOP_BAR_SHADOW
     .shadow(TOP_BAR_SHADOW)

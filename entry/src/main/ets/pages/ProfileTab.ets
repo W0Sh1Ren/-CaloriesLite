@@ -807,7 +807,7 @@ export struct ProfileTab {
       .width('100%')
 
       Text(this.aiReady
-        ? '使用你自己的 DeepSeek API Key，识别结果只发往 DeepSeek'
+        ? '使用你自己的 DeepSeek API Key'
         : '填上你的 DeepSeek API Key 就能拍照识别食物，一张照片约 0.4 分钱；本应用不提供也不代管任何额度')
         .fontSize(12)
         .fontColor(COLOR_TEXT_SUB)
@@ -851,11 +851,11 @@ export struct ProfileTab {
         .fontColor(COLOR_TEXT_SUB)
         .width('100%')
 
-      Text('所有记录只存在本机，不上传任何服务器；食物表内置，AI 识别按你自己的配置直连。')
+     /* Text('所有记录只存在本机，不上传任何服务器；食物表内置，AI 识别按你自己的配置直连。')
         .fontSize(12)
         .fontColor(COLOR_TEXT_SUB)
         .width('100%')
-        .margin({ top: 4 })
+        .margin({ top: 4 })*/
 
       Divider().color(COLOR_DIVIDER).margin({ top: 12, bottom: 8 })
 

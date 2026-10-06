@@ -102,7 +102,7 @@ export const COLOR_GLASS_BORDER: string = 'rgba(255, 255, 255, 0.92)';
  */
 export const GLASS_LIFT_SHADOW: ShadowOptions = {
   radius: 32,
-  color: 'rgba(16, 24, 36, 0.10)',
+  color: 'rgba(20, 30, 24, 0.8)',
   offsetX: 0,
   offsetY: 8
 };
@@ -115,9 +115,9 @@ export const GLASS_LIFT_SHADOW: ShadowOptions = {
  */
 export const GLASS_GLOW: ShadowOptions = {
   radius: 8,
-  color: 'rgba(255, 255, 255, 0.75)',
+  color: 'rgba(200, 240, 210, 0.75)',
   offsetX: 0,
-  offsetY: -2
+  offsetY: 3
 };
 
 /**
