@@ -26,7 +26,10 @@ import { uiMaterial, SymbolGlyphModifier } from '@kit.ArkUI';
  *   拿不到沉浸光感；HDS 的 `getSystemMaterialTypes()` 却包含 IMMERSIVE。
  *   实测两套 API 给出相反结论，HDS 这套在本机可用。
  */
-import { HdsTabs, HdsTabsController, hdsMaterial, HdsBarStyle, HdsTabsBarChangeMode } from '@kit.UIDesignKit';
+import {
+  HdsTabs, HdsTabsController, hdsMaterial, HdsBarStyle, HdsTabsBarChangeMode,
+  HdsNavigation, HdsNavigationTitleMode, HdsNavigationMenuContentOptions, ScrollEffectType
+} from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -573,28 +576,29 @@ struct Index {
      * 用**半透明的浅色圆底 + 一圈细描边**：miniBar 继承的是页签栏那块
      * 长方形玻璃，直接看是一块裸图标浮在栏中央、读不出「这里可以点」。
      *
-     * 用 8% 白而不是实色：既能勾出圆形，又不会挡住继承来的材质。
+     * 常态用 8% 白、按下用 20% 白 —— 只加深一点（用户要求"稍微深一点"）。
+     * 对浅色背景是"变灰一点"，对深色背景是"变亮一点"，两边都能看出按下。
+     * 不加深太多是因为它本身就是块玻璃，压太实会失去通透感。
+     *
      * 圆角取 999 → 折叠时是圆、展开时是胶囊，两种形态自动成立。
      */
     .backgroundColor(this.pressed ? '#33FFFFFF' : '#14FFFFFF')
     .borderRadius(999)
     .border({ width: 0.5, color: this.pressed ? '#66FFFFFF' : '#33FFFFFF' })
     /*
-     * ── 跟手按压 + Q 弹 ──
+     * ── 按压反馈：只变颜色，不做缩放（用户指定） ──
      *
-     * 术语澄清（官方文档里「跟手」指别的东西）：
-     *   adaptToHandedness = 左右手跟手（栏贴左还是贴右）
-     *   分割线 FOLLOW_SCROLL = 跟手渐变（滚动时分割线的显隐）
-     * 都不是「元素随手指变形」。这里做的是**触摸反馈**：
-     * 按住变实（底色/描边加深，0 过渡——触摸反馈必须即时），
-     * 同时轻微缩小，用回弹曲线给出 Q 弹感。
+     * 按住 → 底色与描边加深，0 时长（无过渡）。
+     * 触摸反馈必须即时，加过渡反而显得拖。
+     *
+     * ⚠️ 这里**不设** .scale / .animation。
+     *    曾经叠过一个 .scale(0.92) + 回弹曲线的"Q 弹"，
+     *    用户明确要求去掉，回到纯粹的变色反馈。
      *
      * 用 onTouch 而不是 onHover/onFocus：触摸设备上按住即反馈；
      * Up 和 Cancel 都要复位 —— 手指滑出控件时只发 Cancel，
-     * 漏了它球会卡在缩小状态。
+     * 漏了它球会卡在按下的颜色。
      */
-    .scale({ x: this.pressed ? 0.92 : 1, y: this.pressed ? 0.92 : 1 })
-    .animation({ duration: DUR_FAST, curve: CURVE_BOUNCE })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.pressed = true;
@@ -724,7 +728,6 @@ struct Index {
   }
 
   /** 顶栏副标题 */
-  /** 顶栏副标题 */
   private topSubtitle(): string {
     if (this.activeTab === 1) {
       return '查看历史与体重趋势';
@@ -733,6 +736,46 @@ struct Index {
       return '个人情况与 AI 配置';
     }
     return this.dayKey === todayKey() ? friendlyDate(this.dayKey) : '查看历史';
+  }
+
+  /**
+   * 顶栏右侧菜单：一对日期步进按钮（只在首页显示）。
+   *
+   * 用方法而不是字段：`isEnabled` 依赖 `dayKey`（「今天」时不能再往后翻）。
+   * 字段只在页面创建时求值一次，翻日期后不会更新；
+   * 方法体在每次重建时都会被读到当前值。
+   *
+   * 图标用系统符号 chevron_backward / chevron_forward
+   *（名字来自官方符号表；拼错不会报错、只会不显示）。
+   */
+  private topMenus(): HdsNavigationMenuContentOptions {
+    if (this.activeTab !== 0) {
+      return { value: [] };
+    }
+    return {
+      value: [
+        {
+          content: {
+            icon: $r('sys.symbol.chevron_backward'),
+            label: '前一天',
+            action: () => {
+              this.shiftDate(-1);
+            }
+          }
+        },
+        {
+          content: {
+            icon: $r('sys.symbol.chevron_forward'),
+            label: '后一天',
+            // 已经在「今天」就不能再往后
+            isEnabled: this.dayKey !== todayKey(),
+            action: () => {
+              this.shiftDate(1);
+            }
+          }
+        }
+      ]
+    };
   }
 
   /**
@@ -1007,16 +1050,17 @@ struct Index {
      * ——实测 left=0 / right=1178 / 屏宽 1280，整体左偏 51px，
      * 看起来就是「导航栏歪了」。改成水平居中后左右留白相等。
      */
-    Stack({ alignContent: Alignment.Top }) {
-      // ---------------------------------------------------- 1. 柔光背景
-      // 铺满整屏（含状态栏区域），这才是「沉浸」的前提
-      Column()
-        .width('100%')
-        .height('100%')
-        .linearGradient({
-          angle: 180,
-          colors: [[this.glow.from, 0.0], [this.glow.to, 0.42], [COLOR_BG, 1.0]]
-        })
+    HdsNavigation() {
+      Stack({ alignContent: Alignment.Top }) {
+        // ---------------------------------------------------- 1. 柔光背景
+        // 铺满整屏（含状态栏区域），这才是「沉浸」的前提
+        Column()
+          .width('100%')
+          .height('100%')
+          .linearGradient({
+            angle: 180,
+            colors: [[this.glow.from, 0.0], [this.glow.to, 0.42], [COLOR_BG, 1.0]]
+          })
 
       // ---------------------------------------------------- 2. 内容层 + 底部页签
       /*
@@ -1175,42 +1219,61 @@ struct Index {
       .onChange((index: number) => {
         this.onTabIndexChanged(index);
       })
-      .width('100%')
-      .height('100%')
-
-      /*
-       * ---------------------------------------------------- 3. 毛玻璃顶栏
-       *
-       * ⚠️ 必须留在 Stack 的**顶层**并加 zIndex(1)：它是覆盖在内容之上的，
-       *    内容向上滚动时从它下面穿过去、被模糊掉。
-       *
-       * 换成 Tabs 时这段曾被漏掉（原来它长在 contentView() 里，
-       * 而 contentView 被废弃了），表现就是「顶部的 UI 没了」。
-       * 顶栏与页签栏是两件独立的事：页签栏交给 Tabs，
-       * 顶栏仍然自绘（官方材质要在 Navigation 标题栏里才生效，
-       * 那需要把整页改成 Navigation，见文件末尾的说明）。
-       */
-      GlassTopBar({
-        title: this.topTitle(),
-        subtitle: this.topSubtitle(),
-        leadingGlyph: '',
-        // 首页右上角放一对步进按钮用于切换日期
-        trailingGlyphs: this.activeTab === 0 ? ['‹', '›'] : [],
-        // 「今天」时不能再往后翻，把右箭头置灰
-        trailingEnabled: [true, this.dayKey !== todayKey()],
-        onTrailing: (index: number) => {
-          this.shiftDate(index === 0 ? -1 : 1);
-        }
-      })
-        .zIndex(1)
-        .hitTestBehavior(HitTestMode.Transparent)
+        .width('100%')
+        .height('100%')
+      }
     }
+    /*
+     * ══════════════ 官方导航标题栏（顶栏） ══════════════
+     *
+     * 从自绘的 GlassTopBar 换成 HdsNavigation 的 titleBar，
+     * 这样顶栏用的是官方组件与官方材质通道（hdsMaterial）。
+     *
+     * ⚠️ 安全区开关**故意设为 false**（用户指定）：
+     *    false/false 时标题栏会顶到状态栏区域。
+     *    实测改 true 会让标题栏位置正确，但底色仍是不透明白 ——
+     *    官方文档：「低算力设备不显示沉浸光感效果，显示为白色背景」，
+     *    本机算力档 = 2 (SMOOTH，最低档)，所以材质不渲染。
+     *    即：这台设备上「白底」改不掉，是否留安全区是独立的选择。
+     */
+    .titleBar({
+      content: {
+        title: {
+          mainTitle: this.topTitle(),
+          subTitle: this.topSubtitle()
+        },
+        menu: this.topMenus()
+      },
+      style: {
+        scrollEffectOpts: {
+          enableScrollEffect: false,
+          scrollEffectType: ScrollEffectType.GRADIENT_BLUR
+        },
+        systemMaterialEffect: {
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
+          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+        }
+      },
+      /*
+       * ── 安全区：只开「避开」，不开「组件级安全区」 ──
+       *
+       * 两个开关的默认值都是 false（= 现在这样，标题压着状态栏）。
+       * 它们的语义是独立的：
+       *   avoidLayoutSafeArea   「是否避开安全区」→ 让标题栏往下让
+       *   enableComponentSafeArea「是否启用组件级安全区」→ 额外一层避让
+       *
+       * 之前两个一起设 true：位置对了，但标题栏变成不透明白底
+       *（官方文档：低算力设备不显示沉浸光感，回退成白色背景）。
+       * 这里只开第一个，试「让位」与「透明」能否兼得。
+       */
+      avoidLayoutSafeArea: true,
+      enableComponentSafeArea: false
+    })
+    .bindToScrollable([this.todayScroller])
+    .hideBackButton(true)
+    .titleMode(HdsNavigationTitleMode.MINI)
     .width('100%')
     .height('100%')
-    // 让背景铺到状态栏和手势区下面。不加这句，根节点会被安全区限制在
-    // [0,137] 起，顶部柔光就永远铺不到屏幕顶端（实测确认过）。
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-    .backgroundColor(COLOR_BG)
   }
 
   // ================================================== 首页
