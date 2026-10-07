@@ -316,17 +316,17 @@ struct CameraPage {
                 .fontSize(44)
               Text('拍照识别，或直接写吃了什么')
                 .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .textAlign(TextAlign.Center)
               Text(`照片可选，最多 ${MAX_IMAGES} 张；同一餐多拍几张，模型会合并判断`)
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .textAlign(TextAlign.Center)
             }
             .width('100%')
             .height(this.hintH)
             .justifyContent(FlexAlign.Center)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(RADIUS)
             .shadow(CARD_SHADOW)
             .clip(true)
@@ -361,15 +361,15 @@ struct CameraPage {
                 // 末尾的「再加一张」入口
                 if (this.imageUris.length < MAX_IMAGES) {
                   Column({ space: 4 }) {
-                    Text('+').fontSize(28).fontColor(COLOR_TEXT_SUB)
-                    Text('再加一张').fontSize(11).fontColor(COLOR_TEXT_SUB)
+                    Text('+').fontSize(28).fontColor(COLOR_TEXT_SUB())
+                    Text('再加一张').fontSize(11).fontColor(COLOR_TEXT_SUB())
                   }
                   .width(150)
                   .height(150)
                   .justifyContent(FlexAlign.Center)
-                  .backgroundColor(COLOR_CARD)
+                  .backgroundColor(COLOR_CARD())
                   .borderRadius(14)
-                  .border({ width: 1, color: COLOR_DIVIDER, style: BorderStyle.Dashed })
+                  .border({ width: 1, color: COLOR_DIVIDER(), style: BorderStyle.Dashed })
                   .onClick(() => {
                     this.onPickGallery();
                   })
@@ -387,11 +387,11 @@ struct CameraPage {
             Row() {
               Text('吃了什么')
                 .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
               Blank()
               Text(`${this.notes.length}/100`)
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
             }
             .width('100%')
 
@@ -409,7 +409,7 @@ struct CameraPage {
               .width('100%')
               .fontColor(INPUT_TEXT)
               .placeholderColor(INPUT_PLACEHOLDER)
-              .backgroundColor(COLOR_BG)
+              .backgroundColor(COLOR_BG())
               .borderRadius(10)
               .maxLength(100)
               .onChange((v: string) => {
@@ -425,7 +425,7 @@ struct CameraPage {
           }
           .width('100%')
           .padding(14)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(RADIUS)
           .shadow(CARD_SHADOW)
 
@@ -441,22 +441,22 @@ struct CameraPage {
            */
           Row({ space: 10 }) {
             Button({ type: ButtonType.Capsule }) {
-              Text('拍照').fontSize(16).fontColor(COLOR_TEXT)
+              Text('拍照').fontSize(16).fontColor(COLOR_TEXT())
             }
             .layoutWeight(1)
             .height(48)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .enabled(!this.busy)
             .onClick(() => {
               this.onTakePhoto();
             })
 
             Button({ type: ButtonType.Capsule }) {
-              Text('相册').fontSize(16).fontColor(COLOR_TEXT)
+              Text('相册').fontSize(16).fontColor(COLOR_TEXT())
             }
             .layoutWeight(1)
             .height(48)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .enabled(!this.busy)
             .onClick(() => {
               this.onPickGallery();
@@ -472,7 +472,7 @@ struct CameraPage {
           }
           .width('100%')
           .height(50)
-          .backgroundColor(COLOR_PRIMARY)
+          .backgroundColor(COLOR_PRIMARY())
           // 有照片**或**有描述即可（纯文字也要能记录）
           .enabled(!this.busy && this.canSubmit())
           .opacity(!this.busy && this.canSubmit() ? 1 : 0.5)
@@ -485,11 +485,11 @@ struct CameraPage {
             Row({ space: 8 }) {
               Text('!')
                 .fontSize(14)
-                .fontColor(COLOR_WARN)
+                .fontColor(COLOR_WARN())
                 .fontWeight(FontWeight.Bold)
               Text(this.errorText)
                 .fontSize(13)
-                .fontColor(COLOR_WARN)
+                .fontColor(COLOR_WARN())
                 .layoutWeight(1)
             }
             .width('100%')
@@ -504,15 +504,15 @@ struct CameraPage {
               LoadingProgress()
                 .width(22)
                 .height(22)
-                .color(COLOR_PRIMARY)
+                .color(COLOR_PRIMARY())
               Text(this.statusText)
                 .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .layoutWeight(1)
             }
             .width('100%')
             .padding(14)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(RADIUS)
           }
 
@@ -521,33 +521,33 @@ struct CameraPage {
             Column({ space: 8 }) {
               Text('识别功能还没配置')
                 .fontSize(14)
-                .fontColor(COLOR_TEXT)
+                .fontColor(COLOR_TEXT())
               Text('需要填入你自己的 AI 接口地址、API Key 和模型名才能识别')
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
               Button({ type: ButtonType.Capsule }) {
                 Text('去配置').fontSize(14).fontColor(Color.White)
               }
               .height(38)
-              .backgroundColor(COLOR_PRIMARY)
+              .backgroundColor(COLOR_PRIMARY())
               .onClick(() => {
                 this.goAiSettings();
               })
             }
             .width('100%')
             .padding(16)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(RADIUS)
             .alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 6 }) {
               Text(`当前模型：${SettingsRepo.loadAiConfig().model}`)
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .width('100%')
               Text('照片只会在本机压缩后发送到 DeepSeek')
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .width('100%')
             }
             .width('100%')
@@ -566,7 +566,7 @@ struct CameraPage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
     }
     .titleBar({
       content: {

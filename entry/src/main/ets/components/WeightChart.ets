@@ -11,6 +11,7 @@
  */
 import { WeightRecord } from '../model/Types';
 import { CARD_SHADOW, COLOR_CARD, COLOR_DIVIDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SUB, RADIUS } from '../common/Theme';
+import { CANVAS_DIVIDER, CANVAS_PRIMARY, CANVAS_TEXT, CANVAS_TEXT_SUB } from '../common/CanvasColors';
 
 /** 图表内边距。左边留给体重刻度，下边留给日期 */
 const PAD_LEFT = 46;
@@ -76,7 +77,7 @@ export struct WeightChart {
     const list: WeightRecord[] = this.records;
     if (list.length === 0) {
       ctx.font = '15px sans-serif';
-      ctx.fillStyle = COLOR_TEXT_SUB;
+      ctx.fillStyle = CANVAS_TEXT_SUB;
       ctx.textAlign = 'center';
       ctx.fillText('还没有体重记录', width / 2, height / 2);
       return;
@@ -112,7 +113,7 @@ export struct WeightChart {
     const yAt = (v: number): number => PAD_TOP + plotH * (1 - (v - min) / range);
 
     // 参考网格线：三条
-    ctx.strokeStyle = COLOR_DIVIDER;
+    ctx.strokeStyle = CANVAS_DIVIDER;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 2; i++) {
       const y: number = PAD_TOP + plotH * i / 2;
@@ -124,7 +125,7 @@ export struct WeightChart {
 
     // Y 轴刻度文字（体重）
     ctx.font = '14px sans-serif';
-    ctx.fillStyle = COLOR_TEXT_SUB;
+    ctx.fillStyle = CANVAS_TEXT_SUB;
     ctx.textAlign = 'right';
     ctx.fillText(max.toFixed(1), PAD_LEFT - 7, PAD_TOP + 5);
     ctx.fillText(((max + min) / 2).toFixed(1), PAD_LEFT - 7, PAD_TOP + plotH / 2 + 5);
@@ -132,7 +133,7 @@ export struct WeightChart {
 
     // 轴名称：左上标「体重(kg)」，右下标「日期」
     ctx.textAlign = 'left';
-    ctx.fillStyle = COLOR_TEXT_SUB;
+    ctx.fillStyle = CANVAS_TEXT_SUB;
     ctx.font = '13px sans-serif';
     ctx.fillText('体重(kg)', 2, 15);
 
@@ -147,7 +148,7 @@ export struct WeightChart {
     ctx.fillText('日期', width - PAD_RIGHT, height - 2);
 
     // 折线
-    ctx.strokeStyle = COLOR_PRIMARY;
+    ctx.strokeStyle = CANVAS_PRIMARY;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -167,14 +168,14 @@ export struct WeightChart {
     const dotRadius: number = list.length > 30 ? 2 : 3.5;
     for (let i = 0; i < list.length; i++) {
       ctx.beginPath();
-      ctx.fillStyle = COLOR_PRIMARY;
+      ctx.fillStyle = CANVAS_PRIMARY;
       ctx.arc(xAt(i), yAt(list[i].weightKg), dotRadius, 0, Math.PI * 2);
       ctx.fill();
     }
 
     // 最新值标注在最后一个点上方
     const lastIndex: number = list.length - 1;
-    ctx.fillStyle = COLOR_TEXT;
+    ctx.fillStyle = CANVAS_TEXT;
     ctx.font = '15px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(`${list[lastIndex].weightKg} kg`, width - PAD_RIGHT,
@@ -187,12 +188,12 @@ export struct WeightChart {
         Text('体重趋势')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
         Blank()
         if (this.records.length > 0) {
           Text(`${this.records.length} 次记录`)
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
       }
       .width('100%')
@@ -208,7 +209,7 @@ export struct WeightChart {
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }

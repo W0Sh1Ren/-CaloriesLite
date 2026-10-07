@@ -112,17 +112,17 @@ export struct CalendarHeatmap {
   }
 
   /** 状态点的颜色：按缺口正负分级 */
-  private dotColor(data: DayCell): string {
+  private dotColor(data: DayCell): ResourceColor {
     if (!data.hasRecord) {
-      return COLOR_DIVIDER;
+      return COLOR_DIVIDER();
     }
     if (data.deficit < 0) {
-      return COLOR_WARN;
+      return COLOR_WARN();
     }
     if (data.deficit <= 150) {
-      return COLOR_PRIMARY;
+      return COLOR_PRIMARY();
     }
-    return COLOR_OK;
+    return COLOR_OK();
   }
 
   /** 按下标取格子，越界返回占位，避免渲染期抛异常 */
@@ -134,28 +134,28 @@ export struct CalendarHeatmap {
   }
 
   /** 选中态的底色。统一用字符串色值，避免 Color 枚举与 string 混用导致类型不匹配 */
-  private cellBg(data: DayCell): string {
+  private cellBg(data: DayCell): ResourceColor {
     if (!data.inMonth || data.isFuture) {
       return TRANSPARENT;
     }
     if (this.selectedDay === data.dayKey) {
-      return COLOR_PRIMARY;
+      return COLOR_PRIMARY();
     }
     if (data.isToday) {
-      return COLOR_PRIMARY_SOFT;
+      return COLOR_PRIMARY_SOFT();
     }
     return TRANSPARENT;
   }
 
   /** 选中态的字色 */
-  private cellTextColor(data: DayCell): string {
+  private cellTextColor(data: DayCell): ResourceColor {
     if (!data.inMonth || data.isFuture) {
-      return COLOR_DIVIDER;
+      return COLOR_DIVIDER();
     }
     if (this.selectedDay === data.dayKey) {
       return '#FFFFFF';
     }
-    return data.isToday ? COLOR_PRIMARY : COLOR_TEXT;
+    return data.isToday ? COLOR_PRIMARY() : COLOR_TEXT();
   }
 
   /** 该格是否用中等字重（选中的今天） */
@@ -165,7 +165,7 @@ export struct CalendarHeatmap {
   }
 
   /** 状态点底色：选中格不画点（与选中圆底撞色） */
-  private dotBg(index: number): string {
+  private dotBg(index: number): ResourceColor {
     const data: DayCell = this.cellAt(index);
     return this.selectedDay === data.dayKey ? TRANSPARENT : this.dotColor(data);
   }
@@ -186,7 +186,7 @@ export struct CalendarHeatmap {
           ForEach(WEEK_HEADER, (w: string) => {
             Text(w)
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .textAlign(TextAlign.Center)
               .layoutWeight(1)
               .height(28)
@@ -323,10 +323,10 @@ export struct CalendarHeatmap {
 
       // 图例
       Row({ space: 14 }) {
-        this.legend(COLOR_OK, '有缺口')
-        this.legend(COLOR_PRIMARY, '基本持平')
-        this.legend(COLOR_WARN, '超标')
-        this.legend(COLOR_DIVIDER, '未记录')
+        this.legend(COLOR_OK(), '有缺口')
+        this.legend(COLOR_PRIMARY(), '基本持平')
+        this.legend(COLOR_WARN(), '超标')
+        this.legend(COLOR_DIVIDER(), '未记录')
       }
       .width('100%')
       .justifyContent(FlexAlign.Center)
@@ -334,13 +334,13 @@ export struct CalendarHeatmap {
     }
     .width('100%')
     .padding({ left: 8, right: 8, top: 14, bottom: 14 })
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
 
   @Builder
-  legend(color: string, label: string) {
+  legend(color: ResourceColor, label: string) {
     Row({ space: 5 }) {
       Row()
         .width(6)
@@ -349,7 +349,7 @@ export struct CalendarHeatmap {
         .borderRadius(3)
       Text(label)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
     }
   }
 }

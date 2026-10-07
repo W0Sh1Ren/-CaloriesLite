@@ -294,14 +294,14 @@ struct ResultConfirm {
     return '不确定';
   }
 
-  private confidenceColor(level: string): string {
+  private confidenceColor(level: string): ResourceColor {
     if (level === 'high') {
-      return COLOR_OK;
+      return COLOR_OK();
     }
     if (level === 'medium') {
-      return COLOR_PRIMARY;
+      return COLOR_PRIMARY();
     }
-    return COLOR_WARN;
+    return COLOR_WARN();
   }
 
   /** 删除某一行 */
@@ -389,10 +389,10 @@ struct ResultConfirm {
         Text('和模型聊聊')
           .fontSize(14)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
         Text('可以改，也可以直接加')
           .fontSize(11)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .layoutWeight(1)
       }
       .width('100%')
@@ -407,7 +407,7 @@ struct ResultConfirm {
                 Blank()
                 Text(t.ask)
                   .fontSize(13)
-                  .fontColor(COLOR_TEXT)
+                  .fontColor(COLOR_TEXT())
                   .padding({ left: 10, right: 10, top: 6, bottom: 6 })
                   .backgroundColor('#1A22C55E')
                   .borderRadius(10)
@@ -420,9 +420,9 @@ struct ResultConfirm {
                 Row() {
                   Text(t.reply)
                     .fontSize(12)
-                    .fontColor(COLOR_TEXT_SUB)
+                    .fontColor(COLOR_TEXT_SUB())
                     .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-                    .backgroundColor(COLOR_BG)
+                    .backgroundColor(COLOR_BG())
                     .borderRadius(10)
                     .constraintSize({ maxWidth: '80%' })
                   Blank()
@@ -445,7 +445,7 @@ struct ResultConfirm {
       if (this.drafts.length === 0) {
         Text('当前没有条目了。可以直接让模型加，例如「再加一碗米饭」')
           .fontSize(11)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .width('100%')
       }
 
@@ -457,7 +457,7 @@ struct ResultConfirm {
           .layoutWeight(1)
           .fontColor(INPUT_TEXT)
           .placeholderColor(INPUT_PLACEHOLDER)
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_BG())
           .borderRadius(10)
           /*
            * 程序化聚焦时不弹键盘。
@@ -490,7 +490,7 @@ struct ResultConfirm {
         }
         .width(72)
         .height(42)
-        .backgroundColor(COLOR_PRIMARY)
+        .backgroundColor(COLOR_PRIMARY())
         .borderRadius(10)
         // 只要有话说就能发送：不再要求还有条目（删光了也能加）
         .enabled(!this.revising && this.askText.trim().length > 0)
@@ -503,7 +503,7 @@ struct ResultConfirm {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -536,17 +536,17 @@ struct ResultConfirm {
             Row({ space: 8 }) {
               Text('你的说明')
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
               Text(this.userNotes)
                 .fontSize(12)
-                .fontColor(COLOR_TEXT)
+                .fontColor(COLOR_TEXT())
                 .layoutWeight(1)
                 .maxLines(2)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
             }
             .width('100%')
             .padding(12)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(RADIUS)
             .shadow(CARD_SHADOW)
           }
@@ -554,7 +554,7 @@ struct ResultConfirm {
           Row() {
             Text(`识别模型：${this.model}`)
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
           }
           .width('100%')
           .padding({ left: 4 })
@@ -563,12 +563,12 @@ struct ResultConfirm {
             Row() {
               Text(this.overallNote)
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .layoutWeight(1)
             }
             .width('100%')
             .padding(12)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(10)
           }
 
@@ -576,18 +576,18 @@ struct ResultConfirm {
           Column({ space: 8 }) {
             Text('记到哪一餐')
               .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
 
             Row({ space: 8 }) {
               ForEach(MEAL_ORDER, (m: MealType) => {
                 Text(mealTypeLabel(m))
                   .fontSize(14)
-                  .fontColor(this.meal === m ? Color.White : COLOR_TEXT)
+                  .fontColor(this.meal === m ? Color.White : COLOR_TEXT())
                   .textAlign(TextAlign.Center)
                   .layoutWeight(1)
                   .height(38)
-                  .backgroundColor(this.meal === m ? COLOR_PRIMARY : COLOR_CARD)
+                  .backgroundColor(this.meal === m ? COLOR_PRIMARY() : COLOR_CARD())
                   .borderRadius(10)
                   .onClick(() => {
                     this.meal = m;
@@ -626,11 +626,11 @@ struct ResultConfirm {
         Column({ space: 2 }) {
           Text('合计')
             .fontSize(11)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
           Text(`${this.totalKcal()} 千卡`)
             .fontSize(18)
             .fontWeight(FontWeight.Medium)
-            .fontColor(COLOR_TEXT)
+            .fontColor(COLOR_TEXT())
         }
         .alignItems(HorizontalAlign.Start)
 
@@ -641,18 +641,18 @@ struct ResultConfirm {
         }
         .height(46)
         .width(140)
-        .backgroundColor(COLOR_PRIMARY)
+        .backgroundColor(COLOR_PRIMARY())
         .onClick(() => {
           this.confirm();
         })
       }
       .width('100%')
       .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 10, bottom: 10 })
-      .backgroundColor(COLOR_CARD)
+      .backgroundColor(COLOR_CARD())
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
     }
     .titleBar({
       content: {
@@ -698,16 +698,16 @@ struct ResultConfirm {
           .layoutWeight(1)
           .fontColor(INPUT_TEXT)
           .placeholderColor(INPUT_PLACEHOLDER)
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_BG())
           .borderRadius(8)
           .onChange((v: string) => {
             item.name = v;
           })
 
         Button({ type: ButtonType.Circle }) {
-          Text('✕').fontSize(13).fontColor(COLOR_TEXT_SUB)
+          Text('✕').fontSize(13).fontColor(COLOR_TEXT_SUB())
         }
-        .width(30).height(30).backgroundColor(COLOR_DIVIDER)
+        .width(30).height(30).backgroundColor(COLOR_DIVIDER())
         .onClick(() => {
           this.removeRow(index);
         })
@@ -722,7 +722,7 @@ struct ResultConfirm {
           .layoutWeight(1)
           .fontColor(INPUT_TEXT)
           .placeholderColor(INPUT_PLACEHOLDER)
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_BG())
           .borderRadius(8)
           .onChange((v: string) => {
             item.gramsText = v;
@@ -733,12 +733,12 @@ struct ResultConfirm {
 
         Text('克')
           .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
 
         Text(`${item.kcal} 千卡`)
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
           .width(78)
           .textAlign(TextAlign.End)
       }
@@ -757,16 +757,16 @@ struct ResultConfirm {
           .fontSize(11)
           .fontColor(this.confidenceColor(item.confidence))
           .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_BG())
           .borderRadius(4)
 
         Text(item.source === FoodSource.DATABASE ? '查表数值' : 'AI 估算')
           .fontSize(11)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
 
         Text(item.note)
           .fontSize(11)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .layoutWeight(1)
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -775,7 +775,7 @@ struct ResultConfirm {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -786,11 +786,11 @@ struct ResultConfirm {
     Row({ space: 3 }) {
       Text(label)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
       Text(`${grams} g`)
         .fontSize(12)
         .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
+        .fontColor(COLOR_TEXT())
     }
   }
 }

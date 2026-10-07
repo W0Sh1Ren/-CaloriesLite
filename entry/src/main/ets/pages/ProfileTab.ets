@@ -307,7 +307,7 @@ export struct ProfileTab {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
   }
 
   /** 数值选择面板（自绘底部弹层） */
@@ -318,7 +318,7 @@ export struct ProfileTab {
       Row()
         .width(36)
         .height(4)
-        .backgroundColor(COLOR_DIVIDER)
+        .backgroundColor(COLOR_DIVIDER())
         .borderRadius(2)
         .margin({ top: 8, bottom: 2 })
 
@@ -331,11 +331,11 @@ export struct ProfileTab {
          * 给定宽以后取消/确定的尺寸一致、文字左右留白也均匀。
          */
         Button({ type: ButtonType.Capsule }) {
-          Text('取消').fontSize(14).fontColor(COLOR_TEXT_SUB)
+          Text('取消').fontSize(14).fontColor(COLOR_TEXT_SUB())
         }
         .width(88)
         .height(34)
-        .backgroundColor(COLOR_BG)
+        .backgroundColor(COLOR_BG())
         .onClick(() => {
           this.hideSheet();
         })
@@ -343,7 +343,7 @@ export struct ProfileTab {
         Text(this.sheetTitle())
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
 
@@ -353,7 +353,7 @@ export struct ProfileTab {
         }
         .width(88)
         .height(34)
-        .backgroundColor(COLOR_PRIMARY)
+        .backgroundColor(COLOR_PRIMARY())
         .onClick(() => {
           this.confirmPicker();
         })
@@ -375,7 +375,7 @@ export struct ProfileTab {
           .textAlign(TextAlign.Center)
           .height(64)
           .width('100%')
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_BG())
           .borderRadius(12)
           .onChange((v: string) => {
             this.weightText = v;
@@ -383,7 +383,7 @@ export struct ProfileTab {
 
         Text('公斤，可精确到 0.1')
           .fontSize(11)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
       } else {
         /*
          * 滚轮选择。
@@ -401,15 +401,15 @@ export struct ProfileTab {
           .height(200)
           .canLoop(false)
           .selectedTextStyle({
-            color: COLOR_PRIMARY,
+            color: COLOR_PRIMARY(),
             font: { size: 26, weight: FontWeight.Bold }
           })
           .textStyle({
-            color: COLOR_TEXT,
+            color: COLOR_TEXT(),
             font: { size: 19, weight: FontWeight.Normal }
           })
           .disappearTextStyle({
-            color: COLOR_TEXT_SUB,
+            color: COLOR_TEXT_SUB(),
             font: { size: 16, weight: FontWeight.Normal }
           })
           .onChange((value: string | string[], index: number | number[]) => {
@@ -418,7 +418,7 @@ export struct ProfileTab {
 
         Text('上下滑动选择')
           .fontSize(11)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
       }
 
       Row().height(16)
@@ -426,7 +426,7 @@ export struct ProfileTab {
     .width('100%')
     .padding({ left: PAGE_PAD, right: PAGE_PAD })
     // 底部弹层外观：上方圆角 + 卡片底色 + 让开手势条
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius({ topLeft: 20, topRight: 20 })
     // 底部只让开手势条即可：面板打开时导航栏已被隐藏，
     // 之前按导航栏高度留的 88vp 会变成一大片空白。
@@ -445,7 +445,7 @@ export struct ProfileTab {
       // 不是基础代谢；叫「基础热量」会和下面的「基础代谢」混起来。
       Text('每日热量目标')
         .fontSize(13)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
 
       Row() {
@@ -453,18 +453,18 @@ export struct ProfileTab {
           value: this.budget,
           fontSize: 40,
           fontWeight: FontWeight.Bold,
-          textColor: COLOR_PRIMARY,
+          textColor: COLOR_PRIMARY(),
           duration: DUR_SLOW
         })
         Text(' 千卡')
           .fontSize(14)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .margin({ bottom: 6 })
       }
       .alignItems(VerticalAlign.Bottom)
       .width('100%')
 
-      Divider().color(COLOR_DIVIDER)
+      Divider().color(COLOR_DIVIDER())
 
       Row() {
         this.metric('基础代谢', () => this.bmr)
@@ -483,17 +483,17 @@ export struct ProfileTab {
        */
       Text(this.budgetHint())
         .fontSize(11)
-        .fontColor(COLOR_PRIMARY)
+        .fontColor(COLOR_PRIMARY())
         .width('100%')
 
       Text(`按当前体重 ${this.latestWeight} 公斤、${genderLabel(this.profile.gender)}性、${this.profile.age} 岁、${this.profile.heightCm} 厘米计算`)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -512,13 +512,13 @@ export struct ProfileTab {
         value: value(),
         fontSize: 18,
         fontWeight: FontWeight.Medium,
-        textColor: COLOR_TEXT,
+        textColor: COLOR_TEXT(),
         duration: DUR_SLOW,
         decimals: decimals
       })
       Text(sub().length > 0 ? `${label} · ${sub()}` : label)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
     }
     .layoutWeight(1)
   }
@@ -536,13 +536,13 @@ export struct ProfileTab {
         Text('个人情况')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
 
         Blank()
 
         Text('⌄')
           .fontSize(14)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .rotate({ angle: this.profileExpanded ? 180 : 0 })
           // 与明细区同时长，箭头与容器动作才是一体的
           .animation({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut })
@@ -559,7 +559,7 @@ export struct ProfileTab {
       if (!this.profileExpanded) {
         Text(this.profileSummary())
           .fontSize(12)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
@@ -585,16 +585,16 @@ export struct ProfileTab {
             Row({ space: 8 }) {
               Text('性别')
                 .fontSize(14)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .width(56)
               ForEach([Gender.MALE, Gender.FEMALE], (g: Gender) => {
                 Text(genderLabel(g))
                   .fontSize(14)
-                  .fontColor(this.profile.gender === g ? Color.White : COLOR_TEXT)
+                  .fontColor(this.profile.gender === g ? Color.White : COLOR_TEXT())
                   .textAlign(TextAlign.Center)
                   .layoutWeight(1)
                   .height(36)
-                  .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY : COLOR_BG)
+                  .backgroundColor(this.profile.gender === g ? COLOR_PRIMARY() : COLOR_BG())
                   .borderRadius(10)
                   .onClick(() => {
                     this.apply((p: UserProfile) => {
@@ -618,7 +618,7 @@ export struct ProfileTab {
               this.openPicker('weight');
             })
 
-            Divider().color(COLOR_DIVIDER)
+            Divider().color(COLOR_DIVIDER())
 
             /*
              * 日常活动量 | 减脂目标 —— **左右两列并排**。
@@ -634,7 +634,7 @@ export struct ProfileTab {
               Column({ space: 6 }) {
                 Text('日常活动量')
                   .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
+                  .fontColor(COLOR_TEXT_SUB())
                   .width('100%')
 
                 ForEach(ACTIVITY_UI_ORDER, (level: ActivityLevel) => {
@@ -661,7 +661,7 @@ export struct ProfileTab {
               Column({ space: 6 }) {
                 Text('减脂目标')
                   .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
+                  .fontColor(COLOR_TEXT_SUB())
                   .width('100%')
 
                 ForEach(GOAL_ORDER, (goal: Goal) => {
@@ -687,7 +687,7 @@ export struct ProfileTab {
             if (this.goalDays() > 0) {
               Text(`按当前目标，约 ${this.goalDays()} 天后可减到目标体重`)
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .width('100%')
             }
           }
@@ -705,7 +705,7 @@ export struct ProfileTab {
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -769,7 +769,7 @@ export struct ProfileTab {
     Row({ space: 8 }) {
       Text(label)
         .fontSize(14)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width(56)
 
       Blank()
@@ -779,18 +779,18 @@ export struct ProfileTab {
         Text(`${value()}`)
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_PRIMARY)
+          .fontColor(COLOR_PRIMARY())
         Text(unit)
           .fontSize(12)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
         Text('›')
           .fontSize(14)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .margin({ left: 2 })
       }
       .height(40)
       .padding({ left: 12, right: 6 })
-      .backgroundColor(COLOR_BG)
+      .backgroundColor(COLOR_BG())
       .borderRadius(10)
       .onClick(onTap)
     }
@@ -804,11 +804,11 @@ export struct ProfileTab {
         Text('AI 拍照识别')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
         Blank()
         Text(this.aiReady ? '已配置' : '未配置')
           .fontSize(12)
-          .fontColor(this.aiReady ? COLOR_OK : COLOR_WARN)
+          .fontColor(this.aiReady ? COLOR_OK() : COLOR_WARN())
       }
       .width('100%')
 
@@ -816,7 +816,7 @@ export struct ProfileTab {
         ? '使用你自己的 DeepSeek API Key'
         : '填上你的 DeepSeek API Key 就能拍照识别食物，一张照片约 0.4 分钱；本应用不提供也不代管任何额度')
         .fontSize(12)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
 
       Button({ type: ButtonType.Capsule }) {
@@ -826,7 +826,7 @@ export struct ProfileTab {
       }
       .width('100%')
       .height(42)
-      .backgroundColor(COLOR_PRIMARY)
+      .backgroundColor(COLOR_PRIMARY())
       .onClick(() => {
         try {
           router.pushUrl({ url: 'pages/AiSettings' });
@@ -837,7 +837,7 @@ export struct ProfileTab {
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -848,27 +848,27 @@ export struct ProfileTab {
       Text('关于')
         .fontSize(15)
         .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
+        .fontColor(COLOR_TEXT())
         .width('100%')
         .margin({ bottom: 6 })
 
       Text('轻卡记 —— 只做三件事：算出你一天该吃多少、帮你记下吃了多少、告诉你今天差多少。')
         .fontSize(12)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
 
      /* Text('所有记录只存在本机，不上传任何服务器；食物表内置，AI 识别按你自己的配置直连。')
         .fontSize(12)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
         .margin({ top: 4 })*/
 
-      Divider().color(COLOR_DIVIDER).margin({ top: 12, bottom: 8 })
+      Divider().color(COLOR_DIVIDER()).margin({ top: 12, bottom: 8 })
 
       Row() {
         Text('清空全部数据')
           .fontSize(14)
-          .fontColor(COLOR_WARN)
+          .fontColor(COLOR_WARN())
         Blank()
       }
       .width('100%')
@@ -879,7 +879,7 @@ export struct ProfileTab {
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -890,8 +890,8 @@ export struct ProfileTab {
         title: '清空全部数据',
         message: '会删除所有饮食记录、体重记录和设置，且无法恢复。确定继续吗？',
         buttons: [
-          { text: '取消', color: COLOR_TEXT_SUB },
-          { text: '清空', color: COLOR_WARN }
+          { text: '取消', color: COLOR_TEXT_SUB() },
+          { text: '清空', color: COLOR_WARN() }
         ]
       });
       if (res.index === 1) {

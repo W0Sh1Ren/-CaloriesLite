@@ -92,7 +92,7 @@ struct ManualAdd {
           .layoutWeight(1)
           .fontColor(INPUT_TEXT)
           .placeholderColor(INPUT_PLACEHOLDER)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(10)
           .onChange((v: string) => {
             this.keyword = v;
@@ -116,9 +116,9 @@ struct ManualAdd {
           ForEach(FOOD_CATEGORIES, (c: string) => {
             Text(c)
               .fontSize(13)
-              .fontColor(this.category === c ? Color.White : COLOR_TEXT)
+              .fontColor(this.category === c ? Color.White : COLOR_TEXT())
               .padding({ left: 14, right: 14, top: 6, bottom: 6 })
-              .backgroundColor(this.category === c ? COLOR_PRIMARY : COLOR_CARD)
+              .backgroundColor(this.category === c ? COLOR_PRIMARY() : COLOR_CARD())
               .borderRadius(14)
               .onClick(() => {
                 this.toggleCategory(c);
@@ -140,10 +140,10 @@ struct ManualAdd {
               Column({ space: 3 }) {
                 Text(item.name)
                   .fontSize(15)
-                  .fontColor(COLOR_TEXT)
+                  .fontColor(COLOR_TEXT())
                 Text(`${item.category} · 每 100 克`)
                   .fontSize(11)
-                  .fontColor(COLOR_TEXT_SUB)
+                  .fontColor(COLOR_TEXT_SUB())
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
@@ -151,14 +151,14 @@ struct ManualAdd {
               Text(`${item.kcalPer100g}`)
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
-                .fontColor(this.selected !== null && this.selected.name === item.name ? COLOR_PRIMARY : COLOR_TEXT)
+                .fontColor(this.selected !== null && this.selected.name === item.name ? COLOR_PRIMARY() : COLOR_TEXT())
               Text(' 千卡')
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
             }
             .width('100%')
             .padding(14)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(10)
           }
           .onClick(() => {
@@ -171,14 +171,14 @@ struct ManualAdd {
             Column({ space: 6 }) {
               Text('没找到这个食物')
                 .fontSize(14)
-                .fontColor(COLOR_TEXT)
+                .fontColor(COLOR_TEXT())
               Text('试试换个说法，或者用拍照识别让 AI 估算')
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
             }
             .width('100%')
             .padding(24)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(RADIUS)
           }
         }
@@ -202,20 +202,20 @@ struct ManualAdd {
               Text(this.selected.name)
                 .fontSize(15)
                 .fontWeight(FontWeight.Medium)
-                .fontColor(COLOR_TEXT)
+                .fontColor(COLOR_TEXT())
               Text(this.preview() !== null
                 ? `${(this.preview() as FoodDraft).kcal} 千卡 · 蛋白 ${(this.preview() as FoodDraft).protein}g / 脂肪 ${(this.preview() as FoodDraft).fat}g / 碳水 ${(this.preview() as FoodDraft).carb}g`
                 : '')
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
             }
             .alignItems(HorizontalAlign.Start)
             .layoutWeight(1)
 
             Button({ type: ButtonType.Circle }) {
-              Text('✕').fontSize(13).fontColor(COLOR_TEXT_SUB)
+              Text('✕').fontSize(13).fontColor(COLOR_TEXT_SUB())
             }
-            .width(28).height(28).backgroundColor(COLOR_DIVIDER)
+            .width(28).height(28).backgroundColor(COLOR_DIVIDER())
             .onClick(() => {
               this.selected = null;
             })
@@ -225,7 +225,7 @@ struct ManualAdd {
           Row({ space: 10 }) {
             Text('份量')
               .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
             TextInput({ text: this.gramsText })
               .type(InputType.NUMBER_DECIMAL)
               .fontSize(14)
@@ -233,14 +233,14 @@ struct ManualAdd {
               .layoutWeight(1)
               .fontColor(INPUT_TEXT)
               .placeholderColor(INPUT_PLACEHOLDER)
-              .backgroundColor(COLOR_BG)
+              .backgroundColor(COLOR_BG())
               .borderRadius(8)
               .onChange((v: string) => {
                 this.gramsText = v;
               })
             Text('克')
               .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
           }
           .width('100%')
 
@@ -248,11 +248,11 @@ struct ManualAdd {
             ForEach(MEAL_ORDER, (m: MealType) => {
               Text(mealTypeLabel(m))
                 .fontSize(13)
-                .fontColor(this.meal === m ? Color.White : COLOR_TEXT)
+                .fontColor(this.meal === m ? Color.White : COLOR_TEXT())
                 .textAlign(TextAlign.Center)
                 .layoutWeight(1)
                 .height(34)
-                .backgroundColor(this.meal === m ? COLOR_PRIMARY : COLOR_BG)
+                .backgroundColor(this.meal === m ? COLOR_PRIMARY() : COLOR_BG())
                 .borderRadius(8)
                 .onClick(() => {
                   this.meal = m;
@@ -266,19 +266,19 @@ struct ManualAdd {
           }
           .width('100%')
           .height(46)
-          .backgroundColor(COLOR_PRIMARY)
+          .backgroundColor(COLOR_PRIMARY())
           .onClick(() => {
             this.save();
           })
         }
         .width('100%')
         .padding(16)
-        .backgroundColor(COLOR_CARD)
+        .backgroundColor(COLOR_CARD())
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
     }
     .titleBar({
       content: {

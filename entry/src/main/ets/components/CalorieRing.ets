@@ -14,6 +14,7 @@
  */
 import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, DUR_SLOW, GAP, RADIUS, deficitColor, deficitLabel, deficitLabelColor } from '../common/Theme';
 import { RollingNumber } from './RollingNumber';
+import { CANVAS_PRIMARY_SOFT } from '../common/CanvasColors';
 
 @Component
 export struct CalorieRing {
@@ -165,7 +166,7 @@ export struct CalorieRing {
 
     // 底环：整圈浅色
     ctx.beginPath();
-    ctx.strokeStyle = COLOR_PRIMARY_SOFT;
+    ctx.strokeStyle = CANVAS_PRIMARY_SOFT;
     ctx.lineWidth = stroke;
     ctx.lineCap = 'round';
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -224,13 +225,13 @@ export struct CalorieRing {
              * 数字再上绿色会让「数值」和「状态」两个信息互相稀释。
              * 未达标/超出才给彩色，让异常状态自己跳出来。
              */
-            textColor: this.deficit < this.deficitPlanned ? this.arcColor() : COLOR_TEXT,
+            textColor: this.deficit < this.deficitPlanned ? this.arcColor() : COLOR_TEXT(),
             duration: DUR_SLOW
           })
 
           Text('千卡')
             .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
         .alignItems(HorizontalAlign.Center)
       }
@@ -251,14 +252,14 @@ export struct CalorieRing {
             refreshKey: this.refreshKey,
             fontSize: 20,
             fontWeight: FontWeight.Medium,
-            textColor: COLOR_PRIMARY,
+            textColor: COLOR_PRIMARY(),
             duration: DUR_SLOW
           })
           Text('已摄入')
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
-        Divider().vertical(true).height(28).color(COLOR_PRIMARY_SOFT)
+        Divider().vertical(true).height(28).color(COLOR_PRIMARY_SOFT())
 
         Column({ space: 4 }) {
           RollingNumber({
@@ -266,14 +267,14 @@ export struct CalorieRing {
             refreshKey: this.refreshKey,
             fontSize: 20,
             fontWeight: FontWeight.Medium,
-            textColor: COLOR_TEXT,
+            textColor: COLOR_TEXT(),
             duration: DUR_SLOW
           })
           Text('每日目标')
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
-        Divider().vertical(true).height(28).color(COLOR_PRIMARY_SOFT)
+        Divider().vertical(true).height(28).color(COLOR_PRIMARY_SOFT())
 
         Column({ space: 4 }) {
           RollingNumber({
@@ -281,12 +282,12 @@ export struct CalorieRing {
             refreshKey: this.refreshKey,
             fontSize: 20,
             fontWeight: FontWeight.Medium,
-            textColor: COLOR_OK,
+            textColor: COLOR_OK(),
             duration: DUR_SLOW
           })
           Text('运动消耗')
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
       }
       .width('100%')
@@ -294,7 +295,7 @@ export struct CalorieRing {
     }
     .width('100%')
     .padding(20)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }

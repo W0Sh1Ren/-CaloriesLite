@@ -2,7 +2,7 @@
   "color": [
     {
       "name": "start_window_background",
-      "value": "#FFFFFF"
+      "value": "#121212"
     },
     {
       "name": "color_primary",
@@ -10,7 +10,7 @@
     },
     {
       "name": "color_primary_soft",
-      "value": "#DCFCE7"
+      "value": "#1B3A28"
     },
     {
       "name": "color_primary_glass",
@@ -18,43 +18,43 @@
     },
     {
       "name": "color_warn",
-      "value": "#E5533D"
+      "value": "#FF6B57"
     },
     {
       "name": "color_ok",
-      "value": "#2FA36B"
+      "value": "#3FBF85"
     },
     {
       "name": "color_bg",
-      "value": "#F5F8F6"
+      "value": "#121212"
     },
     {
       "name": "color_card",
-      "value": "#FFFFFF"
+      "value": "#1E1E1E"
     },
     {
       "name": "color_text",
-      "value": "#1A1A1A"
+      "value": "#F2F2F2"
     },
     {
       "name": "color_text_sub",
-      "value": "#8A8F99"
+      "value": "#9BA1A6"
     },
     {
       "name": "color_nav_idle",
-      "value": "#8E8E93"
+      "value": "#9BA1A6"
     },
     {
       "name": "color_nav_active",
-      "value": "#10B981"
+      "value": "#34D399"
     },
     {
       "name": "color_divider",
-      "value": "#EEF0F3"
+      "value": "#2C2C2E"
     },
     {
       "name": "color_carb",
-      "value": "#4C8DFF"
+      "value": "#6BA4FF"
     },
     {
       "name": "color_protein",
@@ -62,35 +62,35 @@
     },
     {
       "name": "color_fat",
-      "value": "#F5C142"
+      "value": "#FFD166"
     },
     {
       "name": "color_glass_border",
-      "value": "#EBFFFFFF"
+      "value": "#33FFFFFF"
     },
     {
       "name": "color_press_glow",
-      "value": "#2622C55E"
+      "value": "#3322C55E"
     },
     {
       "name": "color_glow_dawn",
-      "value": "#DFF5E3"
+      "value": "#1B2A20"
     },
     {
       "name": "color_glow_day",
-      "value": "#E8F8EC"
+      "value": "#182720"
     },
     {
       "name": "color_glow_dusk",
-      "value": "#DCF2EA"
+      "value": "#17262A"
     },
     {
       "name": "color_glow_night",
-      "value": "#DCE6F5"
+      "value": "#171E2A"
     },
     {
       "name": "color_glow_tail",
-      "value": "#F6F7F9"
+      "value": "#161616"
     }
   ]
 }

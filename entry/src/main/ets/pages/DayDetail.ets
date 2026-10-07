@@ -198,7 +198,7 @@ struct DayDetail {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
     }
     .titleBar({
       content: {
@@ -248,15 +248,15 @@ struct DayDetail {
         Column({ space: 2 }) {
           Text('总摄入')
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
           Row({ space: 4 }) {
             Text(`${this.summary.intake}`)
               .fontSize(30)
               .fontWeight(FontWeight.Bold)
-              .fontColor(COLOR_TEXT)
+              .fontColor(COLOR_TEXT())
             Text('千卡')
               .fontSize(12)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .margin({ bottom: 4 })
           }
           .alignItems(VerticalAlign.Bottom)
@@ -269,7 +269,7 @@ struct DayDetail {
           : `缺口 ${this.summary.deficit}`)
           .fontSize(14)
           .fontWeight(FontWeight.Medium)
-          .fontColor(this.summary.deficit < 0 ? COLOR_WARN : COLOR_OK)
+          .fontColor(this.summary.deficit < 0 ? COLOR_WARN() : COLOR_OK())
           .padding({ left: 12, right: 12, top: 6, bottom: 6 })
           .backgroundColor(this.summary.deficit < 0 ? '#1AE5533D' : '#1A2FA36B')
           .borderRadius(12)
@@ -278,10 +278,10 @@ struct DayDetail {
 
       Text(`预算 ${this.summary.budget} 千卡 · 共 ${this.summary.recordCount} 条记录`)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
 
-      Divider().color(COLOR_DIVIDER)
+      Divider().color(COLOR_DIVIDER())
 
       // 推荐的营养素克数按当日预算推算（碳水 50% / 蛋白 30% / 脂肪 20%）
       MacroBar({
@@ -295,7 +295,7 @@ struct DayDetail {
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -308,11 +308,11 @@ struct DayDetail {
         Text(mealTypeLabel(meal))
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
         Blank()
         Text(`${this.mealKcal(meal)} 千卡`)
           .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
       }
       .width('100%')
 
@@ -330,7 +330,7 @@ struct DayDetail {
       }
       .width('100%')
       .padding({ left: 14, right: 14 })
-      .backgroundColor(COLOR_CARD)
+      .backgroundColor(COLOR_CARD())
       .borderRadius(16)
       .shadow(CARD_SHADOW)
     }
@@ -343,20 +343,20 @@ struct DayDetail {
   dishRow(r: FoodRecord, withDivider: boolean) {
     Column() {
       if (withDivider) {
-        Divider().color(COLOR_DIVIDER)
+        Divider().color(COLOR_DIVIDER())
       }
       Row({ space: 10 }) {
         Column({ space: 3 }) {
           Text(r.name)
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
-            .fontColor(COLOR_TEXT)
+            .fontColor(COLOR_TEXT())
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
 
           Text(this.dishSubtitle(r))
             .fontSize(11)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
@@ -367,10 +367,10 @@ struct DayDetail {
           Text(`${r.kcal}`)
             .fontSize(17)
             .fontWeight(FontWeight.Medium)
-            .fontColor(COLOR_PRIMARY)
+            .fontColor(COLOR_PRIMARY())
           Text('千卡')
             .fontSize(10)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
             .margin({ bottom: 2 })
         }
         .alignItems(VerticalAlign.Bottom)
@@ -399,10 +399,10 @@ struct DayDetail {
       Text('这天还没有饮食记录哦')
         .fontSize(15)
         .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
+        .fontColor(COLOR_TEXT())
       Text('拍一张照片，识别后按餐次记到这一天')
         .fontSize(12)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .textAlign(TextAlign.Center)
       Button({ type: ButtonType.Capsule }) {
         Text('去补记一笔').fontSize(14).fontColor(Color.White)
@@ -410,7 +410,7 @@ struct DayDetail {
       // 显式给宽：不给宽时 Capsule 会紧贴文字，背景看着和文字重叠
       .width(148)
       .height(40)
-      .backgroundColor(COLOR_PRIMARY)
+      .backgroundColor(COLOR_PRIMARY())
       .margin({ top: 4 })
       .onClick(() => {
         /*
@@ -424,7 +424,7 @@ struct DayDetail {
     }
     .width('100%')
     .padding({ top: 44, bottom: 44, left: 24, right: 24 })
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
     .justifyContent(FlexAlign.Center)

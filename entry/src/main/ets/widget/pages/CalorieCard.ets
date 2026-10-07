@@ -47,7 +47,7 @@
  *
  *   注意：三条营养素的颜色**不在这里**。它们按营养素区分，由后端推过来
  *   （proteinColor / fatColor / carbColor，见 CardData.ets），
- *   与主应用 Theme.ets 的 COLOR_PROTEIN / FAT / CARB 一致。
+ *   与主应用 Theme.ets 的 COLOR_PROTEIN() / FAT / CARB 一致。
  *   想改那三个颜色要改 CardData.ets，改这里没用。
  *
  * ── 改完怎么生效

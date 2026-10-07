@@ -254,9 +254,9 @@ export struct HistoryTab {
     // 弹窗按钮上限有限，只放最常用的几项 + 取消
     const quick: MetItem[] = MET_TABLE.slice(0, 6);
     for (const m of quick) {
-      buttons.push({ text: m.name, color: COLOR_TEXT });
+      buttons.push({ text: m.name, color: COLOR_TEXT() });
     }
-    buttons.push({ text: '取消', color: COLOR_TEXT_SUB });
+    buttons.push({ text: '取消', color: COLOR_TEXT_SUB() });
 
     try {
       const res = await promptAction.showDialog({
@@ -297,7 +297,7 @@ export struct HistoryTab {
           Text(`${this.viewYear}年${this.viewMonth0 + 1}月`)
             .fontSize(17)
             .fontWeight(FontWeight.Medium)
-            .fontColor(COLOR_TEXT)
+            .fontColor(COLOR_TEXT())
 
           /*
            * 本月缺口：放在月份右边、翻月按钮左边的空档里。
@@ -318,10 +318,10 @@ export struct HistoryTab {
           Column({ space: 1 }) {
             Text(`本月缺口 ${this.monthDeficitKcal} 千卡`)
               .fontSize(12)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
             Text(`相当于 ${kcalToFatGrams(this.monthDeficitKcal)} g 脂肪`)
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .opacity(0.75)
           }
           .alignItems(HorizontalAlign.End)
@@ -329,20 +329,20 @@ export struct HistoryTab {
           .margin({ right: 4 })
 
           Button({ type: ButtonType.Circle }) {
-            Text('‹').fontSize(18).fontColor(COLOR_TEXT)
+            Text('‹').fontSize(18).fontColor(COLOR_TEXT())
           }
           .width(32).height(32)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .shadow(CARD_SHADOW)
           .onClick(() => {
             this.shiftMonth(-1);
           })
 
           Button({ type: ButtonType.Circle }) {
-            Text('›').fontSize(18).fontColor(COLOR_TEXT)
+            Text('›').fontSize(18).fontColor(COLOR_TEXT())
           }
           .width(32).height(32)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .shadow(CARD_SHADOW)
           .onClick(() => {
             this.shiftMonth(1);
@@ -409,7 +409,7 @@ export struct HistoryTab {
         Text(friendlyDate(this.selectedDay))
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
 
         Blank()
 
@@ -419,12 +419,12 @@ export struct HistoryTab {
           Text(this.detail.deficit < 0 ? '超出' : '缺口')
             .fontSize(14)
             .fontWeight(FontWeight.Medium)
-            .fontColor(this.detail.deficit < 0 ? COLOR_WARN : COLOR_OK)
+            .fontColor(this.detail.deficit < 0 ? COLOR_WARN() : COLOR_OK())
           RollingNumber({
             value: Math.abs(this.detail.deficit),
             fontSize: 14,
             fontWeight: FontWeight.Medium,
-            textColor: this.detail.deficit < 0 ? COLOR_WARN : COLOR_OK,
+            textColor: this.detail.deficit < 0 ? COLOR_WARN() : COLOR_OK(),
             duration: DUR_SLOW
           })
         }
@@ -437,9 +437,9 @@ export struct HistoryTab {
       // 三项指标：之间加竖分隔线，比纯留白更容易读
       Row() {
         this.miniStat('摄入', () => this.detail.intake)
-        Divider().vertical(true).height(26).color(COLOR_DIVIDER)
+        Divider().vertical(true).height(26).color(COLOR_DIVIDER())
         this.miniStat('预算', () => this.detail.budget)
-        Divider().vertical(true).height(26).color(COLOR_DIVIDER)
+        Divider().vertical(true).height(26).color(COLOR_DIVIDER())
         this.miniStat('运动', () => this.detail.exerciseKcal)
       }
       .width('100%')
@@ -449,7 +449,7 @@ export struct HistoryTab {
         Row({ space: 8 }) {
           Text('这天没有饮食记录')
             .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
             .layoutWeight(1)
 
           // 没有记录时把补记入口放在这里，指向更明确
@@ -459,11 +459,11 @@ export struct HistoryTab {
            * 高度 30 配 fontSize 12，宽度按文字量给足两侧留白。
            */
           Button({ type: ButtonType.Capsule }) {
-            Text('+ 补记一笔').fontSize(12).fontColor(COLOR_PRIMARY)
+            Text('+ 补记一笔').fontSize(12).fontColor(COLOR_PRIMARY())
           }
           .width(104)
           .height(30)
-          .backgroundColor(COLOR_PRIMARY_SOFT)
+          .backgroundColor(COLOR_PRIMARY_SOFT())
           .onClick(() => {
             this.goManualAdd();
           })
@@ -471,39 +471,39 @@ export struct HistoryTab {
         .width('100%')
         .padding({ top: 2 })
       } else {
-        Divider().color(COLOR_DIVIDER)
+        Divider().color(COLOR_DIVIDER())
 
         ForEach(MEAL_ORDER, (meal: MealType) => {
           if (DailyService.recordsOf(this.detailRecords, meal).length > 0) {
             Column({ space: 6 }) {
               Text(mealTypeLabel(meal))
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .width('100%')
 
               ForEach(DailyService.recordsOf(this.detailRecords, meal), (r: FoodRecord) => {
                 Row({ space: 8 }) {
                   Text(r.name)
                     .fontSize(14)
-                    .fontColor(COLOR_TEXT)
+                    .fontColor(COLOR_TEXT())
                     .layoutWeight(1)
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
 
                   Text(`${r.grams}g`)
                     .fontSize(12)
-                    .fontColor(COLOR_TEXT_SUB)
+                    .fontColor(COLOR_TEXT_SUB())
 
                   Text(`${r.kcal}`)
                     .fontSize(14)
                     .fontWeight(FontWeight.Medium)
-                    .fontColor(COLOR_TEXT)
+                    .fontColor(COLOR_TEXT())
                     .width(42)
                     .textAlign(TextAlign.End)
 
                   Text('千卡')
                     .fontSize(11)
-                    .fontColor(COLOR_TEXT_SUB)
+                    .fontColor(COLOR_TEXT_SUB())
                 }
                 .width('100%')
               }, (r: FoodRecord) => r.id)
@@ -517,11 +517,11 @@ export struct HistoryTab {
         Row() {
           // 同样显式给宽，避免背景紧贴文字（见上面「补记一笔」的说明）
           Button({ type: ButtonType.Capsule }) {
-            Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY)
+            Text('+ 补记').fontSize(12).fontColor(COLOR_PRIMARY())
           }
           .width(84)
           .height(30)
-          .backgroundColor(COLOR_PRIMARY_SOFT)
+          .backgroundColor(COLOR_PRIMARY_SOFT())
           .onClick(() => {
             this.goManualAdd();
           })
@@ -547,7 +547,7 @@ export struct HistoryTab {
         })
     )
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
@@ -628,12 +628,12 @@ export struct HistoryTab {
         value: value(),
         fontSize: 18,
         fontWeight: FontWeight.Medium,
-        textColor: COLOR_TEXT,
+        textColor: COLOR_TEXT(),
         duration: DUR_SLOW
       })
       Text(label)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
     }
     .layoutWeight(1)
   }
@@ -656,7 +656,7 @@ export struct HistoryTab {
           .layoutWeight(1)
           .fontColor(INPUT_TEXT)
           .placeholderColor(INPUT_PLACEHOLDER)
-          .backgroundColor(COLOR_BG)
+          .backgroundColor(COLOR_BG())
           .borderRadius(10)
           .onChange((v: string) => {
             this.weightInput = v;
@@ -668,7 +668,7 @@ export struct HistoryTab {
         }
         .width(84)
         .height(42)
-        .backgroundColor(COLOR_PRIMARY)
+        .backgroundColor(COLOR_PRIMARY())
         .borderRadius(10)
         .onClick(() => {
           this.saveWeight();
@@ -678,12 +678,12 @@ export struct HistoryTab {
 
       Text(`记录到 ${this.selectedDay}`)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }

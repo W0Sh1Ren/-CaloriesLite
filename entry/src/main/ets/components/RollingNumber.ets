@@ -27,7 +27,7 @@ export struct RollingNumber {
   @Prop @Watch('onValueChange') refreshKey: number = 0;
   @Prop fontSize: number = 48;
   @Prop fontWeight: FontWeight = FontWeight.Bold;
-  @Prop textColor: string = '#1A1A1A';
+  @Prop textColor: ResourceColor = '#1A1A1A';
   @Prop duration: number = DUR_SLOW;
   /** 小数位数。整数用 0（默认），像 BMI 这种要 1 */
   @Prop decimals: number = 0;

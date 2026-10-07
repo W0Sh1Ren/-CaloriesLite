@@ -7,48 +7,48 @@
 import { curves } from '@kit.ArkUI';
 
 /** 主色：暖橙，代表热量 */
-export const COLOR_PRIMARY: string = '#22C55E';
+export function COLOR_PRIMARY(): Resource { return $r('app.color.color_primary'); }
 /** 主色的浅色版本，用于进度环底色与标签背景 */
-export const COLOR_PRIMARY_SOFT: string = '#DCFCE7';
+export function COLOR_PRIMARY_SOFT(): Resource { return $r('app.color.color_primary_soft'); }
 /**
  * 选中气泡的玻璃绿。
  *
  * 半透明的品牌绿 + 白色柔光叠成，既看得出是选中态，
  * 又保留玻璃的通透感（纯不透明绿会变成一块实心色，纯白又看不出选中）。
  */
-export const COLOR_PRIMARY_GLASS: string = '#4D22C55E';
+export function COLOR_PRIMARY_GLASS(): Resource { return $r('app.color.color_primary_glass'); }
 /** 缺口为负（超标）时的警示色 */
-export const COLOR_WARN: string = '#E5533D';
+export function COLOR_WARN(): Resource { return $r('app.color.color_warn'); }
 /** 达标色 */
-export const COLOR_OK: string = '#2FA36B';
+export function COLOR_OK(): Resource { return $r('app.color.color_ok'); }
 
 /** 页面背景 */
-export const COLOR_BG: string = '#F5F8F6';
+export function COLOR_BG(): Resource { return $r('app.color.color_bg'); }
 /** 卡片背景 */
-export const COLOR_CARD: string = '#FFFFFF';
+export function COLOR_CARD(): Resource { return $r('app.color.color_card'); }
 /** 主文字 */
-export const COLOR_TEXT: string = '#1A1A1A';
+export function COLOR_TEXT(): Resource { return $r('app.color.color_text'); }
 /** 次要文字 */
-export const COLOR_TEXT_SUB: string = '#8A8F99';
+export function COLOR_TEXT_SUB(): Resource { return $r('app.color.color_text_sub'); }
 /**
  * 底部导航未选中项的颜色。
  *
  * 用 iOS 系的中性灰：导航栏浮在内容之上、背景不可控，
  * 纯中性灰在任何底色上都能保持「未选中」的语义，不会和品牌绿抢注意力。
  */
-export const COLOR_NAV_IDLE: string = '#8E8E93';
+export function COLOR_NAV_IDLE(): Resource { return $r('app.color.color_nav_idle'); }
 /** 底部导航选中项的颜色：比主色更亮的绿，浮在玻璃上更醒目 */
-export const COLOR_NAV_ACTIVE: string = '#10B981';
+export function COLOR_NAV_ACTIVE(): Resource { return $r('app.color.color_nav_active'); }
 /** 分割线 */
-export const COLOR_DIVIDER: string = '#EEF0F3';
+export function COLOR_DIVIDER(): Resource { return $r('app.color.color_divider'); }
 
 /** 三大营养素配色 */
 /** 碳水：浅蓝 */
-export const COLOR_CARB: string = '#4C8DFF';
+export function COLOR_CARB(): Resource { return $r('app.color.color_carb'); }
 /** 蛋白质：浅绿（与主色同系） */
-export const COLOR_PROTEIN: string = '#22C55E';
+export function COLOR_PROTEIN(): Resource { return $r('app.color.color_protein'); }
 /** 脂肪：淡黄 */
-export const COLOR_FAT: string = '#F5C142';
+export function COLOR_FAT(): Resource { return $r('app.color.color_fat'); }
 
 /** 常规间距 */
 export const GAP: number = 12;
@@ -90,7 +90,7 @@ export const GLASS_HAIRLINE: number = 0.5;
  * 偏亮的白 —— 这圈边是「折射」最直接的视觉信号：
  * 光线在玻璃边缘被折弯，看起来就是一条比底色亮得多的细边。
  */
-export const COLOR_GLASS_BORDER: string = 'rgba(255, 255, 255, 0.92)';
+export function COLOR_GLASS_BORDER(): Resource { return $r('app.color.color_glass_border'); }
 
 /**
  * 玻璃的深色大半径投影 —— 「浮起感」的来源。
@@ -151,8 +151,8 @@ export const TOP_BAR_SHADOW: ShadowOptions = {
  * 会报「Property 'fontColor' does not exist on type 'CommonAttribute'」。
  * 所以只能逐处写，新增输入框时照抄这两行。
  */
-export const INPUT_TEXT: string = COLOR_TEXT;
-export const INPUT_PLACEHOLDER: string = COLOR_TEXT_SUB;
+export const INPUT_TEXT: Resource = COLOR_TEXT();
+export const INPUT_PLACEHOLDER: Resource = COLOR_TEXT_SUB();
 
 /** 换算：1 公斤脂肪约等于多少千卡 */
 export const KCAL_PER_KG_FAT: number = 7700;
@@ -208,7 +208,7 @@ export const CURVE_COUNT: ICurve = curves.responsiveSpringMotion(0.5, 0.86);
 /** 按压反馈：按下时缩到的比例 */
 export const PRESS_SCALE: number = 0.9;
 /** 按压/高亮光效的底色 */
-export const COLOR_PRESS_GLOW: string = '#2622C55E';
+export function COLOR_PRESS_GLOW(): Resource { return $r('app.color.color_press_glow'); }
 
 /**
  * 手动逐帧数值动画器。
@@ -329,35 +329,45 @@ export function cameralSlide(fromX: number, toX: number): TransitionEffect {
 /**
  * 顶部柔光渐变的配色。
  *
- * 「沉浸光感」的做法：在页面顶部铺一层很淡的径向暖光，
+ * 「沉浸光感」的做法：在页面顶部铺一层很淡的径向柔光，
  * 颜色随一天中的时段轻微变化，让界面不至于整天一个死板的底色。
+ *
+ * ⚠️ 类型是 Resource（不是 string）：这样深色模式能自动切到另一套色值。
+ *    base 里是浅绿/浅蓝（浅色主题的「淡光」），
+ *    dark 里是低饱和的深色（深色主题下用亮色会是一片刺眼的白斑）。
  */
 export class GlowPalette {
   /** 渐变起点色（最亮处） */
-  from: string;
+  from: Resource;
   /** 渐变终点色（淡出到页面底色） */
-  to: string;
+  to: Resource;
 
-  constructor(from: string, to: string) {
+  constructor(from: Resource, to: Resource) {
     this.from = from;
     this.to = to;
   }
 }
 
-/** 按小时取柔光配色：清晨偏暖橙，白天偏中性，夜晚偏冷蓝 */
+/**
+ * 按小时取柔光配色：清晨偏暖，白天偏薄荷，傍晚偏青，夜间偏冷蓝。
+ *
+ * 色值本身放在 resources 的 color.json 里（base / dark 各一套），
+ * 这里只负责「几点用哪一支」。
+ */
 export function glowForHour(hour: number): GlowPalette {
+  const tail: Resource = $r('app.color.color_glow_tail');
   if (hour >= 5 && hour < 11) {
     // 清晨到上午：嫩绿
-    return new GlowPalette('#DFF5E3', '#F6F7F9');
+    return new GlowPalette($r('app.color.color_glow_dawn'), tail);
   }
   if (hour >= 11 && hour < 17) {
     // 白天：极淡薄荷
-    return new GlowPalette('#E8F8EC', '#F6F7F9');
+    return new GlowPalette($r('app.color.color_glow_day'), tail);
   }
   if (hour >= 17 && hour < 21) {
     // 傍晚：淡青
-    return new GlowPalette('#DCF2EA', '#F6F7F9');
+    return new GlowPalette($r('app.color.color_glow_dusk'), tail);
   }
-  // 夜间：冷蓝（保留一点暖夜对比）
-  return new GlowPalette('#DCE6F5', '#F6F7F9');
+  // 夜间：冷蓝（保留一点冷暖对比）
+  return new GlowPalette($r('app.color.color_glow_night'), tail);
 }

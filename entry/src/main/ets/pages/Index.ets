@@ -531,13 +531,13 @@ struct Index {
     Row({ space: 8 }) {
       SymbolGlyph($r('sys.symbol.camera_fill'))
         .fontSize(22)
-        .fontColor([COLOR_PRIMARY])
+        .fontColor([COLOR_PRIMARY()])
       // 只有在展开态才显示文字；折叠态是一颗球，宽度放不下
       if (this.shootExpanded) {
         Text('拍照识别热量')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_PRIMARY)
+          .fontColor(COLOR_PRIMARY())
           .maxLines(1)
       }
     }
@@ -1000,7 +1000,7 @@ struct Index {
         title: '删除记录',
         message: `确定删除「${record.name}」吗？`,
         buttons: [
-          { text: '取消', color: COLOR_TEXT_SUB },
+          { text: '取消', color: COLOR_TEXT_SUB() },
           { text: '删除', color: '#E5533D' }
         ]
       });
@@ -1059,7 +1059,7 @@ struct Index {
           .height('100%')
           .linearGradient({
             angle: 180,
-            colors: [[this.glow.from, 0.0], [this.glow.to, 0.42], [COLOR_BG, 1.0]]
+            colors: [[this.glow.from, 0.0], [this.glow.to, 0.42], [COLOR_BG(), 1.0]]
           })
 
       // ---------------------------------------------------- 2. 内容层 + 底部页签
@@ -1151,7 +1151,7 @@ struct Index {
         // 按左右手习惯自适应
         adaptToHandedness: true,
         // 光效颜色：给品牌绿，和主色呼应
-        lightColor: COLOR_PRIMARY,
+        lightColor: COLOR_PRIMARY(),
         systemMaterialEffect: {
           materialType: hdsMaterial.MaterialType.IMMERSIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
@@ -1309,7 +1309,7 @@ struct Index {
             Row() {
               Text(DailyService.verdict(this.data.summary))
                 .fontSize(13)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .layoutWeight(1)
             }
             .width('100%')
@@ -1332,7 +1332,7 @@ struct Index {
                 Text(`所选目标会使每日目标低于基础代谢（${this.data.bmr} 千卡），已按基础代谢计。`
                     + `原本 ${this.data.requestedBudget} → 现为 ${this.data.summary.budget} 千卡`)
                   .fontSize(12)
-                  .fontColor(COLOR_WARN)
+                  .fontColor(COLOR_WARN())
                   .layoutWeight(1)
               }
               .width('100%')
@@ -1448,11 +1448,11 @@ struct Index {
   dateBar() {
     Row() {
       Button({ type: ButtonType.Circle }) {
-        Text('‹').fontSize(20).fontColor(COLOR_TEXT)
+        Text('‹').fontSize(20).fontColor(COLOR_TEXT())
       }
       .width(36)
       .height(36)
-      .backgroundColor(COLOR_CARD)
+      .backgroundColor(COLOR_CARD())
       .shadow(CARD_SHADOW)
       .onClick(() => {
         this.shiftDate(-1);
@@ -1462,23 +1462,23 @@ struct Index {
         Text(this.dayKey === todayKey() ? '今天' : friendlyDate(this.dayKey))
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
         // 副标题只在「今天」时补一个日期；看历史日期时标题本身就是日期，
         // 再重复一次没有信息量
         Text(this.dayKey === todayKey() ? friendlyDate(this.dayKey) : '查看历史')
           .fontSize(12)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
       }
       .layoutWeight(1)
 
       Button({ type: ButtonType.Circle }) {
         Text('›')
           .fontSize(20)
-          .fontColor(this.dayKey === todayKey() ? COLOR_DIVIDER : COLOR_TEXT)
+          .fontColor(this.dayKey === todayKey() ? COLOR_DIVIDER() : COLOR_TEXT())
       }
       .width(36)
       .height(36)
-      .backgroundColor(COLOR_CARD)
+      .backgroundColor(COLOR_CARD())
       .shadow(CARD_SHADOW)
       .enabled(this.dayKey !== todayKey())
       .opacity(this.dayKey === todayKey() ? 0.5 : 1)
@@ -1503,21 +1503,21 @@ struct Index {
     Row({ space: 2 }) {
       Text(label)
         .fontSize(12)
-        .fontColor(COLOR_PRIMARY)
+        .fontColor(COLOR_PRIMARY())
       RollingNumber({
         value: value(),
         fontSize: 12,
         fontWeight: FontWeight.Medium,
-        textColor: COLOR_PRIMARY,
+        textColor: COLOR_PRIMARY(),
         duration: DUR_SLOW
       })
       Text(unit)
         .fontSize(12)
-        .fontColor(COLOR_PRIMARY)
+        .fontColor(COLOR_PRIMARY())
     }
     .alignItems(VerticalAlign.Center)
     .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-    .backgroundColor(COLOR_PRIMARY_SOFT)
+    .backgroundColor(COLOR_PRIMARY_SOFT())
     .borderRadius(12)
   }
 
@@ -1630,7 +1630,7 @@ struct Index {
         Text(mealTypeLabel(meal))
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
 
         Blank()
 
@@ -1638,11 +1638,11 @@ struct Index {
           ? `${this.mealKcal(DailyService.recordsOf(this.data.records, meal))} 千卡`
           : '')
           .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
 
         Text('⌄')
           .fontSize(14)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
           .rotate({ angle: this.isExpanded(meal) ? 180 : 0 })
           // 与明细区同时长，箭头与容器动作才是一体的
           .animation({ duration: DUR_MEAL_EXPAND, curve: Curve.EaseInOut })
@@ -1658,7 +1658,7 @@ struct Index {
        * 这是层级感最关键的一笔 —— 没有它，展开后标题会和第一条记录粘在一起。
        */
       if (this.isExpanded(meal)) {
-        Divider().color(COLOR_DIVIDER)
+        Divider().color(COLOR_DIVIDER())
       }
 
       /*
@@ -1688,13 +1688,13 @@ struct Index {
         Row() {
           Text(this.mealSummary(meal))
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
           Text(this.mealKcalText(meal))
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
             .margin({ left: 8 })
         }
         .width('100%')
@@ -1703,7 +1703,7 @@ struct Index {
     }
     .width('100%')
     // 每餐一张卡片，四个餐次之间才有明确的边界
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
     .clip(true)
@@ -1722,7 +1722,7 @@ struct Index {
         Row() {
           Text('还没有记录')
             .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
         .width('100%')
         .padding(14)
@@ -1744,7 +1744,7 @@ struct Index {
     .width('100%')
     // 浅底块：与白色卡片形成第二层，明细区一眼是「卡片里的内容」
     .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
     /*
      * 底部圆角跟着卡片：卡片圆角 18、外层 padding 0，
      * 明细块在最底下，不补圆角就会溢出卡片边角。
@@ -1790,12 +1790,12 @@ struct Index {
         Text('运动消耗')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
         Blank()
         if (this.data.summary.exerciseKcal > 0) {
           Text(`${this.data.summary.exerciseKcal} 千卡`)
             .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
       }
       .width('100%')
@@ -1805,11 +1805,11 @@ struct Index {
         Row() {
           Text('没有运动记录')
             .fontSize(13)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
         .width('100%')
         .padding(14)
-        .backgroundColor(COLOR_CARD)
+        .backgroundColor(COLOR_CARD())
         .borderRadius(RADIUS)
         .shadow(CARD_SHADOW)
       } else {
@@ -1818,21 +1818,21 @@ struct Index {
             Column({ space: 3 }) {
               Text(item.name)
                 .fontSize(15)
-                .fontColor(COLOR_TEXT)
+                .fontColor(COLOR_TEXT())
               Text(item.minutes > 0 ? `${item.minutes} 分钟` : '未记录时长')
                 .fontSize(12)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
             }
             .alignItems(HorizontalAlign.Start)
             .layoutWeight(1)
 
             Text(`${item.kcal} 千卡`)
               .fontSize(15)
-              .fontColor(COLOR_TEXT)
+              .fontColor(COLOR_TEXT())
           }
           .width('100%')
           .padding(14)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(RADIUS)
           .shadow(CARD_SHADOW)
         }, (item: ExerciseRecord) => item.id)

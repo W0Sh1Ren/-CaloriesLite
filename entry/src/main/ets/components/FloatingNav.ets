@@ -187,8 +187,8 @@ export struct FloatingNav {
    * 图标与文字共用同一个颜色，所以选中态完全由颜色表达，
    * 不需要任何背景块。
    */
-  private itemColor(index: number): string {
-    return index === this.activeIndex ? COLOR_NAV_ACTIVE : COLOR_NAV_IDLE;
+  private itemColor(index: number): ResourceColor {
+    return index === this.activeIndex ? COLOR_NAV_ACTIVE() : COLOR_NAV_IDLE();
   }
 
   /**

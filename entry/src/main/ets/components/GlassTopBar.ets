@@ -65,7 +65,7 @@ export struct GlassTopBar {
           Button({ type: ButtonType.Circle }) {
             Text(this.leadingGlyph)
               .fontSize(20)
-              .fontColor(COLOR_TEXT)
+              .fontColor(COLOR_TEXT())
           }
           .width(36)
           .height(36)
@@ -79,13 +79,13 @@ export struct GlassTopBar {
           Text(this.title)
             .fontSize(17)
             .fontWeight(FontWeight.Medium)
-            .fontColor(COLOR_TEXT)
+            .fontColor(COLOR_TEXT())
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.subtitle.length > 0) {
             Text(this.subtitle)
               .fontSize(12)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
@@ -100,7 +100,7 @@ export struct GlassTopBar {
               Button({ type: ButtonType.Circle }) {
                 Text(glyph)
                   .fontSize(18)
-                  .fontColor(this.isTrailingEnabled(index) ? COLOR_TEXT : '#33000000')
+                  .fontColor(this.isTrailingEnabled(index) ? COLOR_TEXT() : '#33000000')
               }
               .width(32)
               .height(32)

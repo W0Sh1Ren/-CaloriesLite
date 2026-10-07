@@ -38,21 +38,21 @@ export struct ProfileOption {
       Row({ space: 4 }) {
         Text(this.label)
           .fontSize(14)
-          .fontColor(this.selected ? COLOR_PRIMARY : COLOR_TEXT)
+          .fontColor(this.selected ? COLOR_PRIMARY() : COLOR_TEXT())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         if (this.selected) {
           Text('✓')
             .fontSize(14)
-            .fontColor(COLOR_PRIMARY)
+            .fontColor(COLOR_PRIMARY())
         }
       }
       .width('100%')
 
       Text(this.desc)
         .fontSize(10)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
@@ -62,7 +62,7 @@ export struct ProfileOption {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Start)
     .padding({ left: 8, right: 8 })
-    .backgroundColor(this.selected ? COLOR_PRIMARY_SOFT : COLOR_BG)
+    .backgroundColor(this.selected ? COLOR_PRIMARY_SOFT() : COLOR_BG())
     .borderRadius(10)
     // 事件绑在组件自己的根节点上，不依赖父级再包一层
     .onClick(() => {

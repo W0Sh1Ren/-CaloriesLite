@@ -93,43 +93,43 @@ struct AiSettings {
             Text('这个应用不卖会员，也不代管额度')
               .fontSize(14)
               .fontWeight(FontWeight.Medium)
-              .fontColor(COLOR_TEXT)
+              .fontColor(COLOR_TEXT())
               .width('100%')
             Text('拍照识别用的是你自己的 DeepSeek API Key。下面填的信息只保存本机，识别时由手机直连 DeepSeek，不经过任何中间服务器。')
               .fontSize(12)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
           }
           .width('100%')
           .padding(16)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(RADIUS)
 
           // 接口类型：固定走 OpenAI 兼容协议，不再让用户选
           Column({ space: 6 }) {
             Text('接口协议')
               .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
             Text('OpenAI 兼容（DeepSeek）')
               .fontSize(14)
-              .fontColor(COLOR_TEXT)
+              .fontColor(COLOR_TEXT())
               .width('100%')
             Text('请求发往 DeepSeek 的 /chat/completions 接口，API Key 只保存在本机。')
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
           }
           .width('100%')
           .padding(16)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(RADIUS)
 
           // 服务商信息（当前只支持 DeepSeek）
           Column({ space: 10 }) {
             Text('服务商')
               .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
 
             ForEach(PRESETS, (p: ProviderPreset) => {
@@ -138,13 +138,13 @@ struct AiSettings {
                   Text(p.title)
                     .fontSize(15)
                     .fontWeight(FontWeight.Medium)
-                    .fontColor(COLOR_TEXT)
+                    .fontColor(COLOR_TEXT())
                   Text(p.hint)
                     .fontSize(11)
-                    .fontColor(COLOR_TEXT_SUB)
+                    .fontColor(COLOR_TEXT_SUB())
                   Text(`${p.baseUrl}  ·  ${p.model}`)
                     .fontSize(10)
-                    .fontColor(COLOR_TEXT_SUB)
+                    .fontColor(COLOR_TEXT_SUB())
                     .maxLines(2)
                 }
                 .alignItems(HorizontalAlign.Start)
@@ -153,11 +153,11 @@ struct AiSettings {
                 if (this.baseUrl === p.baseUrl && this.model === p.model) {
                   Text('✓')
                     .fontSize(16)
-                    .fontColor(COLOR_OK)
+                    .fontColor(COLOR_OK())
                 } else {
                   Text('填入')
                     .fontSize(12)
-                    .fontColor(COLOR_PRIMARY)
+                    .fontColor(COLOR_PRIMARY())
                 }
               }
               .width('100%')
@@ -169,12 +169,12 @@ struct AiSettings {
 
             Text('换模型不必改代码：把下面的「模型名」改成 DeepSeek 平台上其它支持识图的模型即可。')
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
           }
           .width('100%')
           .padding(16)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(RADIUS)
 
           // 填写区
@@ -188,11 +188,11 @@ struct AiSettings {
               Row() {
                 Text('API Key')
                   .fontSize(13)
-                  .fontColor(COLOR_TEXT_SUB)
+                  .fontColor(COLOR_TEXT_SUB())
                 Blank()
                 Text(this.showKey ? '隐藏' : '显示')
                   .fontSize(12)
-                  .fontColor(COLOR_PRIMARY)
+                  .fontColor(COLOR_PRIMARY())
                   .onClick(() => {
                     this.showKey = !this.showKey;
                   })
@@ -206,7 +206,7 @@ struct AiSettings {
                 .width('100%')
                 .fontColor(INPUT_TEXT)
                 .placeholderColor(INPUT_PLACEHOLDER)
-                .backgroundColor(COLOR_BG)
+                .backgroundColor(COLOR_BG())
                 .borderRadius(10)
                 .onChange((v: string) => {
                   this.apiKey = v;
@@ -214,7 +214,7 @@ struct AiSettings {
 
               Text('在 platform.deepseek.com 的「API keys」里创建，形如 sk-xxxxxxxx')
                 .fontSize(11)
-                .fontColor(COLOR_TEXT_SUB)
+                .fontColor(COLOR_TEXT_SUB())
                 .width('100%')
             }
             .width('100%')
@@ -225,36 +225,36 @@ struct AiSettings {
 
             Text(`默认 ${AI_MODEL}，支持图像理解，1M 上下文。`)
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
             Text('别填 deepseek-v4-flash 或 deepseek-v4-flash-vision-exp——那两个名字对应的模型已下线。')
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
             Text('模型必须支持图片输入，DeepSeek 的 deepseek-v4-pro 不支持识图。')
               .fontSize(11)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
               .width('100%')
 
-            Divider().color(COLOR_DIVIDER)
+            Divider().color(COLOR_DIVIDER())
 
             // 思考模式开关
             Row() {
               Column({ space: 3 }) {
                 Text('深度思考')
                   .fontSize(14)
-                  .fontColor(COLOR_TEXT)
+                  .fontColor(COLOR_TEXT())
                 Text(this.thinking
                   ? '开启：更准，但思维链按输出计费，单次可能贵 5 倍且更慢'
                   : '关闭：更快更省。识图列清单不需要深思，建议保持关闭')
                   .fontSize(11)
-                  .fontColor(COLOR_TEXT_SUB)
+                  .fontColor(COLOR_TEXT_SUB())
               }
               .alignItems(HorizontalAlign.Start)
               .layoutWeight(1)
 
               Toggle({ type: ToggleType.Switch, isOn: this.thinking })
-                .selectedColor(COLOR_PRIMARY)
+                .selectedColor(COLOR_PRIMARY())
                 .onChange((on: boolean) => {
                   this.thinking = on;
                   this.testResult = '';
@@ -265,7 +265,7 @@ struct AiSettings {
           }
           .width('100%')
           .padding(16)
-          .backgroundColor(COLOR_CARD)
+          .backgroundColor(COLOR_CARD())
           .borderRadius(RADIUS)
           .shadow(CARD_SHADOW)
 
@@ -275,15 +275,15 @@ struct AiSettings {
               Text(this.testOk ? '✓' : '!')
                 .fontSize(14)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(this.testOk ? COLOR_OK : COLOR_WARN)
+                .fontColor(this.testOk ? COLOR_OK() : COLOR_WARN())
               Text(this.testResult)
                 .fontSize(12)
-                .fontColor(this.testOk ? COLOR_OK : COLOR_WARN)
+                .fontColor(this.testOk ? COLOR_OK() : COLOR_WARN())
                 .layoutWeight(1)
             }
             .width('100%')
             .padding(14)
-            .backgroundColor(COLOR_CARD)
+            .backgroundColor(COLOR_CARD())
             .borderRadius(RADIUS)
           }
 
@@ -306,16 +306,16 @@ struct AiSettings {
               LoadingProgress()
                 .width(18)
                 .height(18)
-                .color(COLOR_PRIMARY)
+                .color(COLOR_PRIMARY())
             }
             Text(this.testing ? '测试中…' : '测试连接')
               .fontSize(15)
-              .fontColor(COLOR_PRIMARY)
+              .fontColor(COLOR_PRIMARY())
           }
         }
         .layoutWeight(1)
         .height(46)
-        .backgroundColor(COLOR_CARD)
+        .backgroundColor(COLOR_CARD())
         .enabled(!this.testing)
         .onClick(() => {
           this.test();
@@ -326,18 +326,18 @@ struct AiSettings {
         }
         .layoutWeight(1)
         .height(46)
-        .backgroundColor(COLOR_PRIMARY)
+        .backgroundColor(COLOR_PRIMARY())
         .onClick(() => {
           this.save();
         })
       }
       .width('100%')
       .padding({ left: PAGE_PAD, right: PAGE_PAD, top: 10, bottom: 10 })
-      .backgroundColor(COLOR_CARD)
+      .backgroundColor(COLOR_CARD())
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLOR_BG)
+    .backgroundColor(COLOR_BG())
     }
     .titleBar({
       content: {
@@ -385,7 +385,7 @@ struct AiSettings {
     Column({ space: 6 }) {
       Text(label)
         .fontSize(13)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
         .width('100%')
 
       TextInput({ text: value, placeholder: placeholder })
@@ -395,7 +395,7 @@ struct AiSettings {
         .width('100%')
         .fontColor(INPUT_TEXT)
         .placeholderColor(INPUT_PLACEHOLDER)
-        .backgroundColor(COLOR_BG)
+        .backgroundColor(COLOR_BG())
         .borderRadius(10)
         .onChange(onChange)
     }

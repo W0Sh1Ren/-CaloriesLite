@@ -37,12 +37,12 @@ export struct RecordRow {
   };
 
   /** 来源标签的颜色：查表命中用绿色，AI 估算用主色，提醒用户可信度不同 */
-  private sourceColor(): string {
-    return this.record.source === FoodSource.DATABASE ? COLOR_OK : COLOR_PRIMARY;
+  private sourceColor(): ResourceColor {
+    return this.record.source === FoodSource.DATABASE ? COLOR_OK() : COLOR_PRIMARY();
   }
 
   @Builder
-  macro(label: string, grams: number, color: string) {
+  macro(label: string, grams: number, color: ResourceColor) {
     Row({ space: 3 }) {
       // 一个小色点代替图标，标明是哪一项
       Row()
@@ -52,7 +52,7 @@ export struct RecordRow {
         .borderRadius(3)
       Text(`${label} ${grams}g`)
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
     }
   }
 
@@ -68,18 +68,18 @@ export struct RecordRow {
       Column({ space: 3 }) {
         Text(this.record.name)
           .fontSize(16)
-          .fontColor(COLOR_TEXT)
+          .fontColor(COLOR_TEXT())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
 
         Row({ space: 6 }) {
           Text(`${this.record.grams} g`)
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
 
           Text('·')
             .fontSize(12)
-            .fontColor(COLOR_DIVIDER)
+            .fontColor(COLOR_DIVIDER())
 
           Text(foodSourceLabel(this.record.source))
             .fontSize(12)
@@ -87,11 +87,11 @@ export struct RecordRow {
 
           Text('·')
             .fontSize(12)
-            .fontColor(COLOR_DIVIDER)
+            .fontColor(COLOR_DIVIDER())
 
           Text(timeLabel(this.record.timestamp))
             .fontSize(12)
-            .fontColor(COLOR_TEXT_SUB)
+            .fontColor(COLOR_TEXT_SUB())
         }
 
         /*
@@ -111,9 +111,9 @@ export struct RecordRow {
          * RecordRow 另外还钉了固定高度兜底（见 RECORD_ROW_FIXED_H）。
          */
         Row({ space: 8 }) {
-          this.macro('蛋白', this.record.protein, COLOR_PROTEIN)
-          this.macro('脂肪', this.record.fat, COLOR_FAT)
-          this.macro('碳水', this.record.carb, COLOR_CARB)
+          this.macro('蛋白', this.record.protein, COLOR_PROTEIN())
+          this.macro('脂肪', this.record.fat, COLOR_FAT())
+          this.macro('碳水', this.record.carb, COLOR_CARB())
         }
       }
       .alignItems(HorizontalAlign.Start)
@@ -122,21 +122,21 @@ export struct RecordRow {
       Text(`${this.record.kcal}`)
         .fontSize(19)
         .fontWeight(FontWeight.Medium)
-        .fontColor(COLOR_TEXT)
+        .fontColor(COLOR_TEXT())
 
       Text('千卡')
         .fontSize(11)
-        .fontColor(COLOR_TEXT_SUB)
+        .fontColor(COLOR_TEXT_SUB())
 
       // 删除按钮：点击后再弹确认，避免误删
       Button({ type: ButtonType.Circle, stateEffect: true }) {
         Text('✕')
           .fontSize(13)
-          .fontColor(COLOR_TEXT_SUB)
+          .fontColor(COLOR_TEXT_SUB())
       }
       .width(28)
       .height(28)
-      .backgroundColor(COLOR_DIVIDER)
+      .backgroundColor(COLOR_DIVIDER())
       .onClick(() => {
         this.onDelete(this.record.id);
       })
@@ -156,7 +156,7 @@ export struct RecordRow {
     .height(RECORD_ROW_FIXED_H)
     .alignItems(VerticalAlign.Center)
     .padding({ left: 12, right: 12 })
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }

@@ -24,9 +24,9 @@ class MacroItem {
   label: string;
   grams: number;
   target: number;
-  color: string;
+  color: ResourceColor;
 
-  constructor(label: string, grams: number, target: number, color: string) {
+  constructor(label: string, grams: number, target: number, color: ResourceColor) {
     this.label = label;
     this.grams = grams;
     this.target = target;
@@ -153,9 +153,9 @@ export struct MacroBar {
 
   private items(): MacroItem[] {
     return [
-      new MacroItem('碳水', this.carb, this.carbTarget, COLOR_CARB),
-      new MacroItem('蛋白质', this.protein, this.proteinTarget, COLOR_PROTEIN),
-      new MacroItem('脂肪', this.fat, this.fatTarget, COLOR_FAT)
+      new MacroItem('碳水', this.carb, this.carbTarget, COLOR_CARB()),
+      new MacroItem('蛋白质', this.protein, this.proteinTarget, COLOR_PROTEIN()),
+      new MacroItem('脂肪', this.fat, this.fatTarget, COLOR_FAT())
     ];
   }
 
@@ -171,7 +171,7 @@ export struct MacroBar {
           Row() {
             Text(item.label)
               .fontSize(13)
-              .fontColor(COLOR_TEXT_SUB)
+              .fontColor(COLOR_TEXT_SUB())
             Blank()
             // 摄入 / 推荐。数字直接显示真实值，不做滚动动效——
             // 三条数字同时滚容易看花，这里只保留条的连续变化。
@@ -179,7 +179,7 @@ export struct MacroBar {
             // 所以即使不插值，它也会随数据立刻刷新。
             Text(`${item.grams} / ${item.target} g`)
               .fontSize(12)
-              .fontColor(COLOR_TEXT)
+              .fontColor(COLOR_TEXT())
           }
           .width('100%')
 
@@ -197,7 +197,7 @@ export struct MacroBar {
               Row()
                 .width('100%')
                 .height(8)
-                .backgroundColor(COLOR_DIVIDER)
+                .backgroundColor(COLOR_DIVIDER())
                 .borderRadius(4)
 
               Row()
@@ -224,7 +224,7 @@ export struct MacroBar {
     }
     .width('100%')
     .padding(16)
-    .backgroundColor(COLOR_CARD)
+    .backgroundColor(COLOR_CARD())
     .borderRadius(RADIUS)
     .shadow(CARD_SHADOW)
   }
