@@ -74,23 +74,23 @@
     },
     {
       "name": "color_glow_dawn",
-      "value": "#DFF5E3"
+      "value": "#F5F8F6"
     },
     {
       "name": "color_glow_day",
-      "value": "#E8F8EC"
+      "value": "#F5F8F6"
     },
     {
       "name": "color_glow_dusk",
-      "value": "#DCF2EA"
+      "value": "#F5F8F6"
     },
     {
       "name": "color_glow_night",
-      "value": "#DCE6F5"
+      "value": "#F5F8F6"
     },
     {
       "name": "color_glow_tail",
-      "value": "#F6F7F9"
+      "value": "#F5F8F6"
     }
   ]
 }

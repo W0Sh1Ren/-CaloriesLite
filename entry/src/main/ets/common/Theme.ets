@@ -329,12 +329,26 @@ export function cameralSlide(fromX: number, toX: number): TransitionEffect {
 /**
  * 顶部柔光渐变的配色。
  *
- * 「沉浸光感」的做法：在页面顶部铺一层很淡的径向柔光，
- * 颜色随一天中的时段轻微变化，让界面不至于整天一个死板的底色。
+ * ══════════════════════════════════════════════════════════════
+ * 【当前状态：柔光已关掉色偏，四个时段都等于页面底色】
+ * ══════════════════════════════════════════════════════════════
+ * 原本的设计是「按一天中的时段给不同的淡色光」：
+ *   清晨嫩绿 / 白天薄荷 / 傍晚淡青 / 夜间冷蓝。
+ *
+ * 但用户反馈**首页与记录页的背景发绿**——那层柔光铺满整屏，
+ * 深色下尤其明显（深底上一点色偏就看得出来），
+ * 而「我的」页因为内容结构不同观感偏中性，于是三个页面不一致。
+ *
+ * 处理方式：把 base 与 dark 里的 color_glow_* 全部改成**页面底色本身**
+ * （浅色 #F5F8F6 / 深色 #121212）。渐变依然在渲染，
+ * 但两端同色 → 视觉上就是干净的纯色背景，三个页面完全一致。
+ *
+ * 想恢复时段色偏：只改 resources 里那 5 个 color_glow_* 的值即可，
+ * 代码不用动。当时用的值记在下面备查：
+ *   浅色  #DFF5E3 / #E8F8EC / #DCF2EA / #DCE6F5，尾色 #F6F7F9
+ *   深色  #1B2A20 / #182720 / #17262A / #171E2A，尾色 #161616
  *
  * ⚠️ 类型是 Resource（不是 string）：这样深色模式能自动切到另一套色值。
- *    base 里是浅绿/浅蓝（浅色主题的「淡光」），
- *    dark 里是低饱和的深色（深色主题下用亮色会是一片刺眼的白斑）。
  */
 export class GlowPalette {
   /** 渐变起点色（最亮处） */
@@ -349,25 +363,22 @@ export class GlowPalette {
 }
 
 /**
- * 按小时取柔光配色：清晨偏暖，白天偏薄荷，傍晚偏青，夜间偏冷蓝。
+ * 按小时取柔光配色。
  *
- * 色值本身放在 resources 的 color.json 里（base / dark 各一套），
- * 这里只负责「几点用哪一支」。
+ * ⚠️ 目前四个时段的色值在 resources 里**都是页面底色**，
+ *    所以这个函数实际上返回恒定的同色渐变（见上面 GlowPalette 的说明）。
+ *    保留按小时分支是为了以后想恢复时段色偏时**只改色值、不改代码**。
  */
 export function glowForHour(hour: number): GlowPalette {
   const tail: Resource = $r('app.color.color_glow_tail');
   if (hour >= 5 && hour < 11) {
-    // 清晨到上午：嫩绿
     return new GlowPalette($r('app.color.color_glow_dawn'), tail);
   }
   if (hour >= 11 && hour < 17) {
-    // 白天：极淡薄荷
     return new GlowPalette($r('app.color.color_glow_day'), tail);
   }
   if (hour >= 17 && hour < 21) {
-    // 傍晚：淡青
     return new GlowPalette($r('app.color.color_glow_dusk'), tail);
   }
-  // 夜间：冷蓝（保留一点冷暖对比）
   return new GlowPalette($r('app.color.color_glow_night'), tail);
 }
