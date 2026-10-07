@@ -142,6 +142,17 @@ struct Index {
   private isReloading: boolean = false;
   /** 顶部柔光配色，按当前时段取 */
   @State glow: GlowPalette = glowForHour(hourOf(Date.now()));
+  /**
+   * 系统深浅色变化的信号（由 EntryAbility → AppState.notifyThemeChanged 写入）。
+   *
+   * 为什么首页需要它：Theme 里的颜色是资源引用，切主题时自动生效；
+   * 但**热量环是 Canvas 画的**，颜色是字符串、画上去就不会自己变，
+   * 必须触发一次重建让它重绘。
+   *
+   * 用 @StorageLink 而不是监听回调：它变化时会重建本组件，
+   * 环随之重绘 —— 这正是要的效果。
+   */
+  @StorageLink('themeTick') @Watch('onThemeTick') themeTick: number = 0;
   /** 悬浮导航栏实测宽度，用于算高亮胶囊位置 */
   @State navWidth: number = 0;
   /** 顶部安全区（状态栏）高度，全屏布局后需要自行避让 */
@@ -345,6 +356,21 @@ struct Index {
     // 顺带同步模态面板状态，用于隐藏导航栏
     this.modalOpen = AppState.modalOpen;
     this.reload();
+  }
+
+  /**
+   * 系统深浅色切换时重绘热量环。
+   *
+   * 为什么只有这一件事要做：Theme 里的颜色是资源引用，
+   * 系统切主题时属性值自动变，其余界面不用管。
+   * 但热量环是 **Canvas** 画的 —— 颜色是画上去的字符串，
+   * 不改就不会变，所以必须让它重画一次。
+   *
+   * themeTick 变化本身就会触发本组件重建（@StorageLink），
+   * 环的 draw() 在 onReady/尺寸变化时跑，这里再推一次更稳。
+   */
+  onThemeTick(): void {
+    this.glow = glowForHour(hourOf(Date.now()));
   }
 
   /** 把 EntryAbility 量好的安全区尺寸取到本地状态，驱动布局重算 */

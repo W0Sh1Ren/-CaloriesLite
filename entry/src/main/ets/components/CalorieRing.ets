@@ -14,7 +14,7 @@
  */
 import { CARD_SHADOW, COLOR_CARD, COLOR_OK, COLOR_PRIMARY, COLOR_PRIMARY_SOFT, COLOR_TEXT, COLOR_TEXT_SUB, DUR_SLOW, GAP, RADIUS, deficitColor, deficitLabel, deficitLabelColor } from '../common/Theme';
 import { RollingNumber } from './RollingNumber';
-import { CANVAS_PRIMARY_SOFT } from '../common/CanvasColors';
+import { PAIR_RING_TRACK, resolveCanvasColor } from '../common/CanvasColors';
 
 @Component
 export struct CalorieRing {
@@ -164,9 +164,9 @@ export struct CalorieRing {
     const cx: number = w / 2;
     const cy: number = h / 2;
 
-    // 底环：整圈浅色
+    // 底环：整圈中性灰（见 CANVAS_RING_TRACK 的说明——原为浅绿，深色下扎眼）
     ctx.beginPath();
-    ctx.strokeStyle = CANVAS_PRIMARY_SOFT;
+    ctx.strokeStyle = resolveCanvasColor(PAIR_RING_TRACK);
     ctx.lineWidth = stroke;
     ctx.lineCap = 'round';
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);

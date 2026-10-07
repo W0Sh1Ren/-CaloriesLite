@@ -114,6 +114,23 @@ export class AppState {
   }
 
   /**
+   * 系统深浅色变化时，EntryAbility 调用它通知界面。
+   *
+   * 为什么需要单独一条通道：
+   *   Theme 里的颜色是资源引用（$r），系统切主题时**属性值自动变**，
+   *   所以大部分界面什么都不用做。
+   *   但 **Canvas 不在这条通道里** —— 它的颜色是画上去的字符串，
+   *   主题变了必须**重画**。首页的热量环就属于这种。
+   *
+   * 机制：把这个计数加一，页面用 @StorageLink 观察它，
+   * 变化时触发一次重建 → 画布重绘（见 Index 的 themeTick）。
+   */
+  static notifyThemeChanged(): void {
+    const cur: number = AppStorage.get<number>('themeTick') ?? 0;
+    AppStorage.setOrCreate<number>('themeTick', cur + 1);
+  }
+
+  /**
    * 顶部安全区高度（vp）。
    *
    * 窗口设为全屏布局后，状态栏会盖在内容上，页面顶部需要留出这个高度。

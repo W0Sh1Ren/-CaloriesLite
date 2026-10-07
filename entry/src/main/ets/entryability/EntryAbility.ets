@@ -1,4 +1,4 @@
-import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
+import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import uiMaterial from '@ohos.arkui.uiMaterial';
@@ -9,6 +9,9 @@ import { hdsMaterial } from '@kit.UIDesignKit';
 import { SafeArea } from '../common/SafeArea';
 import { Store } from '../common/Store';
 import { AppState } from '../common/AppState';
+// 画布用的色值是**字符串**（Canvas 不吃 Resource），所以它不能像
+// Theme 那样自动跟随主题，得由这里把当前颜色模式写进去。
+import { setCanvasDarkMode } from '../common/CanvasColors';
 import { ImageService } from '../service/ImageService';
 
 const DOMAIN = 0x0000;
@@ -77,6 +80,9 @@ export default class EntryAbility extends UIAbility {
     } catch (err) {
       hilog.error(DOMAIN, 'CalorieLite', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
+    // 把当前颜色模式告诉画布色值表。
+    // Theme 里的资源色会自动跟随主题，但画布用的是字符串，必须显式同步。
+    this.syncCanvasColorMode(this.context.config.colorMode);
 
     // 必须在这里初始化偏好存储。
     // 漏掉这一步时 Store.prefs 一直是 null，所有写入都会被静默丢弃：
@@ -115,6 +121,33 @@ export default class EntryAbility extends UIAbility {
       AppState.cardRoute = route;
       AppState.notifyDataChanged();
     }
+  }
+
+  /**
+   * 把系统的颜色模式同步给画布色值表（common/CanvasColors）。
+   *
+   * 为什么需要：Theme 里的颜色是资源引用（$r），系统切深浅色时自动生效；
+   * 但 **Canvas 只接受字符串**，所以那套色值必须由外部告知当前模式。
+   *
+   * 两个调用点：onCreate（冷启动）与 onConfigurationUpdate（运行中切主题）。
+   */
+  private syncCanvasColorMode(colorMode: ConfigurationConstant.ColorMode | undefined): void {
+    const isDark: boolean = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
+    setCanvasDarkMode(isDark);
+    hilog.info(DOMAIN, 'CalorieLite', 'canvas color mode: dark=%{public}s', `${isDark}`);
+  }
+
+  /**
+   * 系统配置变化（深浅色、语言、字号…）时回调。
+   *
+   * 目前只关心深浅色：画布的色值是字符串，不会自动切，必须在这里更新。
+   * 首页的热量环还要**重绘**一次 —— 画布不在 ArkUI 的重建通道里，
+   * 光改色值不会触发重画。重绘由 Index 自己监听（见那里的 onConfigurationUpdate）。
+   */
+  onConfigurationUpdate(newConfig: Configuration): void {
+    this.syncCanvasColorMode(newConfig.colorMode);
+    // 通知页面：主题变了，需要重建/重绘
+    AppState.notifyThemeChanged();
   }
 
   onDestroy(): void {

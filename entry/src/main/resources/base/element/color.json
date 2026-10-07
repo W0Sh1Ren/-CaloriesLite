@@ -91,6 +91,10 @@
     {
       "name": "color_glow_tail",
       "value": "#F5F8F6"
+    },
+    {
+      "name": "color_card_track",
+      "value": "#E8EBEF"
     }
   ]
 }

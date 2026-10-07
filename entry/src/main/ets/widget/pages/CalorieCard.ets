@@ -39,16 +39,22 @@
  *   两个按钮的宽度比            build() ③ 里 .layoutWeight(1) 与 .layoutWeight(2)
  *   按钮行与中部的间距          build() ③ 那行 Row 的 .margin({ top: 6 })
  *
- * ── 配色（改文件顶部这几个常量，全卡片统一生效）
- *   COLOR_PRIMARY   主色（环、拍照按钮）       现为品牌绿 #22C55E
- *   COLOR_TEXT      主文字                     现为 #1A1A1A
- *   COLOR_TEXT_SUB  次要文字（标签、时间）      现为 #8A8F99
- *   COLOR_TRACK     底色（环的轨道、刷新按钮）  现为 #E8EBEF
+ * ── 配色（走资源引用，跟随系统深浅色）
+ *   COLOR_PRIMARY   主色（环、拍照按钮）        → app.color.color_primary
+ *   COLOR_TEXT      主文字                      → app.color.color_text
+ *   COLOR_TEXT_SUB  次要文字（标签、时间）       → app.color.color_text_sub
+ *   COLOR_TRACK     底色（环的轨道、刷新按钮）   → app.color.color_card_track
+ *
+ *   这四项的**实际色值**在 resources/base/element/color.json（浅色）
+ *   与 resources/dark/element/color.json（深色）里，
+ *   系统切深浅色时卡片自动跟着切。要改颜色改那两个 json，不用改这里。
  *
  *   注意：三条营养素的颜色**不在这里**。它们按营养素区分，由后端推过来
  *   （proteinColor / fatColor / carbColor，见 CardData.ets），
  *   与主应用 Theme.ets 的 COLOR_PROTEIN() / FAT / CARB 一致。
  *   想改那三个颜色要改 CardData.ets，改这里没用。
+ *   ⚠️ 那三个仍是硬编码字符串（CardData 不能带 UI 依赖），
+ *      所以它们在深色下**不跟随**——目前的值在深色底上仍可辨认。
  *
  * ── 改完怎么生效
  *   1. tools\sync-src.ps1 然后 tools\build.ps1
@@ -90,10 +96,28 @@
  */
 import { CardData } from '../CardData';
 
-const COLOR_TEXT = '#1A1A1A';
-const COLOR_TEXT_SUB = '#8A8F99';
-const COLOR_TRACK = '#E8EBEF';
-const COLOR_PRIMARY = '#22C55E';
+/*
+ * ── 卡片配色：走资源引用，跟随系统深浅色 ──
+ *
+ * 早先这里是 4 个硬编码的字符串常量，深色模式下卡片会一直是浅色。
+ * 现在改成 `$r('app.color.*')`，与主应用同一套色值
+ *（resources/base 与 resources/dark 各一份同名 key），
+ * 系统切深浅色时卡片会自动跟着切。
+ *
+ * ⚠️ 卡片页面**可以**用 $r()：它在卡片进程里由框架解析资源。
+ *    但 CardData.ets（Ability 侧）不能这么做 —— 那个文件刻意
+ *    零 UI 依赖，见它的文件头说明。
+ *
+ * ⚠️ 顺带说明为什么这里能改而画布不能：
+ *    这几个颜色只用在 .fontColor() / .backgroundColor() 这类**属性**上，
+ *    类型是 ResourceColor，接受 Resource。
+ *    画布的 ctx.fillStyle 只接受 string，所以主应用那边另有一套
+ *    CanvasColors（见 common/CanvasColors.ets）。
+ */
+const COLOR_TEXT = $r('app.color.color_text');
+const COLOR_TEXT_SUB = $r('app.color.color_text_sub');
+const COLOR_TRACK = $r('app.color.color_card_track');
+const COLOR_PRIMARY = $r('app.color.color_primary');
 
 /** 卡片的「拍照记录」用这个 want 参数告诉应用该直接进拍照页 */
 const ROUTE_CAMERA = 'camera';
@@ -342,7 +366,16 @@ struct CalorieCard {
      * 减去左右内边距才是环 + 营养素能用的空间。
      */
     .padding({ left: 8, right: 12, top: 10, bottom: 10 })
-    .backgroundColor('#FFFFFF')
+    /*
+     * 卡片底色：走资源引用，跟随系统深浅色。
+     *
+     * ⚠️ 这里原本是硬编码的 '#FFFFFF' —— 只把顶部那几个颜色常量
+     *    换成资源是不够的，卡片底色漏了就会一直是白底、
+     *    看起来完全没适配（实测踩过）。
+     *
+     * 用 color_card：浅色 #FFFFFF / 深色 #1E1E1E。
+     */
+    .backgroundColor($r('app.color.color_card'))
     .borderRadius(16)
   }
 
